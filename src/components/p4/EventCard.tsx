@@ -57,10 +57,8 @@ const OSO = {
   onClass:
     "data-[state=on]:bg-orange-700 data-[state=on]:text-white data-[state=on]:border-orange-700",
 };
-const NONE_OPT = { value: "none", label: "なし" };
-// GC1 は加速度なしもあり得る（呪詛のみ）。GC2 は GC1雷水の裏で必ず加速度がつくので 早/遅 のみ。
-const ACCEL_OPTIONS_GC1 = [NONE_OPT, HAYA, OSO];
-const ACCEL_OPTIONS_GC2 = [HAYA, OSO];
+// 雷水が付かない人（なし）は必ず加速度爆弾がつくので 早/遅 のみ（GC1/GC2 共通）。
+const ACCEL_OPTIONS = [HAYA, OSO];
 // 呪詛は「発生源」かどうかの有/無のみ（早/遅は GC1=早・GC2=遅 で確定。見る見ないは全員）。
 const JUSO_OPTIONS = [
   {
@@ -157,7 +155,7 @@ function GcInputCard({
               <SelectToggle
                 value={accelVal}
                 onChange={(v) => set(`gc${suffix}_accel`, v)}
-                options={suffix === "2" ? ACCEL_OPTIONS_GC2 : ACCEL_OPTIONS_GC1}
+                options={ACCEL_OPTIONS}
               />
             </div>
           </div>
