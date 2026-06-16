@@ -1,22 +1,13 @@
 import type { Judge, EventDef } from "@/p4/types";
-import { raiMizuAction, tsunamiHonooAction, juso, accel } from "@/p4/logic";
+import { raiMizuAction, tsunamiHonooAction } from "@/p4/logic";
 
-export const gcJudges = (suffix: string, late: boolean): Judge[] => [
-  {
-    id: `gc${suffix}_juso`,
-    label: late ? "呪詛の叫声（遅）" : "呪詛の叫声（早）",
-    resolve: ({ truth }) => juso(truth),
-  },
+// 各GCは「担当(雷/水)＋GC真偽1つ」。この1つの真偽が呪詛・雷水・加速度すべてを決める。
+export const gcJudges = (suffix: string): Judge[] => [
   {
     id: `gc${suffix}_role`,
-    label: "自分の担当",
+    label: "担当（雷/水）＋GC真偽",
     role: { left: { value: "rai", label: "雷" }, right: { value: "mizu", label: "水" } },
     resolve: ({ truth, role }) => raiMizuAction(role, truth),
-  },
-  {
-    id: `gc${suffix}_accel`,
-    label: `加速度爆弾（GC${suffix}で付与の人のみ）`,
-    resolve: ({ truth }) => accel(truth),
   },
 ];
 
@@ -30,9 +21,9 @@ export const tsunamiJudges = (suffix: string): Judge[] => [
 ];
 
 export const EVENTS: EventDef[] = [
-  { id: "gc1", name: "グランドクロス 1回目", judges: gcJudges("1", false) },
+  { id: "gc1", name: "グランドクロス 1回目", judges: gcJudges("1") },
   { id: "wave1", name: "つなみ / ほのお 1回目", judges: tsunamiJudges("1") },
-  { id: "gc2", name: "グランドクロス 2回目", judges: gcJudges("2", true) },
+  { id: "gc2", name: "グランドクロス 2回目", judges: gcJudges("2") },
   { id: "wave2", name: "つなみ / ほのお 2回目", judges: tsunamiJudges("2") },
   {
     id: "gc3",

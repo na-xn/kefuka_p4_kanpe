@@ -157,10 +157,12 @@ export function ProcessStep({
         </span>
         {!last && <div className="my-0.5 w-0.5 flex-1 rounded bg-border" />}
       </div>
-      {/* 内容 */}
-      <div className={last ? "flex-1" : "flex-1 pb-4"}>
-        <div className="mb-1 pt-0.5 text-[13px] font-bold leading-tight">{name}</div>
-        <div className="flex flex-col gap-1.5">{children}</div>
+      {/* 内容（ブロックごとに枠＋下余白でギャップ） */}
+      <div className={last ? "flex-1" : "flex-1 pb-3"}>
+        <div className="rounded-lg border bg-card/40 px-2 py-1.5">
+          <div className="mb-1 text-[13px] font-bold leading-tight">{name}</div>
+          <div className="flex flex-col gap-1.5">{children}</div>
+        </div>
       </div>
     </div>
   );

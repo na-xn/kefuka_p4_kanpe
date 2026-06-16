@@ -21,15 +21,12 @@ export function ProcessFlow({
   const blizza = get("magic_blizza") as Choice; // ブリザガ記憶
   const magicOut = get("magic_out") as Choice; // マジックアウト
 
+  // 各GCの真偽は1つ（gc{n}_role）。呪詛・雷水・加速度すべてをこの真偽で決める。
   const gc1Role = get("gc1_role__role");
-  const gc1RoleTruth = get("gc1_role") as Choice; // 雷/水 散開・頭割り判定
-  const gc1Juso = get("gc1_juso") as Choice;
-  const gc1Accel = get("gc1_accel") as Choice;
+  const gc1Truth = get("gc1_role") as Choice;
 
   const gc2Role = get("gc2_role__role");
-  const gc2RoleTruth = get("gc2_role") as Choice;
-  const gc2Juso = get("gc2_juso") as Choice;
-  const gc2Accel = get("gc2_accel") as Choice;
+  const gc2Truth = get("gc2_role") as Choice;
 
   const wave1Role = get("wave1_type__role");
   const wave1Truth = get("wave1_type") as Choice;
@@ -112,8 +109,8 @@ export function ProcessFlow({
         index={2}
         name="水属性圧縮＋フォークライトニング＋加速度爆弾（GC1）処理"
       >
-        <ActionBar text={raiMizuAction(gc1Role, gc1RoleTruth)} />
-        {accel(gc1Accel) && <ActionBar text={accel(gc1Accel)} />}
+        <ActionBar text={raiMizuAction(gc1Role, gc1Truth)} />
+        {accel(gc1Truth) && <ActionBar text={`${accel(gc1Truth)}（加速度・付与GCのみ）`} />}
       </ProcessStep>
 
       {/* 3. もりもりサンダガ＋呪詛の叫声（GC1） */}
@@ -124,7 +121,7 @@ export function ProcessFlow({
           onChange={(v) => set("magic_thunda", v)}
         />
         <ActionBar text={thundaDirect} />
-        <ActionBar text={juso(gc1Juso)} />
+        <ActionBar text={juso(gc1Truth)} />
       </ProcessStep>
 
       {/* 4. どきどきアルテマ＋混沌（1回目） */}
@@ -140,13 +137,13 @@ export function ProcessFlow({
           onChange={(v) => set("magic_blizza", v)}
         />
         <ActionBar text={blizzaDirect} />
-        <ActionBar text={raiMizuAction(gc2Role, gc2RoleTruth)} />
-        {accel(gc2Accel) && <ActionBar text={accel(gc2Accel)} />}
+        <ActionBar text={raiMizuAction(gc2Role, gc2Truth)} />
+        {accel(gc2Truth) && <ActionBar text={`${accel(gc2Truth)}（加速度・付与GCのみ）`} />}
       </ProcessStep>
 
       {/* 6. 呪詛の叫声（GC2） */}
       <ProcessStep index={6} name="呪詛の叫声（GC2）処理">
-        <ActionBar text={juso(gc2Juso)} />
+        <ActionBar text={juso(gc2Truth)} />
       </ProcessStep>
 
       {/* 7. マジックアウト＋混沌（2回目） */}
