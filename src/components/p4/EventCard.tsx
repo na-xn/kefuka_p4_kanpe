@@ -61,8 +61,16 @@ const NONE_OPT = { value: "none", label: "なし" };
 // GC1 は加速度なしもあり得る（呪詛のみ）。GC2 は GC1雷水の裏で必ず加速度がつくので 早/遅 のみ。
 const ACCEL_OPTIONS_GC1 = [NONE_OPT, HAYA, OSO];
 const ACCEL_OPTIONS_GC2 = [HAYA, OSO];
-// 呪詛は「発生源」かどうか＝なし/早/遅（見る見ないは全員が対処するので別）。
-const JUSO_OPTIONS = [NONE_OPT, HAYA, OSO];
+// 呪詛は「発生源」かどうかの有/無のみ（早/遅は GC1=早・GC2=遅 で確定。見る見ないは全員）。
+const JUSO_OPTIONS = [
+  {
+    value: "yes",
+    label: "有",
+    onClass:
+      "data-[state=on]:bg-fuchsia-600 data-[state=on]:text-white data-[state=on]:border-fuchsia-600",
+  },
+  { value: "no", label: "無" },
+];
 
 /** ①③ GC1 / GC2 入力カード。真偽は見出しにあるので body には担当・加速度・呪詛のみ。 */
 function GcInputCard({

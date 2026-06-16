@@ -56,13 +56,9 @@ export function ProcessFlow({
       : "";
 
   // --- 呪詛の叫声: 見る/見ないは全員が対処（GC真偽で決まる）。 ---
-  // 自分が「発生源」かどうかは別軸で、早/遅 のタイミングで強調する。
-  const jusoSrcHaya =
-    (gc1Role === "nashi" && gc1Juso === "haya") ||
-    (gc2Role === "nashi" && gc2Juso === "haya");
-  const jusoSrcOso =
-    (gc1Role === "nashi" && gc1Juso === "oso") ||
-    (gc2Role === "nashi" && gc2Juso === "oso");
+  // 自分が「発生源」かどうかは有/無。早/遅は GC1=早・GC2=遅 で確定。
+  const jusoSrcHaya = gc1Role === "nashi" && gc1Juso === "yes"; // GC1=早
+  const jusoSrcOso = gc2Role === "nashi" && gc2Juso === "yes"; // GC2=遅
 
   const wave1Role = get("wave1_type__role");
   const wave1Truth = get("wave1_type") as Choice;
