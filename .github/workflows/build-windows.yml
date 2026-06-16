@@ -44,13 +44,13 @@ jobs:
         shell: bash
         run: |
           mkdir -p out
-          cp src-tauri/target/release/counter-topmost.exe out/
+          cp src-tauri/target/release/p4-kanpe.exe out/
           cp release/README.md out/README.md
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: counter-topmost-windows
+          name: p4-kanpe-windows
           path: out
           if-no-files-found: error
 
@@ -62,7 +62,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "${GITHUB_REF_NAME}" \
-            "out/counter-topmost.exe" \
+            "out/p4-kanpe.exe" \
             "out/README.md" \
             --title "${GITHUB_REF_NAME}" \
             --draft

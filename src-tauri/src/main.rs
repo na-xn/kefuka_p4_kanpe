@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    counter_topmost_lib::run()
+    p4_kanpe_lib::run()
 }
