@@ -44,10 +44,10 @@ pnpm tauri dev      # 320x220 の小窓が常に最前面で起動
 
 ## 3. 配布用 .exe / .msi（GitHub Actions）
 
-`.github/workflows/build-windows.yml` が windows-latest 上でビルドする。Windows 側にツールチェーンは不要。
+`.github/workflows/build-windows.yml` が windows-latest 上で `--no-bundle` ビルドする（インストーラは作らず、ダブルクリック起動の単体 `counter-topmost.exe` のみ）。Windows 側にツールチェーンは不要。
 
-- **手動ビルド**: GitHub の Actions タブ →「build-windows」→ Run workflow。完了後 `counter-topmost-windows` アーティファクトを DL。
-- **リリース**: `git tag v0.1.0 && git push origin v0.1.0` で Draft Release に `.exe` / `.msi` が添付される。
+- **手動ビルド**: GitHub の Actions タブ →「build-windows」→ Run workflow。完了後 `counter-topmost-windows` アーティファクト（`counter-topmost.exe` と `README.md` のみ）を DL。
+- **リリース**: `git tag v0.1.0 && git push origin v0.1.0` で Draft Release に `counter-topmost.exe` と `README.md` だけが添付される。
 
 ## スクリプト
 
