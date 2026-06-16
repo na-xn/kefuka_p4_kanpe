@@ -45,30 +45,24 @@ function JudgeRow({
   );
 }
 
-const ACCEL_OPTIONS = [
-  { value: "none", label: "なし" },
-  {
-    value: "haya",
-    label: "早",
-    onClass:
-      "data-[state=on]:bg-amber-500 data-[state=on]:text-black data-[state=on]:border-amber-500",
-  },
-  {
-    value: "oso",
-    label: "遅",
-    onClass:
-      "data-[state=on]:bg-orange-700 data-[state=on]:text-white data-[state=on]:border-orange-700",
-  },
-];
-const JUSO_OPTIONS = [
-  {
-    value: "yes",
-    label: "有",
-    onClass:
-      "data-[state=on]:bg-fuchsia-600 data-[state=on]:text-white data-[state=on]:border-fuchsia-600",
-  },
-  { value: "no", label: "無" },
-];
+const HAYA = {
+  value: "haya",
+  label: "早",
+  onClass:
+    "data-[state=on]:bg-amber-500 data-[state=on]:text-black data-[state=on]:border-amber-500",
+};
+const OSO = {
+  value: "oso",
+  label: "遅",
+  onClass:
+    "data-[state=on]:bg-orange-700 data-[state=on]:text-white data-[state=on]:border-orange-700",
+};
+const NONE_OPT = { value: "none", label: "なし" };
+// GC1 は加速度なしもあり得る（呪詛のみ）。GC2 は GC1雷水の裏で必ず加速度がつくので 早/遅 のみ。
+const ACCEL_OPTIONS_GC1 = [NONE_OPT, HAYA, OSO];
+const ACCEL_OPTIONS_GC2 = [HAYA, OSO];
+// 呪詛は「発生源」かどうか＝なし/早/遅（見る見ないは全員が対処するので別）。
+const JUSO_OPTIONS = [NONE_OPT, HAYA, OSO];
 
 /** ①③ GC1 / GC2 入力カード。真偽は見出しにあるので body には担当・加速度・呪詛のみ。 */
 function GcInputCard({
@@ -155,13 +149,13 @@ function GcInputCard({
               <SelectToggle
                 value={accelVal}
                 onChange={(v) => set(`gc${suffix}_accel`, v)}
-                options={ACCEL_OPTIONS}
+                options={suffix === "2" ? ACCEL_OPTIONS_GC2 : ACCEL_OPTIONS_GC1}
               />
             </div>
           </div>
           <div className="rounded-md border bg-card px-2 py-1.5">
             <div className="flex items-center justify-between gap-2">
-              <span className="min-w-0 flex-1 text-xs font-semibold">呪詛の叫声</span>
+              <span className="min-w-0 flex-1 text-xs font-semibold">呪詛（発生源）</span>
               <SelectToggle
                 value={jusoVal}
                 onChange={(v) => set(`gc${suffix}_juso`, v)}

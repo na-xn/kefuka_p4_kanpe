@@ -25,7 +25,7 @@ export function ProcessFlow({
   const gc1Role = get("gc1_role__role");
   const gc1Truth = get("gc1_role") as Choice;
   const gc1Accel = get("gc1_accel"); // none | haya | oso（担当=なし時のみ）
-  const gc1Juso = get("gc1_juso"); // yes | no（担当=なし時のみ）
+  const gc1Juso = get("gc1_juso"); // none | haya | oso（呪詛の発生源タイミング）
 
   const gc2Role = get("gc2_role__role");
   const gc2Truth = get("gc2_role") as Choice;
@@ -55,9 +55,14 @@ export function ProcessFlow({
       ? gc2Truth
       : "";
 
-  // --- 呪詛の叫声: プレイヤーが「なし」かつ juso==="yes" のGCが呪詛持ち。 ---
-  const gc1JusoActive = gc1Role === "nashi" && gc1Juso === "yes";
-  const gc2JusoActive = gc2Role === "nashi" && gc2Juso === "yes";
+  // --- 呪詛の叫声: 見る/見ないは全員が対処（GC真偽で決まる）。 ---
+  // 自分が「発生源」かどうかは別軸で、早/遅 のタイミングで強調する。
+  const jusoSrcHaya =
+    (gc1Role === "nashi" && gc1Juso === "haya") ||
+    (gc2Role === "nashi" && gc2Juso === "haya");
+  const jusoSrcOso =
+    (gc1Role === "nashi" && gc1Juso === "oso") ||
+    (gc2Role === "nashi" && gc2Juso === "oso");
 
   const wave1Role = get("wave1_type__role");
   const wave1Truth = get("wave1_type") as Choice;
@@ -139,6 +144,7 @@ export function ProcessFlow({
       <ProcessStep
         index={2}
         name="水属性圧縮＋フォークライトニング＋加速度爆弾（早）処理"
+        highlight={hayaActive}
       >
         {/* 散開/頭割りは全員 */}
         <ActionBar text={raiMizuAction(gc1Role, gc1Truth)} />
@@ -149,14 +155,24 @@ export function ProcessFlow({
       </ProcessStep>
 
       {/* 3. もりもりサンダガ＋呪詛の叫声（GC1） */}
-      <ProcessStep index={3} name="もりもりサンダガ＋呪詛の叫声（GC1）処理">
+      <ProcessStep
+        index={3}
+        name="もりもりサンダガ＋呪詛の叫声（GC1）処理"
+        highlight={jusoSrcHaya}
+      >
         <TruthInputRow
           label="⚡ もりもりサンダガ（真偽）"
           value={thunda}
           onChange={(v) => set("magic_thunda", v)}
         />
         <ActionBar text={thundaDirect} />
-        {gc1JusoActive && <ActionBar text={`${juso(gc1Truth)}（呪詛・GC1）`} />}
+        {/* 見る/見ないは全員が対処（GC1真偽） */}
+        <ActionBar text={juso(gc1Truth) && `${juso(gc1Truth)}（呪詛・全員）`} />
+        {jusoSrcHaya && (
+          <div className="rounded-md border border-amber-400 bg-amber-400/10 px-2 py-1 text-[11px] font-bold text-amber-300">
+            🔆 あなたが呪詛の発生源（早）
+          </div>
+        )}
       </ProcessStep>
 
       {/* 4. どきどきアルテマ＋混沌（1回目） */}
@@ -165,7 +181,11 @@ export function ProcessFlow({
       </ProcessStep>
 
       {/* 5. ひろげるブリザガ＋水＋雷＋加速度（遅）（GC2グループ） */}
-      <ProcessStep index={5} name="ひろげるブリザガ＋水＋雷＋加速度（遅）処理">
+      <ProcessStep
+        index={5}
+        name="ひろげるブリザガ＋水＋雷＋加速度（遅）処理"
+        highlight={osoActive}
+      >
         <TruthInputRow
           label="❄ ひろげるブリザガ（真偽）"
           value={blizza}
@@ -179,11 +199,13 @@ export function ProcessFlow({
       </ProcessStep>
 
       {/* 6. 呪詛の叫声（GC2） */}
-      <ProcessStep index={6} name="呪詛の叫声（GC2）処理">
-        {gc2JusoActive ? (
-          <ActionBar text={`${juso(gc2Truth)}（呪詛・GC2）`} />
-        ) : (
-          <MarkerNote text="呪詛: 該当者のみ" />
+      <ProcessStep index={6} name="呪詛の叫声（GC2）処理" highlight={jusoSrcOso}>
+        {/* 見る/見ないは全員が対処（GC2真偽） */}
+        <ActionBar text={juso(gc2Truth) && `${juso(gc2Truth)}（呪詛・全員）`} />
+        {jusoSrcOso && (
+          <div className="rounded-md border border-amber-400 bg-amber-400/10 px-2 py-1 text-[11px] font-bold text-amber-300">
+            🔆 あなたが呪詛の発生源（遅）
+          </div>
         )}
       </ProcessStep>
 

@@ -187,26 +187,40 @@ export function ProcessStep({
   name,
   children,
   last = false,
+  highlight = false,
 }: {
   index: number;
   name: string;
   children: React.ReactNode;
   /** 最後のステップなら下方向の連結ラインを引かない */
   last?: boolean;
+  /** 自分の担当ステップ（加速度・呪詛発生源）。枠を強調＋先頭に ★ */
+  highlight?: boolean;
 }) {
   return (
     <div className="flex gap-2.5">
       {/* レール（ノード＋連結ライン） */}
       <div className="flex flex-col items-center">
-        <span className="z-10 flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground ring-2 ring-background">
+        <span
+          className={`z-10 flex size-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ring-2 ring-background ${
+            highlight ? "bg-amber-400 text-black" : "bg-primary text-primary-foreground"
+          }`}
+        >
           {index}
         </span>
         {!last && <div className="my-0.5 w-0.5 flex-1 rounded bg-border" />}
       </div>
       {/* 内容（ブロックごとに枠＋下余白でギャップ） */}
       <div className={last ? "flex-1" : "flex-1 pb-3"}>
-        <div className="rounded-lg border bg-card/40 px-2 py-1.5">
-          <div className="mb-1 text-[13px] font-bold leading-tight">{name}</div>
+        <div
+          className={`rounded-lg border bg-card/40 px-2 py-1.5 ${
+            highlight ? "border-2 border-amber-400" : ""
+          }`}
+        >
+          <div className="mb-1 flex items-center gap-1 text-[13px] font-bold leading-tight">
+            {highlight && <span className="text-amber-400">★</span>}
+            <span>{name}</span>
+          </div>
           <div className="flex flex-col gap-1.5">{children}</div>
         </div>
       </div>
