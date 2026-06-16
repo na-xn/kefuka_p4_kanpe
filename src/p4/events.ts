@@ -5,8 +5,12 @@ import { raiMizuAction, tsunamiHonooAction } from "@/p4/logic";
 export const gcJudges = (suffix: string): Judge[] => [
   {
     id: `gc${suffix}_role`,
-    label: "担当（雷/水）＋GC真偽",
-    role: { left: { value: "rai", label: "雷" }, right: { value: "mizu", label: "水" } },
+    label: "担当（雷/水/なし）＋GC真偽",
+    role: {
+      left: { value: "rai", label: "雷" },
+      mid: { value: "mizu", label: "水" },
+      right: { value: "nashi", label: "なし" },
+    },
     resolve: ({ truth, role }) => raiMizuAction(role, truth),
   },
 ];

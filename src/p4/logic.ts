@@ -1,12 +1,17 @@
 import type { Choice, Role } from "@/p4/types";
 
-/** 雷/水 × 真/偽 の散開・頭割りマッピング（①B / ③B 共通） */
+/**
+ * 雷/水/なし × 真/偽 の散開・頭割りマッピング。
+ * - 雷: 本当→散開 / 嘘→頭割り
+ * - 水: 本当→頭割り / 嘘→散開
+ * - なし（雷も水も付かない人）: 水と一緒に頭割り＝水と同じ判定
+ */
 export function raiMizuAction(role: Role, truth: Choice): string | null {
   if (!role || !truth) return null;
   const spread = "💥 散開（1人）";
   const stack = "🤝 頭割り";
   if (role === "rai") return truth === "shin" ? spread : stack;
-  // mizu
+  // mizu / nashi（なしは水判定）
   return truth === "shin" ? stack : spread;
 }
 

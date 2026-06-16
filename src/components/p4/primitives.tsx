@@ -60,6 +60,7 @@ const ROLE_ON_CLASS: Record<string, string> = {
   honoo: "data-[state=on]:bg-red-600 data-[state=on]:text-white data-[state=on]:border-red-600",
   aragan: "data-[state=on]:bg-yellow-400 data-[state=on]:text-black data-[state=on]:border-yellow-400",
   shi: "data-[state=on]:bg-purple-600 data-[state=on]:text-white data-[state=on]:border-purple-600",
+  nashi: "data-[state=on]:bg-slate-500 data-[state=on]:text-white data-[state=on]:border-slate-500",
 };
 
 function roleItemClass(value: string): string {
@@ -95,6 +96,15 @@ export function RoleToggle({
       >
         {role.left.label}
       </ToggleGroupItem>
+      {role.mid && (
+        <ToggleGroupItem
+          value={role.mid.value}
+          aria-label={role.mid.label}
+          className={roleItemClass(role.mid.value)}
+        >
+          {role.mid.label}
+        </ToggleGroupItem>
+      )}
       <ToggleGroupItem
         value={role.right.value}
         aria-label={role.right.label}

@@ -11,8 +11,12 @@ export type Judge = {
   id: string;
   /** 行ラベル */
   label: string;
-  /** 担当セレクタ（任意）。指定時は別の状態キー `${id}__role` を使う */
-  role?: { left: { value: Role; label: string }; right: { value: Role; label: string } };
+  /** 担当セレクタ（任意）。指定時は別の状態キー `${id}__role` を使う。mid は任意の3つ目。 */
+  role?: {
+    left: { value: Role; label: string };
+    mid?: { value: Role; label: string };
+    right: { value: Role; label: string };
+  };
   /** 真/偽トグルを出すか（デフォルト true） */
   truth?: boolean;
   /** 揃った行動テキストを返す。揃っていなければ null */
