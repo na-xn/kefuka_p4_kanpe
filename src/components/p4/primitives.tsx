@@ -71,10 +71,18 @@ export function RoleToggle({
       size="sm"
       className="shrink-0"
     >
-      <ToggleGroupItem value={role.left.value} aria-label={role.left.label}>
+      <ToggleGroupItem
+        value={role.left.value}
+        aria-label={role.left.label}
+        className="data-[state=on]:bg-amber-400 data-[state=on]:text-black data-[state=on]:border-amber-400 data-[state=on]:font-bold data-[state=off]:opacity-50"
+      >
         {role.left.label}
       </ToggleGroupItem>
-      <ToggleGroupItem value={role.right.value} aria-label={role.right.label}>
+      <ToggleGroupItem
+        value={role.right.value}
+        aria-label={role.right.label}
+        className="data-[state=on]:bg-amber-400 data-[state=on]:text-black data-[state=on]:border-amber-400 data-[state=on]:font-bold data-[state=off]:opacity-50"
+      >
         {role.right.label}
       </ToggleGroupItem>
     </ToggleGroup>

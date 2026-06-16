@@ -50,19 +50,14 @@ export function ProcessFlow({
       : "🎯 異色に当たる（瀕死/死を回避）";
   }, [gc3Role, gc3Mu]);
 
+  // 踏む/踏まない（本当=踏まない / 嘘=踏む）
+  const fumu = (f: Choice | null) => (f === "shin" ? "踏まない" : f === "gi" ? "踏む" : null);
+
   // ④ もりもりサンダガ＝記憶値で直接
-  const thundaDirect: string | null = !thunda
-    ? null
-    : thunda === "shin"
-    ? "⚡ 直線を踏まない"
-    : "⚡ 直線を踏む";
+  const thundaDirect: string | null = !thunda ? null : `⚡ サンダガ ${fumu(thunda)}`;
 
   // ⑦ ひろげるブリザガ＝記憶値で直接
-  const blizzaDirect: string | null = !blizza
-    ? null
-    : blizza === "shin"
-    ? "❄ 扇を踏まない"
-    : "❄ 扇を踏む";
+  const blizzaDirect: string | null = !blizza ? null : `❄ ブリザガ ${fumu(blizza)}`;
 
   // ⑨ XNOR(記憶 × マジックアウト) 一致=本当→踏まない / 不一致=嘘→踏む
   const xnorTruth = (memory: Choice): "shin" | "gi" | null => {
@@ -71,18 +66,13 @@ export function ProcessFlow({
   };
   const thundaFinal = xnorTruth(thunda);
   const blizzaFinal = xnorTruth(blizza);
-  const thundaOutAction =
-    thundaFinal === null
-      ? null
-      : thundaFinal === "shin"
-      ? "⚡ 直線を踏まない"
-      : "⚡ 直線を踏む";
-  const blizzaOutAction =
-    blizzaFinal === null
-      ? null
-      : blizzaFinal === "shin"
-      ? "❄ 扇を踏まない"
-      : "❄ 扇を踏む";
+  // 両方が同じ（両方踏む／両方踏まない）なら1行に集約、違えば2行
+  const magicOutBars: string[] =
+    thundaFinal === null || blizzaFinal === null
+      ? []
+      : thundaFinal === blizzaFinal
+      ? [`⚡❄ サンダガ・ブリザガ 両方${fumu(thundaFinal)}`]
+      : [`⚡ サンダガ ${fumu(thundaFinal)}`, `❄ ブリザガ ${fumu(blizzaFinal)}`];
 
   const memLabel = (c: Choice) => (c === "shin" ? "真" : c === "gi" ? "偽" : "—");
 
@@ -178,8 +168,11 @@ export function ProcessFlow({
             </b>
           </div>
         )}
-        <ActionBar text={thundaOutAction} />
-        <ActionBar text={blizzaOutAction} />
+        {magicOutBars.length === 0 ? (
+          <ActionBar text={null} />
+        ) : (
+          magicOutBars.map((t, i) => <ActionBar key={i} text={t} />)
+        )}
         <ActionBar text={tsunamiHonooAction(wave2Role, wave2Truth)} />
       </ProcessStep>
 
