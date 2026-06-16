@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "counter-topmost",
   "version": "0.1.0",
-  "identifier": "com.na__xn.counter-topmost",
+  "identifier": "com.naxn.counter-topmost",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
