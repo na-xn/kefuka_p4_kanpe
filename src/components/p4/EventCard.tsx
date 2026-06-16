@@ -1,10 +1,18 @@
-import { useMemo } from "react";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { ActionBar, TruthToggle, RoleToggle } from "@/components/p4/primitives";
-import { seishi } from "@/p4/logic";
+import { useEffect } from "react";
+import { ActionBar, TruthToggle, RoleToggle, SelectToggle } from "@/components/p4/primitives";
+import { seishi, raiMizuAction, tsunamiHonooAction } from "@/p4/logic";
 import type { Choice, Judge, EventDef } from "@/p4/types";
 
-/** 1判定行（汎用） */
+/** イベント見出しに置く「真偽トグル」の状態キー（GC・つなみ/ほのお・GC3）。 */
+const HEADER_TRUTH_KEY: Record<string, string> = {
+  gc1: "gc1_role",
+  gc2: "gc2_role",
+  gc3: "gc3_truth",
+  wave1: "wave1_type",
+  wave2: "wave2_type",
+};
+
+/** 1判定行（汎用・フォールバック用） */
 function JudgeRow({
   judge,
   get,
@@ -37,7 +45,174 @@ function JudgeRow({
   );
 }
 
-/** ⑤ GC3 の担当選択のみ（判定入力フェーズ用。無の氾濫は処理フェーズで入力） */
+const ACCEL_OPTIONS = [
+  { value: "none", label: "なし" },
+  {
+    value: "haya",
+    label: "早",
+    onClass:
+      "data-[state=on]:bg-amber-500 data-[state=on]:text-black data-[state=on]:border-amber-500",
+  },
+  {
+    value: "oso",
+    label: "遅",
+    onClass:
+      "data-[state=on]:bg-orange-700 data-[state=on]:text-white data-[state=on]:border-orange-700",
+  },
+];
+const JUSO_OPTIONS = [
+  {
+    value: "yes",
+    label: "有",
+    onClass:
+      "data-[state=on]:bg-fuchsia-600 data-[state=on]:text-white data-[state=on]:border-fuchsia-600",
+  },
+  { value: "no", label: "無" },
+];
+
+/** ①③ GC1 / GC2 入力カード。真偽は見出しにあるので body には担当・加速度・呪詛のみ。 */
+function GcInputCard({
+  suffix,
+  get,
+  set,
+}: {
+  /** "1" | "2" */
+  suffix: string;
+  get: (k: string) => string;
+  set: (k: string, v: string) => void;
+}) {
+  const roleKey = `gc${suffix}_role__role`;
+  const role = get(roleKey); // "rai" | "mizu" | "nashi" | ""
+  const truth = get(`gc${suffix}_role`) as Choice; // GC真偽（見出し）
+  const accelVal = get(`gc${suffix}_accel`);
+  const jusoVal = get(`gc${suffix}_juso`);
+  const gc1Role = get("gc1_role__role");
+
+  // GC2 は GC1 の担当に応じて自動で側が決まる（雷/水↔なしの排他）
+  const isGc2 = suffix === "2";
+  const gc2Side: "wait" | "nashi" | "raimizu" | null = !isGc2
+    ? null
+    : !gc1Role
+    ? "wait"
+    : gc1Role === "nashi"
+    ? "raimizu"
+    : "nashi";
+
+  // GC2 の担当キーを GC1 に同期（なし側→nashi固定 / 雷水側→nashiならクリア）
+  useEffect(() => {
+    if (!isGc2) return;
+    if (gc2Side === "nashi" && role !== "nashi") set(roleKey, "nashi");
+    if (gc2Side === "raimizu" && role === "nashi") set(roleKey, "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isGc2, gc2Side, role]);
+
+  // 実効的に「なし」側か（加速度・呪詛を出すか）
+  const isNashi = isGc2 ? gc2Side === "nashi" : role === "nashi";
+
+  return (
+    <>
+      {/* 担当 */}
+      {isGc2 && gc2Side === "wait" ? (
+        <div className="rounded-md border border-dashed px-2 py-1.5 text-[11px] text-muted-foreground">
+          GC1 の担当を先に入力してください
+        </div>
+      ) : (
+        <div className="rounded-md border bg-card px-2 py-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="min-w-0 flex-1 text-xs font-semibold">担当</span>
+            {isGc2 && gc2Side === "nashi" ? (
+              <span className="shrink-0 rounded bg-slate-500 px-2 py-0.5 text-xs font-bold text-white">
+                なし（自動）
+              </span>
+            ) : isGc2 && gc2Side === "raimizu" ? (
+              <RoleToggle
+                role={{ left: { value: "rai", label: "雷" }, right: { value: "mizu", label: "水" } }}
+                value={role}
+                onChange={(v) => set(roleKey, v)}
+              />
+            ) : (
+              <RoleToggle
+                role={{
+                  left: { value: "rai", label: "雷" },
+                  mid: { value: "mizu", label: "水" },
+                  right: { value: "nashi", label: "なし" },
+                }}
+                value={role}
+                onChange={(v) => set(roleKey, v)}
+              />
+            )}
+          </div>
+          <ActionBar text={raiMizuAction(role, truth)} />
+        </div>
+      )}
+
+      {/* 担当=なし のときだけ 加速度・呪詛 */}
+      {isNashi && (
+        <>
+          <div className="rounded-md border bg-card px-2 py-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="min-w-0 flex-1 text-xs font-semibold">加速度爆弾</span>
+              <SelectToggle
+                value={accelVal}
+                onChange={(v) => set(`gc${suffix}_accel`, v)}
+                options={ACCEL_OPTIONS}
+              />
+            </div>
+          </div>
+          <div className="rounded-md border bg-card px-2 py-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="min-w-0 flex-1 text-xs font-semibold">呪詛の叫声</span>
+              <SelectToggle
+                value={jusoVal}
+                onChange={(v) => set(`gc${suffix}_juso`, v)}
+                options={JUSO_OPTIONS}
+              />
+            </div>
+          </div>
+        </>
+      )}
+
+      {isGc2 && (
+        <p className="px-0.5 text-[10px] text-muted-foreground">
+          ※GC2の担当はGC1と排他（自動で出し分け）
+        </p>
+      )}
+    </>
+  );
+}
+
+/** ②④ つなみ / ほのお 入力カード（種類のみ。真偽は見出し）。 */
+function TsunamiInputCard({
+  suffix,
+  get,
+  set,
+}: {
+  suffix: string;
+  get: (k: string) => string;
+  set: (k: string, v: string) => void;
+}) {
+  const roleKey = `wave${suffix}_type__role`;
+  const role = get(roleKey);
+  const truth = get(`wave${suffix}_type`) as Choice;
+  return (
+    <div className="rounded-md border bg-card px-2 py-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="min-w-0 flex-1 text-xs font-semibold">種類</span>
+        <RoleToggle
+          role={{
+            left: { value: "honoo", label: "炎(ほのお)" },
+            right: { value: "tsunami", label: "水(つなみ)" },
+          }}
+          value={role}
+          onChange={(v) => set(roleKey, v)}
+        />
+      </div>
+      <ActionBar text={tsunamiHonooAction(role, truth)} />
+    </div>
+  );
+}
+
+/** ⑤ GC3 の担当選択（真偽は見出し）。 */
 function Gc3RolePicker({
   get,
   set,
@@ -49,201 +224,61 @@ function Gc3RolePicker({
   const role = get(roleKey);
   const truth = get("gc3_truth") as Choice;
   return (
-    <>
-      <div className="rounded-md border bg-card px-2 py-1.5">
-        <div className="flex items-center justify-between gap-2">
-          <span className="min-w-0 flex-1 text-xs font-semibold">担当</span>
-          <RoleToggle
-            role={{
-              left: { value: "aragan", label: "アラガン" },
-              right: { value: "shi", label: "死の超越" },
-            }}
-            value={role}
-            onChange={(v) => set(roleKey, v)}
-          />
-        </div>
+    <div className="rounded-md border bg-card px-2 py-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="min-w-0 flex-1 text-xs font-semibold">担当</span>
+        <RoleToggle
+          role={{
+            left: { value: "aragan", label: "アラガン" },
+            right: { value: "shi", label: "死の超越" },
+          }}
+          value={role}
+          onChange={(v) => set(roleKey, v)}
+        />
       </div>
-      <div className="rounded-md border bg-card px-2 py-1.5">
-        <div className="flex items-center justify-between gap-2">
-          <span className="min-w-0 flex-1 text-xs font-semibold">
-            アラガン/死の超越（真偽）
-          </span>
-          <TruthToggle value={truth} onChange={(v) => set("gc3_truth", v)} />
-        </div>
-        <ActionBar text={seishi(role, truth)} />
-      </div>
-    </>
+      <ActionBar text={seishi(role, truth)} />
+    </div>
   );
 }
 
-/** ⑤ グランドクロス3回目（生者の傷） */
-function Gc3Body({
-  get,
-  set,
-}: {
-  get: (k: string) => string;
-  set: (k: string, v: string) => void;
-}) {
-  const roleKey = "gc3_role__role";
-  const role = get(roleKey); // "aragan" | "shi" | ""
-  const mu = get("gc3_mu") as Choice; // 無の氾濫 真/偽
-
-  const result = useMemo(() => {
-    if (!role || !mu) return null;
-    if (role === "aragan") {
-      // 生きる＝ダメージを受けない
-      return mu === "shin"
-        ? "🎯 異色に当たる（生きる）"
-        : "🎯 同色に当たる（生きる）";
-    }
-    // 死の超越: 瀕死になる＝ダメージを受ける
-    return mu === "shin"
-      ? "🎯 同色に当たる（瀕死/死を回避）"
-      : "🎯 異色に当たる（瀕死/死を回避）";
-  }, [role, mu]);
-
-  return (
-    <>
-      <div className="rounded-md border bg-card px-2 py-1.5">
-        <div className="flex items-center justify-between gap-2">
-          <span className="min-w-0 flex-1 text-xs font-semibold">担当</span>
-          <ToggleGroup
-            type="single"
-            value={role}
-            onValueChange={(v) => set(roleKey, v)}
-            variant="outline"
-            size="sm"
-            className="shrink-0"
-          >
-            <ToggleGroupItem value="aragan" aria-label="アラガンフィールド">
-              アラガン
-            </ToggleGroupItem>
-            <ToggleGroupItem value="shi" aria-label="死の超越">
-              死の超越
-            </ToggleGroupItem>
-          </ToggleGroup>
-        </div>
-      </div>
-      <div className="rounded-md border bg-card px-2 py-1.5">
-        <div className="flex items-center justify-between gap-2">
-          <span className="min-w-0 flex-1 text-xs font-semibold">無の氾濫</span>
-          <TruthToggle value={mu} onChange={(v) => set("gc3_mu", v)} />
-        </div>
-        <ActionBar text={result} />
-      </div>
-    </>
-  );
-}
-
-/** ⑥ マジックチャージ → マジックアウト（XNOR 解決） */
-function MagicBody({
-  get,
-  set,
-}: {
-  get: (k: string) => string;
-  set: (k: string, v: string) => void;
-}) {
-  const thunda = get("magic_thunda") as Choice; // 記憶
-  const blizza = get("magic_blizza") as Choice; // 記憶
-  const out = get("magic_out") as Choice; // マジックアウト
-
-  /** 記憶 と アウト が一致(XNOR)なら本当 / 不一致なら嘘 */
-  const finalTruth = (memory: Choice): "shin" | "gi" | null => {
-    if (!memory || !out) return null;
-    return memory === out ? "shin" : "gi";
-  };
-
-  const thundaFinal = finalTruth(thunda);
-  const blizzaFinal = finalTruth(blizza);
-
-  const thundaAction =
-    thundaFinal === null
-      ? null
-      : thundaFinal === "shin"
-      ? "⚡ 直線を踏まない"
-      : "⚡ 直線を踏む";
-  const blizzaAction =
-    blizzaFinal === null
-      ? null
-      : blizzaFinal === "shin"
-      ? "❄ 扇を踏まない"
-      : "❄ 扇を踏む";
-
-  const memLabel = (c: Choice) => (c === "shin" ? "真" : c === "gi" ? "偽" : "—");
-  const finLabel = (f: "shin" | "gi" | null) =>
-    f === "shin" ? "本当" : f === "gi" ? "嘘" : "—";
-
-  return (
-    <>
-      <div className="rounded-md border bg-card px-2 py-1.5">
-        <div className="flex items-center justify-between gap-2">
-          <span className="min-w-0 flex-1 text-xs font-semibold">⚡ もりもりサンダガ（記憶）</span>
-          <TruthToggle value={thunda} onChange={(v) => set("magic_thunda", v)} />
-        </div>
-      </div>
-      <div className="rounded-md border bg-card px-2 py-1.5">
-        <div className="flex items-center justify-between gap-2">
-          <span className="min-w-0 flex-1 text-xs font-semibold">❄ ひろげるブリザガ（記憶）</span>
-          <TruthToggle value={blizza} onChange={(v) => set("magic_blizza", v)} />
-        </div>
-      </div>
-      <div className="rounded-md border bg-card px-2 py-1.5">
-        <div className="flex items-center justify-between gap-2">
-          <span className="min-w-0 flex-1 text-xs font-semibold">🎭 マジックアウト</span>
-          <TruthToggle value={out} onChange={(v) => set("magic_out", v)} />
-        </div>
-        {/* 記憶値・最終結果のサマリ（マジックアウト後に表示） */}
-        {out && (
-          <div className="mt-1 grid grid-cols-2 gap-1 text-[10px] text-muted-foreground">
-            <span>
-              ⚡記憶 {memLabel(thunda)} → 結果{" "}
-              <b className="text-foreground">{finLabel(thundaFinal)}</b>
-            </span>
-            <span>
-              ❄記憶 {memLabel(blizza)} → 結果{" "}
-              <b className="text-foreground">{finLabel(blizzaFinal)}</b>
-            </span>
-          </div>
-        )}
-        <ActionBar text={thundaAction} />
-        <ActionBar text={blizzaAction} />
-      </div>
-    </>
-  );
-}
-
-/** イベントカード */
+/** イベントカード（判定入力フェーズ） */
 export function EventCard({
   index,
   event,
   get,
   set,
-  inputPhase = false,
 }: {
   index: number;
   event: EventDef;
   get: (k: string) => string;
   set: (k: string, v: string) => void;
-  /** 判定入力フェーズか（GC3 を担当選択のみに絞る） */
-  inputPhase?: boolean;
 }) {
+  const truthKey = HEADER_TRUTH_KEY[event.id];
   return (
     <div className="rounded-lg border bg-card/40 p-2">
-      <div className="mb-1.5 flex items-center gap-1.5">
-        <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground">
-          {index}
-        </span>
-        <span className="truncate text-xs font-bold">{event.name}</span>
+      {/* 見出し（番号＋名称＋真偽トグル） */}
+      <div className="mb-1.5 flex items-center justify-between gap-1.5">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground">
+            {index}
+          </span>
+          <span className="truncate text-xs font-bold">{event.name}</span>
+        </div>
+        {truthKey && (
+          <TruthToggle
+            value={get(truthKey) as Choice}
+            onChange={(v) => set(truthKey, v)}
+          />
+        )}
       </div>
+
       <div className="flex flex-col gap-1.5">
-        {event.id === "gc3" ? (
-          inputPhase ? (
-            <Gc3RolePicker get={get} set={set} />
-          ) : (
-            <Gc3Body get={get} set={set} />
-          )
-        ) : event.id === "magic" ? (
-          <MagicBody get={get} set={set} />
+        {event.id === "gc1" || event.id === "gc2" ? (
+          <GcInputCard suffix={event.id === "gc1" ? "1" : "2"} get={get} set={set} />
+        ) : event.id === "wave1" || event.id === "wave2" ? (
+          <TsunamiInputCard suffix={event.id === "wave1" ? "1" : "2"} get={get} set={set} />
+        ) : event.id === "gc3" ? (
+          <Gc3RolePicker get={get} set={set} />
         ) : (
           event.judges.map((j) => <JudgeRow key={j.id} judge={j} get={get} set={set} />)
         )}

@@ -24,9 +24,40 @@ export function ProcessFlow({
   // 各GCの真偽は1つ（gc{n}_role）。呪詛・雷水・加速度すべてをこの真偽で決める。
   const gc1Role = get("gc1_role__role");
   const gc1Truth = get("gc1_role") as Choice;
+  const gc1Accel = get("gc1_accel"); // none | haya | oso（担当=なし時のみ）
+  const gc1Juso = get("gc1_juso"); // yes | no（担当=なし時のみ）
 
   const gc2Role = get("gc2_role__role");
   const gc2Truth = get("gc2_role") as Choice;
+  const gc2Accel = get("gc2_accel");
+  const gc2Juso = get("gc2_juso");
+
+  // --- 加速度爆弾: プレイヤーが「なし」かつ accel!=="none" のGCが加速度持ち。 ---
+  // 早→GC1グループステップ / 遅→GC2グループステップ に配置（早/遅で配置）。
+  const gc1HasAccel = gc1Role === "nashi" && gc1Accel !== "" && gc1Accel !== "none";
+  const gc2HasAccel = gc2Role === "nashi" && gc2Accel !== "" && gc2Accel !== "none";
+  // 自分が早の加速度を持つか（どちらのGCが「なし」かに依らず、値で判定）
+  const hayaActive =
+    (gc1HasAccel && gc1Accel === "haya") || (gc2HasAccel && gc2Accel === "haya");
+  const osoActive =
+    (gc1HasAccel && gc1Accel === "oso") || (gc2HasAccel && gc2Accel === "oso");
+  // 早/遅の加速度に対応する「そのGCの真偽」
+  const hayaTruth: Choice =
+    gc1HasAccel && gc1Accel === "haya"
+      ? gc1Truth
+      : gc2HasAccel && gc2Accel === "haya"
+      ? gc2Truth
+      : "";
+  const osoTruth: Choice =
+    gc1HasAccel && gc1Accel === "oso"
+      ? gc1Truth
+      : gc2HasAccel && gc2Accel === "oso"
+      ? gc2Truth
+      : "";
+
+  // --- 呪詛の叫声: プレイヤーが「なし」かつ juso==="yes" のGCが呪詛持ち。 ---
+  const gc1JusoActive = gc1Role === "nashi" && gc1Juso === "yes";
+  const gc2JusoActive = gc2Role === "nashi" && gc2Juso === "yes";
 
   const wave1Role = get("wave1_type__role");
   const wave1Truth = get("wave1_type") as Choice;
@@ -104,13 +135,17 @@ export function ProcessFlow({
         )}
       </ProcessStep>
 
-      {/* 2. 水属性圧縮＋フォークライトニング＋加速度爆弾（GC1） */}
+      {/* 2. 水属性圧縮＋フォークライトニング＋加速度爆弾（早）（GC1グループ） */}
       <ProcessStep
         index={2}
-        name="水属性圧縮＋フォークライトニング＋加速度爆弾（GC1）処理"
+        name="水属性圧縮＋フォークライトニング＋加速度爆弾（早）処理"
       >
+        {/* 散開/頭割りは全員 */}
         <ActionBar text={raiMizuAction(gc1Role, gc1Truth)} />
-        {accel(gc1Truth) && <ActionBar text={`${accel(gc1Truth)}（加速度・付与GCのみ）`} />}
+        {/* 加速度（早）: 該当者のみ行を出す */}
+        {hayaActive && (
+          <ActionBar text={`${accel(hayaTruth)}（加速度・早）`} />
+        )}
       </ProcessStep>
 
       {/* 3. もりもりサンダガ＋呪詛の叫声（GC1） */}
@@ -121,7 +156,7 @@ export function ProcessFlow({
           onChange={(v) => set("magic_thunda", v)}
         />
         <ActionBar text={thundaDirect} />
-        <ActionBar text={juso(gc1Truth)} />
+        {gc1JusoActive && <ActionBar text={`${juso(gc1Truth)}（呪詛・GC1）`} />}
       </ProcessStep>
 
       {/* 4. どきどきアルテマ＋混沌（1回目） */}
@@ -129,21 +164,27 @@ export function ProcessFlow({
         <ActionBar text={tsunamiHonooAction(wave1Role, wave1Truth)} />
       </ProcessStep>
 
-      {/* 5. ひろげるブリザガ＋水＋雷＋加速度（GC2） */}
-      <ProcessStep index={5} name="ひろげるブリザガ＋水＋雷＋加速度（GC2）処理">
+      {/* 5. ひろげるブリザガ＋水＋雷＋加速度（遅）（GC2グループ） */}
+      <ProcessStep index={5} name="ひろげるブリザガ＋水＋雷＋加速度（遅）処理">
         <TruthInputRow
           label="❄ ひろげるブリザガ（真偽）"
           value={blizza}
           onChange={(v) => set("magic_blizza", v)}
         />
         <ActionBar text={blizzaDirect} />
+        {/* 散開/頭割りは全員 */}
         <ActionBar text={raiMizuAction(gc2Role, gc2Truth)} />
-        {accel(gc2Truth) && <ActionBar text={`${accel(gc2Truth)}（加速度・付与GCのみ）`} />}
+        {/* 加速度（遅）: 該当者のみ行を出す */}
+        {osoActive && <ActionBar text={`${accel(osoTruth)}（加速度・遅）`} />}
       </ProcessStep>
 
       {/* 6. 呪詛の叫声（GC2） */}
       <ProcessStep index={6} name="呪詛の叫声（GC2）処理">
-        <ActionBar text={juso(gc2Truth)} />
+        {gc2JusoActive ? (
+          <ActionBar text={`${juso(gc2Truth)}（呪詛・GC2）`} />
+        ) : (
+          <MarkerNote text="呪詛: 該当者のみ" />
+        )}
       </ProcessStep>
 
       {/* 7. マジックアウト＋混沌（2回目） */}

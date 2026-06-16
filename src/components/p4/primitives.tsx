@@ -116,6 +116,42 @@ export function RoleToggle({
   );
 }
 
+/** 汎用の単一選択トグル（任意個の選択肢）。選択中は塗り＋太字、未選択は薄く。 */
+export function SelectToggle({
+  options,
+  value,
+  onChange,
+}: {
+  options: { value: string; label: string; onClass?: string }[];
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <ToggleGroup
+      type="single"
+      value={value}
+      onValueChange={(v) => v && onChange(v)}
+      variant="outline"
+      size="sm"
+      className="shrink-0"
+    >
+      {options.map((o) => (
+        <ToggleGroupItem
+          key={o.value}
+          value={o.value}
+          aria-label={o.label}
+          className={`${
+            o.onClass ??
+            "data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:border-primary"
+          } data-[state=on]:font-bold data-[state=off]:opacity-40`}
+        >
+          {o.label}
+        </ToggleGroupItem>
+      ))}
+    </ToggleGroup>
+  );
+}
+
 /** 真/偽トグルの入力行（ラベル＋トグル） */
 export function TruthInputRow({
   label,
