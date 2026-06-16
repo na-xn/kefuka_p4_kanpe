@@ -6,6 +6,10 @@ on:
       - "v*"
   workflow_dispatch: {}
 
+# リリース作成（gh release create）に contents: write が必要
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
