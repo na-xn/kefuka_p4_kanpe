@@ -1,12 +1,47 @@
 import { useEffect, useRef, useState } from "react";
-import { Minus, Plus, RotateCcw, X, Lock, LockOpen } from "lucide-react";
+import { X, Lock, LockOpen, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+
+type Choice = "shin" | "gi" | "";
+
+type Row = { id: string; name: string; shin: string; gi: string };
+type Section = { title: string; rows: Row[] };
+
+const SECTIONS: Section[] = [
+  {
+    title: "【早デバフの皆様】",
+    rows: [
+      { id: "1water", name: "💧 早水", shin: "📢 【真】水頭割り参加", gi: "📢 【偽】水散開（頭割り入らない）" },
+      { id: "1light", name: "⚡ 早ライトニング", shin: "📢 【真】ライトニング散開", gi: "📢 【偽】ライトニング頭割り" },
+      { id: "1look", name: "👁️ 早視線", shin: "📢 【真】視線見ない", gi: "📢 【偽】視線見る" },
+      { id: "element1", name: "🌊 1回目 つなみ or ほのお", shin: "📢 【真】水：ドーナツ / 炎：タケノコ", gi: "📢 【偽】水：タケノコ / 炎：ドーナツ" },
+    ],
+  },
+  {
+    title: "【遅デバフの皆様】",
+    rows: [
+      { id: "2water", name: "💧 遅水", shin: "📢 【真】水頭割り参加", gi: "📢 【偽】水散開（頭割り入らない）" },
+      { id: "2light", name: "⚡ 遅ライトニング", shin: "📢 【真】ライトニング散開", gi: "📢 【偽】ライトニング頭割り" },
+      { id: "2look", name: "👁️ 遅視線", shin: "📢 【真】視線見ない", gi: "📢 【偽】視線見る" },
+      { id: "element2", name: "🔥 2回目 つなみ or ほのお", shin: "📢 【真】水：ドーナツ / 炎：タケノコ", gi: "📢 【偽】水：タケノコ / 炎：ドーナツ" },
+    ],
+  },
+  {
+    title: "【安置、加速度判断】",
+    rows: [
+      { id: "thunda", name: "⚡ サンダガ", shin: "📢 【真】直線踏まない", gi: "📢 【偽】直線踏む" },
+      { id: "blizza", name: "❄️ ブリザガ", shin: "📢 【真】扇踏まない", gi: "📢 【偽】扇踏む" },
+      { id: "accel", name: "⏳ 加速度爆弾", shin: "📢 【真】止まる", gi: "📢 【偽】動き続ける" },
+    ],
+  },
+];
 
 type MenuState = { x: number; y: number } | null;
 
 export default function App() {
-  const [count, setCount] = useState(0);
+  const [sel, setSel] = useState<Record<string, Choice>>({});
   const [opacity, setOpacity] = useState(1);
   const [locked, setLocked] = useState(false);
   const [menu, setMenu] = useState<MenuState>(null);
@@ -16,9 +51,7 @@ export default function App() {
   useEffect(() => {
     if (!menu) return;
     const onDown = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenu(null);
-      }
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenu(null);
     };
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setMenu(null);
     window.addEventListener("mousedown", onDown);
@@ -31,12 +64,11 @@ export default function App() {
 
   const openMenu = (e: React.MouseEvent) => {
     e.preventDefault();
-    const pad = 8;
     const w = 184;
     const h = 64;
     setMenu({
-      x: Math.min(e.clientX, window.innerWidth - w - pad),
-      y: Math.min(e.clientY, window.innerHeight - h - pad),
+      x: Math.min(e.clientX, window.innerWidth - w - 8),
+      y: Math.min(e.clientY, window.innerHeight - h - 8),
     });
   };
 
@@ -48,7 +80,10 @@ export default function App() {
     }
   };
 
-  // 位置ロック中はドラッグ領域属性を外して移動を無効化
+  const setChoice = (id: string, value: Choice) =>
+    setSel((s) => ({ ...s, [id]: value }));
+  const resetAll = () => setSel({});
+
   const dragProps = locked ? {} : { "data-tauri-drag-region": true };
 
   return (
@@ -57,55 +92,79 @@ export default function App() {
       onContextMenu={openMenu}
     >
       <div
-        className="flex h-full w-full flex-col overflow-hidden rounded-xl border border-border bg-background shadow-lg"
+        className="flex h-full w-full flex-col overflow-hidden rounded-xl border bg-background shadow-lg"
         style={{ opacity }}
       >
-        {/* ドラッグ用バー */}
+        {/* ヘッダー兼ドラッグバー */}
         <div
           {...dragProps}
-          className="flex h-7 shrink-0 items-center justify-between px-2 text-muted-foreground"
+          className="flex h-8 shrink-0 items-center justify-between gap-2 border-b px-2"
         >
-          <span {...dragProps} className="text-[11px] font-medium select-none">
-            Counter
+          <span {...dragProps} className="truncate text-xs font-bold select-none">
+            🤡 絶妖星乱舞 P4 真偽判定
           </span>
-          <div className="flex items-center gap-0.5">
-            <button
-              type="button"
+          <div className="flex items-center gap-1">
+            <Button variant="destructive" size="xs" onClick={resetAll}>
+              <RotateCcw />
+              ALLリセット
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-xs"
               onClick={() => setLocked((l) => !l)}
-              className={
-                "grid h-5 w-5 place-items-center rounded hover:bg-secondary " +
-                (locked ? "text-foreground" : "")
-              }
               aria-label={locked ? "位置ロック解除" : "位置ロック"}
               title={locked ? "位置ロック中" : "位置ロック"}
             >
-              {locked ? <Lock className="h-3.5 w-3.5" /> : <LockOpen className="h-3.5 w-3.5" />}
-            </button>
-            <button
-              type="button"
-              onClick={closeWindow}
-              className="grid h-5 w-5 place-items-center rounded hover:bg-secondary"
-              aria-label="閉じる"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
+              {locked ? <Lock /> : <LockOpen />}
+            </Button>
+            <Button variant="ghost" size="icon-xs" onClick={closeWindow} aria-label="閉じる">
+              <X />
+            </Button>
           </div>
         </div>
 
-        {/* 本体 */}
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 pb-3">
-          <div className="text-5xl font-bold tabular-nums leading-none">{count}</div>
-          <div className="flex gap-1.5">
-            <Button variant="outline" size="icon" onClick={() => setCount((c) => c - 1)}>
-              <Minus className="h-4 w-4" />
-            </Button>
-            <Button size="icon" onClick={() => setCount((c) => c + 1)}>
-              <Plus className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" onClick={() => setCount(0)}>
-              <RotateCcw className="h-4 w-4" />
-            </Button>
-          </div>
+        {/* 本体（スクロール可能） */}
+        <div className="flex-1 overflow-y-auto px-2 py-1.5">
+          {SECTIONS.map((section) => (
+            <div key={section.title} className="mb-2">
+              <div className="border-l-2 border-primary pl-1.5 text-[10px] font-bold text-muted-foreground">
+                {section.title}
+              </div>
+              <div className="mt-1 flex flex-col gap-1">
+                {section.rows.map((row) => {
+                  const choice = sel[row.id] ?? "";
+                  return (
+                    <div
+                      key={row.id}
+                      className="flex items-center justify-between gap-2 rounded-md border bg-card px-2 py-1.5"
+                    >
+                      <div className="flex min-w-0 flex-col">
+                        <span className="truncate text-xs font-bold">{row.name}</span>
+                        <span className="truncate text-[10px] text-muted-foreground">
+                          {choice === "shin" ? row.shin : choice === "gi" ? row.gi : " "}
+                        </span>
+                      </div>
+                      <ToggleGroup
+                        type="single"
+                        value={choice}
+                        onValueChange={(v) => setChoice(row.id, v as Choice)}
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0"
+                      >
+                        <ToggleGroupItem value="shin" aria-label="真">
+                          真
+                        </ToggleGroupItem>
+                        <ToggleGroupItem value="gi" aria-label="偽">
+                          偽
+                        </ToggleGroupItem>
+                      </ToggleGroup>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -113,7 +172,7 @@ export default function App() {
       {menu && (
         <div
           ref={menuRef}
-          className="fixed z-50 rounded-lg border border-border bg-background p-2 shadow-xl"
+          className="fixed z-50 rounded-lg border bg-popover p-2 text-popover-foreground shadow-xl"
           style={{ left: menu.x, top: menu.y, width: 184 }}
           onContextMenu={(e) => e.preventDefault()}
         >

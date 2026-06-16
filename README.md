@@ -1,6 +1,11 @@
-# counter-topmost
+# 絶妖星乱舞 P4 真偽判定カンペ
 
-最前面に常駐するカウントアップ用デスクトップアプリ（Tauri v2 + React + Tailwind v4 + shadcn 風 UI）。
+FF14「絶妖星乱舞 P4」用の真偽判定カンペ。ゲーム画面の最前面に常駐し、クリックしてもゲームのフォーカスを奪わないオーバーレイ（Tauri v2 + React + Tailwind v4 + shadcn）。
+
+- 各ギミックの「真 / 偽」をトグルし、選んだ側の指示テキストを表示
+- ALLリセットで一括クリア
+- ボーダーレス / 常に最前面 / クリックでアクティブを奪わない（`WS_EX_NOACTIVATE`）
+- 右クリックで透過度スライダー、ヘッダーの鍵アイコンで位置ロック
 
 開発環境（Linux/SSH）と利用環境（Windows）を分けて運用する。
 
@@ -8,7 +13,7 @@
 | --- | --- |
 | UI / ロジック開発 | Linux（SSH 可。GTK 不要、Vite dev サーバのみ） |
 | 「常に最前面」の最終確認・常用 | Windows 実機（WebView2） |
-| 配布用 `.exe` / `.msi` ビルド | GitHub Actions（windows-latest） |
+| 配布用 `.exe` ビルド | GitHub Actions（windows-latest） |
 
 > `setAlwaysOnTop` は同一デスクトップ内の z-order を操作するため、SSH 越しの転送表示では「手元の最前面」にはならない。最前面の体験確認は必ず Windows 実機で行う。
 

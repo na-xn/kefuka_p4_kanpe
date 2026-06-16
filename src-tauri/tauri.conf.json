@@ -14,10 +14,12 @@
     "windows": [
       {
         "label": "main",
-        "title": "Counter (Top Most)",
-        "width": 220,
-        "height": 170,
-        "resizable": false,
+        "title": "絶妖星乱舞 P4 真偽判定カンペ",
+        "width": 360,
+        "height": 640,
+        "minWidth": 280,
+        "minHeight": 240,
+        "resizable": true,
         "alwaysOnTop": true,
         "decorations": false,
         "transparent": true,
