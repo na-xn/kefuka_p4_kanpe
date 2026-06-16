@@ -77,7 +77,7 @@ export function ProcessFlow({
   const memLabel = (c: Choice) => (c === "shin" ? "真" : c === "gi" ? "偽" : "—");
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-0">
       {/* 1. 生者の傷（GC3）処理 */}
       <ProcessStep index={1} name="生者の傷（GC3）処理">
         {!gc3Role ? (
@@ -177,7 +177,7 @@ export function ProcessFlow({
       </ProcessStep>
 
       {/* 8. どきどきアルテマ（全体攻撃） */}
-      <ProcessStep index={8} name="どきどきアルテマ（全体攻撃）">
+      <ProcessStep index={8} name="どきどきアルテマ（全体攻撃）" last>
         <MarkerNote text="🔥 24.9% 以下で最終フェーズ" />
       </ProcessStep>
     </div>

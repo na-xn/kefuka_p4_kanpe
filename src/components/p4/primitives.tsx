@@ -135,25 +135,33 @@ export function MarkerNote({ text }: { text: string }) {
   );
 }
 
-/** 処理フローのステップ枠（番号バッジ＋ステップ名＋子要素） */
+/** 処理フローのステップ（縦タイムライン: 左に連結ライン＋番号ノード、右に内容） */
 export function ProcessStep({
   index,
   name,
   children,
+  last = false,
 }: {
   index: number;
   name: string;
   children: React.ReactNode;
+  /** 最後のステップなら下方向の連結ラインを引かない */
+  last?: boolean;
 }) {
   return (
-    <div className="rounded-lg border bg-card/40 p-2">
-      <div className="mb-1.5 flex items-center gap-1.5">
-        <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground">
+    <div className="flex gap-2.5">
+      {/* レール（ノード＋連結ライン） */}
+      <div className="flex flex-col items-center">
+        <span className="z-10 flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground ring-2 ring-background">
           {index}
         </span>
-        <span className="text-xs font-bold leading-tight">{name}</span>
+        {!last && <div className="my-0.5 w-0.5 flex-1 rounded bg-border" />}
       </div>
-      <div className="flex flex-col gap-1.5">{children}</div>
+      {/* 内容 */}
+      <div className={last ? "flex-1" : "flex-1 pb-4"}>
+        <div className="mb-1 pt-0.5 text-[13px] font-bold leading-tight">{name}</div>
+        <div className="flex flex-col gap-1.5">{children}</div>
+      </div>
     </div>
   );
 }
