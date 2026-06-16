@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { ActionBar, TruthToggle, TruthInputRow, MarkerNote, ProcessStep } from "@/components/p4/primitives";
-import { raiMizuAction, tsunamiHonooAction, juso, accel } from "@/p4/logic";
+import { raiMizuAction, tsunamiHonooAction, juso, accel, seishi } from "@/p4/logic";
 import type { Choice } from "@/p4/types";
 
 /** 処理フローフェーズ本体（記事タイムライン準拠の処理順） */
@@ -14,6 +14,8 @@ export function ProcessFlow({
   // --- 状態の読み出し ---
   const gc3Role = get("gc3_role__role"); // "aragan" | "shi" | ""
   const gc3Mu = get("gc3_mu") as Choice; // 無の氾濫
+  const gc3Truth = get("gc3_truth") as Choice; // アラガン/死の超越 真偽（生死）
+  const gc3Seishi = seishi(gc3Role, gc3Truth); // 生死テキスト
 
   const thunda = get("magic_thunda") as Choice; // サンダガ記憶
   const blizza = get("magic_blizza") as Choice; // ブリザガ記憶
@@ -103,6 +105,13 @@ export function ProcessFlow({
               </span>
               <TruthToggle value={gc3Mu} onChange={(v) => set("gc3_mu", v)} />
             </div>
+            <div className="mt-1 rounded-md border border-dashed px-2 py-1 text-[11px]">
+              {gc3Seishi ? (
+                <span className="font-semibold text-foreground">あなた: {gc3Seishi}</span>
+              ) : (
+                <span className="text-muted-foreground/60">生死: 判定入力で真偽を選択…</span>
+              )}
+            </div>
             <ActionBar text={gc3Result} />
           </div>
         )}
@@ -146,25 +155,20 @@ export function ProcessFlow({
         <ActionBar text={tsunamiHonooAction(wave1Role, wave1Truth)} />
       </ProcessStep>
 
-      {/* 6. 全体攻撃 */}
-      <ProcessStep index={6} name="全体攻撃">
-        <MarkerNote text="💥 全体攻撃（受けるだけ）" />
-      </ProcessStep>
-
-      {/* 7. ひろげるブリザガ＋水＋雷＋加速度（GC2） */}
-      <ProcessStep index={7} name="ひろげるブリザガ＋水＋雷＋加速度（GC2）処理">
+      {/* 6. ひろげるブリザガ＋水＋雷＋加速度（GC2） */}
+      <ProcessStep index={6} name="ひろげるブリザガ＋水＋雷＋加速度（GC2）処理">
         <ActionBar text={blizzaDirect} />
         <ActionBar text={raiMizuAction(gc2Role, gc2RoleTruth)} />
         {accel(gc2Accel) && <ActionBar text={accel(gc2Accel)} />}
       </ProcessStep>
 
-      {/* 8. 呪詛の叫声（GC2） */}
-      <ProcessStep index={8} name="呪詛の叫声（GC2）処理">
+      {/* 7. 呪詛の叫声（GC2） */}
+      <ProcessStep index={7} name="呪詛の叫声（GC2）処理">
         <ActionBar text={juso(gc2Juso)} />
       </ProcessStep>
 
-      {/* 9. マジックアウト＋混沌（2回目） */}
-      <ProcessStep index={9} name="マジックアウト＋混沌（2回目）処理">
+      {/* 8. マジックアウト＋混沌（2回目） */}
+      <ProcessStep index={8} name="マジックアウト＋混沌（2回目）処理">
         <TruthInputRow
           label="🎭 マジックアウト"
           value={magicOut}
@@ -187,8 +191,8 @@ export function ProcessFlow({
         <ActionBar text={tsunamiHonooAction(wave2Role, wave2Truth)} />
       </ProcessStep>
 
-      {/* 10. どきどきアルテマ */}
-      <ProcessStep index={10} name="どきどきアルテマ">
+      {/* 9. どきどきアルテマ（全体攻撃） */}
+      <ProcessStep index={9} name="どきどきアルテマ（全体攻撃）">
         <MarkerNote text="🔥 24.9% 以下で最終フェーズ" />
       </ProcessStep>
     </div>

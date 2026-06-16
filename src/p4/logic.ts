@@ -29,3 +29,18 @@ export function accel(truth: Choice): string | null {
   if (!truth) return null;
   return truth === "shin" ? "🛑 止まる" : "🏃 動く";
 }
+
+/**
+ * 生者の傷（GC3）の生死判定。担当 × 真偽（本当/嘘）で生きる／死ぬを返す。
+ * - アラガン: 本当→生きる / 嘘→死ぬ
+ * - 死の超越: 本当→死ぬ / 嘘→生きる
+ * 未確定なら null。
+ */
+export function seishi(role: Role, truth: Choice): string | null {
+  if (!role || !truth) return null;
+  const live = "生きる（無敵/ダメージ受けない）";
+  const die = "死ぬ（ダメージ受ける）";
+  if (role === "aragan") return truth === "shin" ? live : die;
+  // shi（死の超越）
+  return truth === "shin" ? die : live;
+}

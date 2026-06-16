@@ -13,6 +13,7 @@ export default function App() {
   const [opacity, setOpacity] = useState(1);
   const [locked, setLocked] = useState(false);
   const [menu, setMenu] = useState<MenuState>(null);
+  const [errors, setErrors] = useState<string[]>([]);
   const menuRef = useRef<HTMLDivElement>(null);
 
   // メニュー外クリック / Esc で閉じる
@@ -51,7 +52,44 @@ export default function App() {
   const get = (key: string): string => state[key] ?? "";
   const set = (key: string, value: string) =>
     setState((s) => ({ ...s, [key]: value }));
-  const resetAll = () => setState({});
+  const resetAll = () => {
+    setState({});
+    setErrors([]);
+  };
+
+  /** 入力フェーズ必須項目の検証。不足ラベルの配列を返す。 */
+  const validateInput = (): string[] => {
+    const missing: string[] = [];
+    const need = (key: string, label: string) => {
+      if (!get(key)) missing.push(label);
+    };
+    need("gc1_juso", "呪詛の叫声（早）");
+    need("gc1_role__role", "GC1 担当（雷/水）の選択");
+    need("gc1_role", "GC1 担当の真偽");
+    need("gc2_juso", "呪詛の叫声（遅）");
+    need("gc2_role__role", "GC2 担当（雷/水）の選択");
+    need("gc2_role", "GC2 担当の真偽");
+    need("wave1_type__role", "つなみ/ほのお1 種類");
+    need("wave1_type", "つなみ/ほのお1 真偽");
+    need("wave2_type__role", "つなみ/ほのお2 種類");
+    need("wave2_type", "つなみ/ほのお2 真偽");
+    need("gc3_role__role", "GC3 担当（アラガン/死の超越）");
+    need("gc3_truth", "GC3 担当の真偽");
+    if (!get("gc1_accel") && !get("gc2_accel")) {
+      missing.push("加速度爆弾（GC1 か GC2 のどちらか一方）");
+    }
+    return missing;
+  };
+
+  const confirmToProcess = () => {
+    const missing = validateInput();
+    if (missing.length > 0) {
+      setErrors(missing);
+      return;
+    }
+    setErrors([]);
+    setPhase("process");
+  };
 
   const dragProps = locked ? {} : { "data-tauri-drag-region": true };
 
@@ -118,10 +156,20 @@ export default function App() {
                   inputPhase
                 />
               ))}
+              {errors.length > 0 && (
+                <div className="mt-1 rounded-md border border-destructive/50 bg-destructive/10 px-2 py-1.5 text-destructive">
+                  <p className="text-xs font-bold">未入力の項目があります:</p>
+                  <ul className="mt-1 list-disc pl-4 text-[11px]">
+                    {errors.map((e) => (
+                      <li key={e}>{e}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <Button
                 variant="default"
                 className="mt-1 h-11 w-full text-sm font-bold"
-                onClick={() => setPhase("process")}
+                onClick={confirmToProcess}
               >
                 確定 → 処理フローへ →
               </Button>

@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { ActionBar, TruthToggle, RoleToggle } from "@/components/p4/primitives";
+import { seishi } from "@/p4/logic";
 import type { Choice, Judge, EventDef } from "@/p4/types";
 
 /** 1判定行（汎用） */
@@ -46,27 +47,39 @@ function Gc3RolePicker({
 }) {
   const roleKey = "gc3_role__role";
   const role = get(roleKey);
+  const truth = get("gc3_truth") as Choice;
   return (
-    <div className="rounded-md border bg-card px-2 py-1.5">
-      <div className="flex items-center justify-between gap-2">
-        <span className="min-w-0 flex-1 text-xs font-semibold">担当</span>
-        <ToggleGroup
-          type="single"
-          value={role}
-          onValueChange={(v) => set(roleKey, v)}
-          variant="outline"
-          size="sm"
-          className="shrink-0"
-        >
-          <ToggleGroupItem value="aragan" aria-label="アラガンフィールド">
-            アラガン
-          </ToggleGroupItem>
-          <ToggleGroupItem value="shi" aria-label="死の超越">
-            死の超越
-          </ToggleGroupItem>
-        </ToggleGroup>
+    <>
+      <div className="rounded-md border bg-card px-2 py-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <span className="min-w-0 flex-1 text-xs font-semibold">担当</span>
+          <ToggleGroup
+            type="single"
+            value={role}
+            onValueChange={(v) => set(roleKey, v)}
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+          >
+            <ToggleGroupItem value="aragan" aria-label="アラガンフィールド">
+              アラガン
+            </ToggleGroupItem>
+            <ToggleGroupItem value="shi" aria-label="死の超越">
+              死の超越
+            </ToggleGroupItem>
+          </ToggleGroup>
+        </div>
       </div>
-    </div>
+      <div className="rounded-md border bg-card px-2 py-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <span className="min-w-0 flex-1 text-xs font-semibold">
+            アラガン/死の超越（真偽）
+          </span>
+          <TruthToggle value={truth} onChange={(v) => set("gc3_truth", v)} />
+        </div>
+        <ActionBar text={seishi(role, truth)} />
+      </div>
+    </>
   );
 }
 
