@@ -45,20 +45,31 @@ function JudgeRow({
   );
 }
 
-const HAYA = {
+// 担当に加速度(早/遅)を統合した選択肢。なし＝加速度持ち（早/遅）なので、雷/水/加早/加遅 の4択。
+const RAI_OPT = {
+  value: "rai",
+  label: "雷",
+  onClass:
+    "data-[state=on]:bg-purple-600 data-[state=on]:text-white data-[state=on]:border-purple-600",
+};
+const MIZU_OPT = {
+  value: "mizu",
+  label: "水",
+  onClass:
+    "data-[state=on]:bg-sky-400 data-[state=on]:text-black data-[state=on]:border-sky-400",
+};
+const ACC_HAYA = {
   value: "haya",
-  label: "早",
+  label: "加早",
   onClass:
     "data-[state=on]:bg-amber-500 data-[state=on]:text-black data-[state=on]:border-amber-500",
 };
-const OSO = {
+const ACC_OSO = {
   value: "oso",
-  label: "遅",
+  label: "加遅",
   onClass:
     "data-[state=on]:bg-orange-700 data-[state=on]:text-white data-[state=on]:border-orange-700",
 };
-// 雷水が付かない人（なし）は必ず加速度爆弾がつくので 早/遅 のみ（GC1/GC2 共通）。
-const ACCEL_OPTIONS = [HAYA, OSO];
 // 呪詛は「発生源」かどうかの有/無のみ（早/遅は GC1=早・GC2=遅 で確定。見る見ないは全員）。
 const JUSO_OPTIONS = [
   {
@@ -82,9 +93,10 @@ function GcInputCard({
   set: (k: string, v: string) => void;
 }) {
   const roleKey = `gc${suffix}_role__role`;
+  const accelKey = `gc${suffix}_accel`;
   const role = get(roleKey); // "rai" | "mizu" | "nashi" | ""
   const truth = get(`gc${suffix}_role`) as Choice; // GC真偽（見出し）
-  const accelVal = get(`gc${suffix}_accel`);
+  const accelVal = get(accelKey); // "haya" | "oso" | ""
   const jusoVal = get(`gc${suffix}_juso`);
   const gc1Role = get("gc1_role__role");
 
@@ -106,12 +118,32 @@ function GcInputCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isGc2, gc2Side, role]);
 
-  // 実効的に「なし」側か（加速度・呪詛を出すか）
   const isNashi = isGc2 ? gc2Side === "nashi" : role === "nashi";
+
+  // 担当＋加速度を統合した1つの値（雷/水/加早/加遅）
+  const combined =
+    role === "rai" || role === "mizu" ? role : role === "nashi" ? accelVal : "";
+  const setCombined = (v: string) => {
+    if (v === "rai" || v === "mizu") {
+      set(roleKey, v);
+      if (accelVal) set(accelKey, "");
+    } else {
+      set(roleKey, "nashi");
+      set(accelKey, v); // haya | oso
+    }
+  };
+
+  // 表示する選択肢: GC1=4択 / GC2なし側=加早遅 / GC2雷水側=雷水
+  const combinedOptions =
+    isGc2 && gc2Side === "nashi"
+      ? [ACC_HAYA, ACC_OSO]
+      : isGc2 && gc2Side === "raimizu"
+      ? [RAI_OPT, MIZU_OPT]
+      : [RAI_OPT, MIZU_OPT, ACC_HAYA, ACC_OSO];
 
   return (
     <>
-      {/* 担当 */}
+      {/* 担当（＋加速度早遅を統合） */}
       {isGc2 && gc2Side === "wait" ? (
         <div className="rounded-md border border-dashed px-2 py-1.5 text-[11px] text-muted-foreground">
           GC1 の担当を先に入力してください
@@ -119,46 +151,16 @@ function GcInputCard({
       ) : (
         <div className="rounded-md border bg-card px-2 py-1.5">
           <div className="flex items-center justify-between gap-2">
-            <span className="min-w-0 flex-1 text-xs font-semibold">担当</span>
-            {isGc2 && gc2Side === "nashi" ? (
-              <span className="shrink-0 rounded bg-slate-500 px-2 py-0.5 text-xs font-bold text-white">
-                なし（自動）
-              </span>
-            ) : isGc2 && gc2Side === "raimizu" ? (
-              <RoleToggle
-                role={{ left: { value: "rai", label: "雷" }, right: { value: "mizu", label: "水" } }}
-                value={role}
-                onChange={(v) => set(roleKey, v)}
-              />
-            ) : (
-              <RoleToggle
-                role={{
-                  left: { value: "rai", label: "雷" },
-                  mid: { value: "mizu", label: "水" },
-                  right: { value: "nashi", label: "なし" },
-                }}
-                value={role}
-                onChange={(v) => set(roleKey, v)}
-              />
-            )}
+            <span className="min-w-0 flex-1 text-xs font-semibold">担当 / 加速度</span>
+            <SelectToggle value={combined} onChange={setCombined} options={combinedOptions} />
           </div>
           <ActionBar text={raiMizuAction(role, truth)} />
         </div>
       )}
 
-      {/* 担当=なし のときだけ 加速度・呪詛 */}
+      {/* 担当=なし のときだけ 呪詛（発生源） */}
       {isNashi && (
         <>
-          <div className="rounded-md border bg-card px-2 py-1.5">
-            <div className="flex items-center justify-between gap-2">
-              <span className="min-w-0 flex-1 text-xs font-semibold">加速度爆弾</span>
-              <SelectToggle
-                value={accelVal}
-                onChange={(v) => set(`gc${suffix}_accel`, v)}
-                options={ACCEL_OPTIONS}
-              />
-            </div>
-          </div>
           <div className="rounded-md border bg-card px-2 py-1.5">
             <div className="flex items-center justify-between gap-2">
               <span className="min-w-0 flex-1 text-xs font-semibold">呪詛（発生源）</span>
