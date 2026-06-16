@@ -39,14 +39,19 @@ jobs:
       - name: Build Tauri app (exe only)
         run: pnpm tauri build --no-bundle
 
-      # アーティファクトは exe と README.md のみ
+      # exe と README.md だけをフラットなフォルダに集める（余計な階層を作らない）
+      - name: Stage artifacts
+        shell: bash
+        run: |
+          mkdir -p out
+          cp src-tauri/target/release/counter-topmost.exe out/
+          cp README.md out/
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: counter-topmost-windows
-          path: |
-            src-tauri/target/release/counter-topmost.exe
-            README.md
+          path: out
           if-no-files-found: error
 
       # タグ push 時のみ: exe と README.md だけを添付した Draft Release を作成
