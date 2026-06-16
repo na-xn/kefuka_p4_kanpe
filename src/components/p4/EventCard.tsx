@@ -53,21 +53,14 @@ function Gc3RolePicker({
       <div className="rounded-md border bg-card px-2 py-1.5">
         <div className="flex items-center justify-between gap-2">
           <span className="min-w-0 flex-1 text-xs font-semibold">担当</span>
-          <ToggleGroup
-            type="single"
+          <RoleToggle
+            role={{
+              left: { value: "aragan", label: "アラガン" },
+              right: { value: "shi", label: "死の超越" },
+            }}
             value={role}
-            onValueChange={(v) => set(roleKey, v)}
-            variant="outline"
-            size="sm"
-            className="shrink-0"
-          >
-            <ToggleGroupItem value="aragan" aria-label="アラガンフィールド">
-              アラガン
-            </ToggleGroupItem>
-            <ToggleGroupItem value="shi" aria-label="死の超越">
-              死の超越
-            </ToggleGroupItem>
-          </ToggleGroup>
+            onChange={(v) => set(roleKey, v)}
+          />
         </div>
       </div>
       <div className="rounded-md border bg-card px-2 py-1.5">

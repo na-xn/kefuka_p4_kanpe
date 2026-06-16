@@ -52,7 +52,24 @@ export function TruthToggle({
   );
 }
 
-/** 担当セレクタ（outline） */
+/** 役割の値ごとの「選択中」スタイル（雷=紫/水=水色/つなみ=水色/ほのお=赤/アラガン=黄/死の超越=紫） */
+const ROLE_ON_CLASS: Record<string, string> = {
+  rai: "data-[state=on]:bg-purple-600 data-[state=on]:text-white data-[state=on]:border-purple-600",
+  mizu: "data-[state=on]:bg-sky-400 data-[state=on]:text-black data-[state=on]:border-sky-400",
+  tsunami: "data-[state=on]:bg-sky-400 data-[state=on]:text-black data-[state=on]:border-sky-400",
+  honoo: "data-[state=on]:bg-red-600 data-[state=on]:text-white data-[state=on]:border-red-600",
+  aragan: "data-[state=on]:bg-yellow-400 data-[state=on]:text-black data-[state=on]:border-yellow-400",
+  shi: "data-[state=on]:bg-purple-600 data-[state=on]:text-white data-[state=on]:border-purple-600",
+};
+
+function roleItemClass(value: string): string {
+  const on =
+    ROLE_ON_CLASS[value] ??
+    "data-[state=on]:bg-primary data-[state=on]:text-primary-foreground";
+  return `${on} data-[state=on]:font-bold data-[state=off]:opacity-40`;
+}
+
+/** 担当セレクタ（値ごとに色分け） */
 export function RoleToggle({
   role,
   value,
@@ -74,14 +91,14 @@ export function RoleToggle({
       <ToggleGroupItem
         value={role.left.value}
         aria-label={role.left.label}
-        className="data-[state=on]:bg-amber-400 data-[state=on]:text-black data-[state=on]:border-amber-400 data-[state=on]:font-bold data-[state=off]:opacity-50"
+        className={roleItemClass(role.left.value)}
       >
         {role.left.label}
       </ToggleGroupItem>
       <ToggleGroupItem
         value={role.right.value}
         aria-label={role.right.label}
-        className="data-[state=on]:bg-amber-400 data-[state=on]:text-black data-[state=on]:border-amber-400 data-[state=on]:font-bold data-[state=off]:opacity-50"
+        className={roleItemClass(role.right.value)}
       >
         {role.right.label}
       </ToggleGroupItem>
