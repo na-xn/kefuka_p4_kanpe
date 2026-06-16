@@ -15,12 +15,14 @@
       {
         "label": "main",
         "title": "Counter (Top Most)",
-        "width": 320,
-        "height": 220,
-        "resizable": true,
+        "width": 220,
+        "height": 170,
+        "resizable": false,
         "alwaysOnTop": true,
-        "decorations": true,
-        "transparent": false
+        "decorations": false,
+        "transparent": true,
+        "shadow": false,
+        "focus": false
       }
     ],
     "security": {

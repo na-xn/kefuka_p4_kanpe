@@ -51,6 +51,7 @@ jobs:
         with:
           name: counter-topmost-windows
           path: |
+            src-tauri/target/release/counter-topmost.exe
             src-tauri/target/release/bundle/nsis/*.exe
             src-tauri/target/release/bundle/msi/*.msi
           if-no-files-found: warn
