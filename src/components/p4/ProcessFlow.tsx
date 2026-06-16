@@ -117,58 +117,50 @@ export function ProcessFlow({
         )}
       </ProcessStep>
 
-      {/* 2. マジックチャージ（記憶） */}
-      <ProcessStep index={2} name="マジックチャージ（記憶）">
-        <TruthInputRow
-          label="⚡ もりもりサンダガ（記憶）"
-          value={thunda}
-          onChange={(v) => set("magic_thunda", v)}
-        />
-        <TruthInputRow
-          label="❄ ひろげるブリザガ（記憶）"
-          value={blizza}
-          onChange={(v) => set("magic_blizza", v)}
-        />
-        <div className="rounded-md border border-dashed bg-muted/30 px-2 py-1 text-[11px] text-muted-foreground">
-          記憶 → ⚡サンダガ: <b className="text-foreground">{memLabel(thunda)}</b>
-          {"　"}❄ブリザガ: <b className="text-foreground">{memLabel(blizza)}</b>
-        </div>
-      </ProcessStep>
-
-      {/* 3. 水属性圧縮＋フォークライトニング＋加速度爆弾（GC1） */}
+      {/* 2. 水属性圧縮＋フォークライトニング＋加速度爆弾（GC1） */}
       <ProcessStep
-        index={3}
+        index={2}
         name="水属性圧縮＋フォークライトニング＋加速度爆弾（GC1）処理"
       >
         <ActionBar text={raiMizuAction(gc1Role, gc1RoleTruth)} />
         {accel(gc1Accel) && <ActionBar text={accel(gc1Accel)} />}
       </ProcessStep>
 
-      {/* 4. もりもりサンダガ＋呪詛の叫声（GC1） */}
-      <ProcessStep index={4} name="もりもりサンダガ＋呪詛の叫声（GC1）処理">
+      {/* 3. もりもりサンダガ＋呪詛の叫声（GC1） */}
+      <ProcessStep index={3} name="もりもりサンダガ＋呪詛の叫声（GC1）処理">
+        <TruthInputRow
+          label="⚡ もりもりサンダガ（真偽）"
+          value={thunda}
+          onChange={(v) => set("magic_thunda", v)}
+        />
         <ActionBar text={thundaDirect} />
         <ActionBar text={juso(gc1Juso)} />
       </ProcessStep>
 
-      {/* 5. どきどきアルテマ＋混沌（1回目） */}
-      <ProcessStep index={5} name="どきどきアルテマ＋混沌（1回目）処理">
+      {/* 4. どきどきアルテマ＋混沌（1回目） */}
+      <ProcessStep index={4} name="どきどきアルテマ＋混沌（1回目）処理">
         <ActionBar text={tsunamiHonooAction(wave1Role, wave1Truth)} />
       </ProcessStep>
 
-      {/* 6. ひろげるブリザガ＋水＋雷＋加速度（GC2） */}
-      <ProcessStep index={6} name="ひろげるブリザガ＋水＋雷＋加速度（GC2）処理">
+      {/* 5. ひろげるブリザガ＋水＋雷＋加速度（GC2） */}
+      <ProcessStep index={5} name="ひろげるブリザガ＋水＋雷＋加速度（GC2）処理">
+        <TruthInputRow
+          label="❄ ひろげるブリザガ（真偽）"
+          value={blizza}
+          onChange={(v) => set("magic_blizza", v)}
+        />
         <ActionBar text={blizzaDirect} />
         <ActionBar text={raiMizuAction(gc2Role, gc2RoleTruth)} />
         {accel(gc2Accel) && <ActionBar text={accel(gc2Accel)} />}
       </ProcessStep>
 
-      {/* 7. 呪詛の叫声（GC2） */}
-      <ProcessStep index={7} name="呪詛の叫声（GC2）処理">
+      {/* 6. 呪詛の叫声（GC2） */}
+      <ProcessStep index={6} name="呪詛の叫声（GC2）処理">
         <ActionBar text={juso(gc2Juso)} />
       </ProcessStep>
 
-      {/* 8. マジックアウト＋混沌（2回目） */}
-      <ProcessStep index={8} name="マジックアウト＋混沌（2回目）処理">
+      {/* 7. マジックアウト＋混沌（2回目） */}
+      <ProcessStep index={7} name="マジックアウト＋混沌（2回目）処理">
         <TruthInputRow
           label="🎭 マジックアウト"
           value={magicOut}
@@ -191,8 +183,8 @@ export function ProcessFlow({
         <ActionBar text={tsunamiHonooAction(wave2Role, wave2Truth)} />
       </ProcessStep>
 
-      {/* 9. どきどきアルテマ（全体攻撃） */}
-      <ProcessStep index={9} name="どきどきアルテマ（全体攻撃）">
+      {/* 8. どきどきアルテマ（全体攻撃） */}
+      <ProcessStep index={8} name="どきどきアルテマ（全体攻撃）">
         <MarkerNote text="🔥 24.9% 以下で最終フェーズ" />
       </ProcessStep>
     </div>
