@@ -12,6 +12,10 @@
     "core:window:allow-set-size",
     "core:window:allow-inner-size",
     "opener:default",
-    "opener:allow-open-url"
+    "opener:allow-open-url",
+    "global-shortcut:allow-register",
+    "global-shortcut:allow-unregister",
+    "global-shortcut:allow-unregister-all",
+    "global-shortcut:allow-is-registered"
   ]
 }

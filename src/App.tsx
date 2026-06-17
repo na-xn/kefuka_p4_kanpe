@@ -10,6 +10,7 @@ import { ProcessFlow } from "@/components/p4/ProcessFlow";
 import { INPUT_EVENTS } from "@/p4/events";
 import type { State, Phase, MenuState } from "@/p4/types";
 import { buildSpeechSteps, speak, stopSpeak, DEFAULT_TIMINGS } from "@/p4/speech";
+import { register, unregister } from "@tauri-apps/plugin-global-shortcut";
 
 const REPO = "na-xn/kefuka_p4_kanpe";
 const RELEASES_URL = `https://github.com/${REPO}/releases/latest`;
@@ -45,6 +46,61 @@ const STEP_GROUPS: string[][] = [
 ];
 
 const EVENT_BY_ID = Object.fromEntries(INPUT_EVENTS.map((e) => [e.id, e]));
+
+/**
+ * キー押下イベントから Tauri アクセラレータの「メインキー」部分を返す。
+ * 修飾キー単独（Control/Shift/Alt/Meta）の場合は null（記録継続用）。
+ */
+function mainKeyToAccel(e: KeyboardEvent): string | null {
+  const code = e.code;
+  const key = e.key;
+  // 修飾キー単独
+  if (["Control", "Shift", "Alt", "Meta"].includes(key)) return null;
+  // F1〜F12
+  if (/^F([1-9]|1[0-2])$/.test(code)) return code;
+  // 英字 KeyA → A
+  const letter = /^Key([A-Z])$/.exec(code);
+  if (letter) return letter[1];
+  // 数字 Digit1 → 1 / Numpad1 → 1
+  const digit = /^(?:Digit|Numpad)([0-9])$/.exec(code);
+  if (digit) return digit[1];
+  // 矢印
+  const arrow: Record<string, string> = {
+    ArrowUp: "Up",
+    ArrowDown: "Down",
+    ArrowLeft: "Left",
+    ArrowRight: "Right",
+  };
+  if (arrow[code]) return arrow[code];
+  // その他よく使うキー
+  const named: Record<string, string> = {
+    Space: "Space",
+    Enter: "Enter",
+    Tab: "Tab",
+    Backspace: "Backspace",
+    Delete: "Delete",
+    Home: "Home",
+    End: "End",
+    PageUp: "PageUp",
+    PageDown: "PageDown",
+    Insert: "Insert",
+    Minus: "Minus",
+    Equal: "Equal",
+    Backquote: "Backquote",
+    Comma: "Comma",
+    Period: "Period",
+    Slash: "Slash",
+    Backslash: "Backslash",
+    Semicolon: "Semicolon",
+    Quote: "Quote",
+    BracketLeft: "BracketLeft",
+    BracketRight: "BracketRight",
+  };
+  if (named[code]) return named[code];
+  // フォールバック: 1文字の印字可能キーは大文字化
+  if (key.length === 1) return key.toUpperCase();
+  return null;
+}
 
 /** 1イベント分の関連状態キー（自動確定の監視用）。 */
 function eventKeys(id: string, state: State): string[] {
@@ -116,6 +172,8 @@ export default function App() {
   const [ttsOn, setTtsOn] = useState(false);
   const [ttsTimings, setTtsTimings] = useState<Record<string, number>>(DEFAULT_TIMINGS);
   const [showTtsSettings, setShowTtsSettings] = useState(false);
+  const [ttsHotkey, setTtsHotkey] = useState("F8");
+  const [recordingHotkey, setRecordingHotkey] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const lastHeight = useRef(0);
@@ -204,6 +262,8 @@ export default function App() {
       if (on != null) setTtsOn(on === "true");
       const tm = localStorage.getItem("ttsTimings");
       if (tm) setTtsTimings({ ...DEFAULT_TIMINGS, ...JSON.parse(tm) });
+      const hk = localStorage.getItem("ttsHotkey");
+      if (hk) setTtsHotkey(hk);
     } catch {
       /* 無視 */
     }
@@ -224,6 +284,13 @@ export default function App() {
       /* 無視 */
     }
   }, [ttsTimings]);
+  useEffect(() => {
+    try {
+      localStorage.setItem("ttsHotkey", ttsHotkey);
+    } catch {
+      /* 無視 */
+    }
+  }, [ttsHotkey]);
 
   // GitHub の最新リリースを確認。
   const checkUpdate = async () => {
@@ -282,6 +349,18 @@ export default function App() {
     }
   };
 
+  /**
+   * 読み上げ開始トリガーの一本化。開始ボタン・GC3担当選択・ホットキーすべてここを呼ぶ。
+   * 処理画面へ遷移し、現在時刻を 0:00 として読み上げスケジュールを開始（既に process でも 0:00 から再スタート）。
+   */
+  const startTtsByTrigger = () => {
+    setPhase("process");
+    startTts();
+  };
+  // ホットキーコールバックが古い closure を掴まないよう、最新の関数を ref で参照。
+  const startTtsByTriggerRef = useRef(startTtsByTrigger);
+  startTtsByTriggerRef.current = startTtsByTrigger;
+
   const resetAll = () => {
     stopTts();
     setState({});
@@ -305,6 +384,24 @@ export default function App() {
     if (!ttsOn) stopTts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ttsOn]);
+
+  // グローバルホットキー登録: ttsOn && ttsHotkey のとき登録、依存変化/OFF/アンマウントで解除。
+  // Tauri 外（ブラウザ）や重複登録では例外になり得るので try/catch で握りつぶす。
+  useEffect(() => {
+    if (!ttsOn || !ttsHotkey) return;
+    (async () => {
+      try {
+        await register(ttsHotkey, (e) => {
+          if (e.state === "Pressed") startTtsByTriggerRef.current();
+        });
+      } catch {
+        /* Tauri 外 / 重複登録 などは無視 */
+      }
+    })();
+    return () => {
+      unregister(ttsHotkey).catch(() => {});
+    };
+  }, [ttsOn, ttsHotkey]);
 
   /** 現在の入力ステップ（複数イベント）の必須未入力を検証。不足ラベルの配列を返す。 */
   const validateStep = (step: number): string[] =>
@@ -374,10 +471,34 @@ export default function App() {
     if (phase !== "input") return;
     if (inputStep !== activeStepGroups.length - 1) return;
     if (!gc3Role) return;
-    setPhase("process");
-    startTts();
+    startTtsByTrigger();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ttsOn, hideEdgeSteps, phase, inputStep, gc3Role]);
+
+  // ホットキー記録: recordingHotkey の間、次の単一キー押下を捕捉してアクセラレータ文字列を生成。
+  useEffect(() => {
+    if (!recordingHotkey) return;
+    const onKey = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key === "Escape") {
+        setRecordingHotkey(false);
+        return;
+      }
+      const mods: string[] = [];
+      if (e.ctrlKey) mods.push("Control");
+      if (e.shiftKey) mods.push("Shift");
+      if (e.altKey) mods.push("Alt");
+      if (e.metaKey) mods.push("Super");
+      const main = mainKeyToAccel(e);
+      // 修飾のみ（メインキー未確定）の場合は記録を継続。
+      if (!main) return;
+      setTtsHotkey([...mods, main].join("+"));
+      setRecordingHotkey(false);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [recordingHotkey]);
 
   const dragProps = locked ? {} : { "data-tauri-drag-region": true };
 
@@ -497,10 +618,7 @@ export default function App() {
               <Button
                 variant="default"
                 className="h-16 w-40 text-lg font-bold"
-                onClick={() => {
-                  setPhase("process");
-                  startTts();
-                }}
+                onClick={startTtsByTrigger}
               >
                 ▶ 開始
               </Button>
@@ -596,6 +714,11 @@ export default function App() {
             >
               ⏱ 秒数設定
             </button>
+            {ttsOn && (
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                開始ホットキー: <span className="tabular-nums">{ttsHotkey || "(未設定)"}</span>
+              </p>
+            )}
           </div>
 
           {/* 更新確認 */}
@@ -678,13 +801,46 @@ export default function App() {
                 </label>
               ))}
             </div>
+            {/* 開始ホットキー */}
+            <div className="mt-3 border-t pt-2">
+              <div className="mb-1 text-[11px] font-medium text-muted-foreground">
+                開始ホットキー（グローバル）
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="min-w-0 flex-1 truncate rounded border bg-background px-2 py-1 text-[11px] tabular-nums text-foreground">
+                  {recordingHotkey ? "キーを押してください…（Escで中止）" : ttsHotkey || "(未設定)"}
+                </span>
+                <Button
+                  variant={recordingHotkey ? "destructive" : "secondary"}
+                  size="xs"
+                  onClick={() => setRecordingHotkey((r) => !r)}
+                >
+                  {recordingHotkey ? "中止" : "記録"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => {
+                    setRecordingHotkey(false);
+                    setTtsHotkey("F8");
+                  }}
+                  title="既定(F8)に戻す"
+                >
+                  F8
+                </Button>
+              </div>
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                読み上げONのとき、このキーで処理画面へ移動し読み上げを開始します。
+              </p>
+            </div>
+
             <div className="mt-3 flex justify-end gap-2">
               <Button
                 variant="secondary"
                 size="xs"
                 onClick={() => setTtsTimings(DEFAULT_TIMINGS)}
               >
-                既定に戻す
+                秒数を既定に戻す
               </Button>
               <Button variant="default" size="xs" onClick={() => setShowTtsSettings(false)}>
                 閉じる
