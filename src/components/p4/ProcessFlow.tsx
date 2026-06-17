@@ -170,8 +170,8 @@ export function ProcessFlow({
         highlight={hayaActive}
         icons={[raiMizuIcon(earlyGcRole), hayaActive ? DEBUFF_ICON.accel : null]}
       >
-        {/* 散開/頭割り（早側の水雷） */}
-        <ActionBar text={raiMizuAction(earlyGcRole, earlyGcTruth)} />
+        {/* 散開/頭割り（早側の水雷）。アイコンは自分の担当(雷/水) */}
+        <ActionBar text={raiMizuAction(earlyGcRole, earlyGcTruth)} icon={raiMizuIcon(earlyGcRole)} />
         {/* 加速度（早）: 該当者のみ行を出す */}
         {hayaActive && (
           <ActionBar text={`${accel(hayaTruth)}（加速度・早）`} />
@@ -206,7 +206,10 @@ export function ProcessFlow({
         name="どきどきアルテマ＋混沌（早）処理"
         icons={[chaosIcon(earlyWaveRole)]}
       >
-        <ActionBar text={tsunamiHonooAction(earlyWaveRole, earlyWaveTruth)} />
+        <ActionBar
+          text={tsunamiHonooAction(earlyWaveRole, earlyWaveTruth)}
+          icon={chaosIcon(earlyWaveRole)}
+        />
       </ProcessStep>
 
       {/* 5. ひろげるブリザガ＋水＋雷＋加速度（遅） — 水雷は1回目(GC1)が遅 */}
@@ -222,8 +225,8 @@ export function ProcessFlow({
           onChange={(v) => set("magic_blizza", v)}
         />
         <ActionBar text={blizzaDirect} />
-        {/* 散開/頭割り（遅側の水雷） */}
-        <ActionBar text={raiMizuAction(lateGcRole, lateGcTruth)} />
+        {/* 散開/頭割り（遅側の水雷）。アイコンは自分の担当(雷/水) */}
+        <ActionBar text={raiMizuAction(lateGcRole, lateGcTruth)} icon={raiMizuIcon(lateGcRole)} />
         {/* 加速度（遅）: 該当者のみ行を出す */}
         {osoActive && <ActionBar text={`${accel(osoTruth)}（加速度・遅）`} />}
       </ProcessStep>
@@ -273,7 +276,10 @@ export function ProcessFlow({
         ) : (
           magicOutBars.map((t, i) => <ActionBar key={i} text={t} />)
         )}
-        <ActionBar text={tsunamiHonooAction(lateWaveRole, lateWaveTruth)} />
+        <ActionBar
+          text={tsunamiHonooAction(lateWaveRole, lateWaveTruth)}
+          icon={chaosIcon(lateWaveRole)}
+        />
       </ProcessStep>
 
       {/* 8. どきどきアルテマ（全体攻撃） */}

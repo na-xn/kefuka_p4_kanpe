@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { ActionBar, TruthToggle, RoleToggle, SelectToggle } from "@/components/p4/primitives";
 import { seishi, raiMizuAction, tsunamiHonooAction } from "@/p4/logic";
-import { DEBUFF_ICON } from "@/p4/icons";
+import { DEBUFF_ICON, raiMizuIcon, chaosIcon } from "@/p4/icons";
 import type { Choice, Judge, EventDef } from "@/p4/types";
 
 /** イベント見出しに置く「真偽トグル」の状態キー（GC・つなみ/ほのお）。GC3は真偽不要。 */
@@ -178,7 +178,7 @@ function GcInputCard({
             <span className="min-w-0 flex-1 text-xs font-semibold">担当 / 加速度</span>
             <SelectToggle value={combined} onChange={setCombined} options={combinedOptions} />
           </div>
-          <ActionBar text={raiMizuAction(role, truth)} />
+          <ActionBar text={raiMizuAction(role, truth)} icon={raiMizuIcon(role)} />
         </div>
       )}
 
@@ -268,7 +268,7 @@ function TsunamiInputCard({
           onChange={(v) => set(roleKey, v)}
         />
       </div>
-      <ActionBar text={tsunamiHonooAction(role, truth)} />
+      <ActionBar text={tsunamiHonooAction(role, truth)} icon={chaosIcon(role)} />
     </div>
     <div className="rounded-md border bg-card px-2 py-1.5">
       <div className="flex items-center justify-between gap-2">

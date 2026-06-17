@@ -2,19 +2,19 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { Choice, Role, Judge } from "@/p4/types";
 import { DEBUFF_ICON } from "@/p4/icons";
 
-/** 行動テキストに対応するデバフアイコン（散開/頭割り・止まる/動く・見る/見ない）。 */
+/** 加速度(止まる/動く)・呪詛(見る/見ない)は単一デバフなのでテキストから判定。 */
 function actionIcon(text: string): string | null {
-  if (text.includes("【炎】")) return DEBUFF_ICON.honoo;
-  if (text.includes("【水】")) return DEBUFF_ICON.tsunami;
-  if (text.includes("散開")) return DEBUFF_ICON.rai;
-  if (text.includes("頭割り")) return DEBUFF_ICON.mizu;
   if (text.includes("止まる") || text.includes("動く")) return DEBUFF_ICON.accel;
   if (text.includes("見ない") || text.includes("見る")) return DEBUFF_ICON.juso;
   return null;
 }
 
-/** 行動テキストバー or プレースホルダ */
-export function ActionBar({ text }: { text: string | null }) {
+/**
+ * 行動テキストバー。`icon` を渡した場合はそのデバフアイコンを表示
+ * （散開/頭割りや混沌は真偽で持つデバフが変わるため、担当アイコンを明示で渡す）。
+ * 未指定なら加速度/呪詛のみテキストから自動判定。
+ */
+export function ActionBar({ text, icon }: { text: string | null; icon?: string | null }) {
   if (!text) {
     return (
       <div className="mt-1 rounded-md border border-dashed px-2 py-1 text-[11px] text-muted-foreground/60">
@@ -22,11 +22,11 @@ export function ActionBar({ text }: { text: string | null }) {
       </div>
     );
   }
-  const icon = actionIcon(text);
+  const resolvedIcon = icon !== undefined ? icon : actionIcon(text);
   return (
     <div className="mt-1 flex items-center gap-1.5 rounded-md bg-primary/15 px-2 py-1.5 text-base font-bold leading-tight text-foreground">
-      {icon && (
-        <img src={icon} alt="" className="size-6 shrink-0 rounded-[3px]" draggable={false} />
+      {resolvedIcon && (
+        <img src={resolvedIcon} alt="" className="size-6 shrink-0 rounded-[3px]" draggable={false} />
       )}
       <span>{text}</span>
     </div>
