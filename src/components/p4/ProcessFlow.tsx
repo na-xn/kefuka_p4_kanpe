@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { ActionBar, TruthToggle, TruthInputRow, MarkerNote, ProcessStep } from "@/components/p4/primitives";
-import { raiMizuAction, tsunamiHonooAction, juso, accel, seishi } from "@/p4/logic";
+import { raiMizuAction, tsunamiHonooAction, juso, accel, seishi, magicFinal, fumuText } from "@/p4/logic";
 import type { Choice } from "@/p4/types";
 
 /** 処理フローフェーズ本体（記事タイムライン準拠の処理順） */
@@ -81,7 +81,7 @@ export function ProcessFlow({
   }, [gc3Role, gc3Mu]);
 
   // 踏む/踏まない（本当=踏まない / 嘘=踏む）
-  const fumu = (f: Choice | null) => (f === "shin" ? "踏まない" : f === "gi" ? "踏む" : null);
+  const fumu = fumuText;
 
   // ④ もりもりサンダガ＝記憶値で直接
   const thundaDirect: string | null = !thunda ? null : `⚡ サンダガ ${fumu(thunda)}`;
@@ -91,12 +91,8 @@ export function ProcessFlow({
 
   // ⑨ XNOR(記憶 × マジックアウト) 一致=本当→踏まない / 不一致=嘘→踏む。
   // マジックアウトはサンダガ・ブリザガそれぞれに真偽がある。
-  const xnorTruth = (memory: Choice, out: Choice): "shin" | "gi" | null => {
-    if (!memory || !out) return null;
-    return memory === out ? "shin" : "gi";
-  };
-  const thundaFinal = xnorTruth(thunda, outThunda);
-  const blizzaFinal = xnorTruth(blizza, outBlizza);
+  const thundaFinal = magicFinal(thunda, outThunda);
+  const blizzaFinal = magicFinal(blizza, outBlizza);
   // 両方が同じ（両方踏む／両方踏まない）なら1行に集約、違えば2行
   const magicOutBars: string[] =
     thundaFinal === null || blizzaFinal === null

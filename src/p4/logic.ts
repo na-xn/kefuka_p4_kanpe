@@ -49,3 +49,18 @@ export function seishi(role: Role, truth: Choice): string | null {
   // shi（死の超越）
   return truth === "shin" ? die : live;
 }
+
+/**
+ * マジックアウトの XNOR 判定。記憶値とマジックアウト値が
+ * 一致なら "shin"（本当→踏まない）、不一致なら "gi"（嘘→踏む）。
+ * どちらか未確定なら null。
+ */
+export function magicFinal(memory: Choice, out: Choice): "shin" | "gi" | null {
+  if (!memory || !out) return null;
+  return memory === out ? "shin" : "gi";
+}
+
+/** 真偽から踏む/踏まないテキスト。shin→"踏まない" / gi→"踏む" / それ以外→null。 */
+export function fumuText(f: Choice | null): string | null {
+  return f === "shin" ? "踏まない" : f === "gi" ? "踏む" : null;
+}
