@@ -9,6 +9,7 @@ import { EventCard } from "@/components/p4/EventCard";
 import { ProcessFlow } from "@/components/p4/ProcessFlow";
 import { INPUT_EVENTS } from "@/p4/events";
 import type { State, Phase, MenuState } from "@/p4/types";
+import { buildSpeechSteps, speak, stopSpeak, DEFAULT_TIMINGS } from "@/p4/speech";
 
 const REPO = "na-xn/kefuka_p4_kanpe";
 const RELEASES_URL = `https://github.com/${REPO}/releases/latest`;
@@ -111,9 +112,17 @@ export default function App() {
   const [hideEdgeSteps, setHideEdgeSteps] = useState(false); // ①生者の傷・⑧アルテマを隠す
   const [appVersion, setAppVersion] = useState("");
   const [update, setUpdate] = useState<UpdateState>({ s: "idle" });
+  // 読み上げ（TTS）
+  const [ttsOn, setTtsOn] = useState(false);
+  const [ttsTimings, setTtsTimings] = useState<Record<string, number>>(DEFAULT_TIMINGS);
+  const [showTtsSettings, setShowTtsSettings] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const lastHeight = useRef(0);
+  const ttsTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  // 最新の state を読み上げ発火時に参照するための ref
+  const stateRef = useRef<State>(state);
+  stateRef.current = state;
 
   // ウィンドウ高さをコンテンツに合わせて自動可変（最大＝画面高さ）。最大時のみ本体スクロール。
   useEffect(() => {
@@ -166,7 +175,7 @@ export default function App() {
   const openMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     const w = 184;
-    const h = 240;
+    const h = 320;
     setMenu({
       x: Math.min(e.clientX, window.innerWidth - w - 8),
       y: Math.min(e.clientY, window.innerHeight - h - 8),
@@ -187,6 +196,34 @@ export default function App() {
       .then(setAppVersion)
       .catch(() => {});
   }, []);
+
+  // 読み上げ設定を localStorage から読み込み（初回のみ）。
+  useEffect(() => {
+    try {
+      const on = localStorage.getItem("ttsOn");
+      if (on != null) setTtsOn(on === "true");
+      const tm = localStorage.getItem("ttsTimings");
+      if (tm) setTtsTimings({ ...DEFAULT_TIMINGS, ...JSON.parse(tm) });
+    } catch {
+      /* 無視 */
+    }
+  }, []);
+
+  // 読み上げ設定を localStorage に永続化。
+  useEffect(() => {
+    try {
+      localStorage.setItem("ttsOn", String(ttsOn));
+    } catch {
+      /* 無視 */
+    }
+  }, [ttsOn]);
+  useEffect(() => {
+    try {
+      localStorage.setItem("ttsTimings", JSON.stringify(ttsTimings));
+    } catch {
+      /* 無視 */
+    }
+  }, [ttsTimings]);
 
   // GitHub の最新リリースを確認。
   const checkUpdate = async () => {
@@ -220,12 +257,54 @@ export default function App() {
   const get = (key: string): string => state[key] ?? "";
   const set = (key: string, value: string) =>
     setState((s) => ({ ...s, [key]: value }));
+
+  /** 全読み上げタイマーを解除し、発話を停止。 */
+  const stopTts = () => {
+    ttsTimers.current.forEach((t) => clearTimeout(t));
+    ttsTimers.current = [];
+    stopSpeak();
+  };
+
+  /** 現在時刻を 0:00 として読み上げスケジュールを開始。 */
+  const startTts = () => {
+    stopTts();
+    const steps = buildSpeechSteps(ttsTimings);
+    const getLatest = (k: string) => stateRef.current[k] ?? "";
+    for (const step of steps) {
+      // hideEdge のとき生者の傷ステップはスキップ
+      if (step.edgeOnly && hideEdgeSteps) continue;
+      const ms = Math.max(0, step.atSec) * 1000;
+      const timer = setTimeout(() => {
+        const text = step.text(getLatest);
+        if (text) speak(text);
+      }, ms);
+      ttsTimers.current.push(timer);
+    }
+  };
+
   const resetAll = () => {
+    stopTts();
     setState({});
     setErrors([]);
     setInputStep(0);
     setPhase("input");
   };
+
+  // process 以外のフェーズに居る間は読み上げを止める（編集に戻る・リセット時の保険）。
+  useEffect(() => {
+    if (phase !== "process") stopTts();
+    // アンマウント時も停止
+    return () => {
+      if (phase !== "process") stopTts();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
+
+  // 読み上げ OFF に切替えたら即停止。
+  useEffect(() => {
+    if (!ttsOn) stopTts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ttsOn]);
 
   /** 現在の入力ステップ（複数イベント）の必須未入力を検証。不足ラベルの配列を返す。 */
   const validateStep = (step: number): string[] =>
@@ -250,7 +329,15 @@ export default function App() {
     }
     setErrors([]);
     if (inputStep >= activeStepGroups.length - 1) {
-      setPhase("process");
+      // 読み上げON & ①⑧非表示 → 「開始」ボタン画面を挟む（押下を 0:00 とする）。
+      // それ以外（読み上げOFF / 読み上げON&①⑧表示）→ そのまま処理画面へ。
+      //   ①⑧表示時の 0:00 は GC3 担当選択トリガー(別 effect)が拾うため、
+      //   確定ボタンで process に来たときは既に読み上げ開始済み。
+      if (ttsOn && hideEdgeSteps) {
+        setPhase("start");
+      } else {
+        setPhase("process");
+      }
     } else {
       setInputStep((s) => s + 1);
     }
@@ -277,6 +364,20 @@ export default function App() {
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoConfirm, phase, inputStep, autoConfirmSec, stepValid, stepValues]);
+
+  // GC3 担当選択トリガー（読み上げON & ①⑧表示）:
+  // 入力フェーズの最終ステップ(GC3)で gc3_role__role が設定された瞬間を 0:00 とし、
+  // 処理画面へ遷移して読み上げを開始する。
+  const gc3Role = state["gc3_role__role"] ?? "";
+  useEffect(() => {
+    if (!ttsOn || hideEdgeSteps) return;
+    if (phase !== "input") return;
+    if (inputStep !== activeStepGroups.length - 1) return;
+    if (!gc3Role) return;
+    setPhase("process");
+    startTts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ttsOn, hideEdgeSteps, phase, inputStep, gc3Role]);
 
   const dragProps = locked ? {} : { "data-tauri-drag-region": true };
 
@@ -386,6 +487,24 @@ export default function App() {
                 </Button>
               </div>
             </div>
+          ) : phase === "start" ? (
+            <div className="flex flex-col items-center gap-3 py-6">
+              <p className="px-2 text-center text-xs text-muted-foreground">
+                GC3 のデバフが付いた瞬間に「開始」を押してください。
+                <br />
+                押した時刻を 0:00 として読み上げが始まります。
+              </p>
+              <Button
+                variant="default"
+                className="h-16 w-40 text-lg font-bold"
+                onClick={() => {
+                  setPhase("process");
+                  startTts();
+                }}
+              >
+                ▶ 開始
+              </Button>
+            </div>
           ) : (
             <ProcessFlow get={get} set={set} hideEdge={hideEdgeSteps} />
           )}
@@ -456,6 +575,29 @@ export default function App() {
             </label>
           </div>
 
+          {/* 読み上げ（TTS） */}
+          <div className="mt-2 border-t pt-2">
+            <label className="flex cursor-pointer items-center justify-between text-[11px] font-medium text-muted-foreground">
+              <span>読み上げ</span>
+              <input
+                type="checkbox"
+                checked={ttsOn}
+                onChange={(e) => setTtsOn(e.target.checked)}
+                className="size-3.5 accent-primary"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => {
+                setShowTtsSettings(true);
+                setMenu(null);
+              }}
+              className="mt-1.5 w-full rounded border bg-background px-2 py-1 text-[11px] text-foreground hover:bg-accent"
+            >
+              ⏱ 秒数設定
+            </button>
+          </div>
+
           {/* 更新確認 */}
           <div className="mt-2 border-t pt-2">
             <div className="flex items-center justify-between gap-2">
@@ -486,6 +628,68 @@ export default function App() {
                 新バージョン v{update.latest} → ダウンロード
               </button>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* 読み上げ秒数設定パネル（オーバーレイ） */}
+      {showTtsSettings && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-3"
+          onClick={() => setShowTtsSettings(false)}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          <div
+            className="w-full max-w-[300px] rounded-lg border bg-popover p-3 text-popover-foreground shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-xs font-bold">読み上げ秒数設定</span>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                onClick={() => setShowTtsSettings(false)}
+                aria-label="閉じる"
+              >
+                <X />
+              </Button>
+            </div>
+            <p className="mb-2 text-[10px] text-muted-foreground">
+              開始(0:00)から各処理までの秒数。
+            </p>
+            <div className="flex flex-col gap-1.5">
+              {buildSpeechSteps(ttsTimings).map((step) => (
+                <label
+                  key={step.key}
+                  className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground"
+                >
+                  <span className="min-w-0 flex-1 truncate">{step.label}</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={600}
+                    value={ttsTimings[step.key] ?? DEFAULT_TIMINGS[step.key] ?? 0}
+                    onChange={(e) => {
+                      const v = Math.max(0, Math.min(600, Number(e.target.value) || 0));
+                      setTtsTimings((t) => ({ ...t, [step.key]: v }));
+                    }}
+                    className="w-14 shrink-0 rounded border bg-background px-1 py-0.5 text-right tabular-nums text-foreground"
+                  />
+                </label>
+              ))}
+            </div>
+            <div className="mt-3 flex justify-end gap-2">
+              <Button
+                variant="secondary"
+                size="xs"
+                onClick={() => setTtsTimings(DEFAULT_TIMINGS)}
+              >
+                既定に戻す
+              </Button>
+              <Button variant="default" size="xs" onClick={() => setShowTtsSettings(false)}>
+                閉じる
+              </Button>
+            </div>
           </div>
         </div>
       )}

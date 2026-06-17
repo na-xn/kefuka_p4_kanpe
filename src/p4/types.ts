@@ -27,5 +27,5 @@ export type EventDef = { id: string; name: string; judges: Judge[] };
 
 export type MenuState = { x: number; y: number } | null;
 
-/** フェーズ: 判定入力 → 処理フロー */
-export type Phase = "input" | "process";
+/** フェーズ: 判定入力 → （開始待ち）→ 処理フロー */
+export type Phase = "input" | "start" | "process";
