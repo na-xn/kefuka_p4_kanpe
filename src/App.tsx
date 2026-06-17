@@ -9,7 +9,15 @@ import { EventCard } from "@/components/p4/EventCard";
 import { ProcessFlow } from "@/components/p4/ProcessFlow";
 import { INPUT_EVENTS } from "@/p4/events";
 import type { State, Phase, MenuState } from "@/p4/types";
-import { buildSpeechSteps, speak, stopSpeak, DEFAULT_TIMINGS } from "@/p4/speech";
+import {
+  buildSpeechSteps,
+  speak,
+  stopSpeak,
+  primeSpeech,
+  startKeepAlive,
+  stopKeepAlive,
+  DEFAULT_TIMINGS,
+} from "@/p4/speech";
 import { register, unregister } from "@tauri-apps/plugin-global-shortcut";
 
 const REPO = "na-xn/kefuka_p4_kanpe";
@@ -329,12 +337,14 @@ export default function App() {
   const stopTts = () => {
     ttsTimers.current.forEach((t) => clearTimeout(t));
     ttsTimers.current = [];
+    stopKeepAlive();
     stopSpeak();
   };
 
   /** 現在時刻を 0:00 として読み上げスケジュールを開始。 */
   const startTts = () => {
     stopTts();
+    startKeepAlive();
     const steps = buildSpeechSteps(ttsTimings);
     const getLatest = (k: string) => stateRef.current[k] ?? "";
     for (const step of steps) {
@@ -379,9 +389,10 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
-  // 読み上げ OFF に切替えたら即停止。
+  // 読み上げ ON で音声エンジンをウォームアップ（初回遅延対策）、OFF で即停止。
   useEffect(() => {
-    if (!ttsOn) stopTts();
+    if (ttsOn) primeSpeech();
+    else stopTts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ttsOn]);
 

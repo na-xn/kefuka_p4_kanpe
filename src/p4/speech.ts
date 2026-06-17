@@ -1,26 +1,93 @@
 import { raiMizuAction, tsunamiHonooAction, juso, accel } from "@/p4/logic";
 import type { Choice } from "@/p4/types";
 
-/** speechSynthesis で日本語読み上げ。利用不可環境では何もしない。 */
-export function speak(text: string): void {
+function synth(): SpeechSynthesis | null {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return null;
+  return window.speechSynthesis;
+}
+
+let jaVoice: SpeechSynthesisVoice | null = null;
+function pickVoice(): void {
+  const s = synth();
+  if (!s) return;
   try {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-    window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = "ja-JP";
-    window.speechSynthesis.speak(u);
+    const vs = s.getVoices();
+    jaVoice =
+      vs.find((v) => v.lang === "ja-JP") ||
+      vs.find((v) => v.lang && v.lang.toLowerCase().startsWith("ja")) ||
+      null;
   } catch {
-    /* 読み上げ不可環境では無視 */
+    /* 無視 */
   }
 }
 
-/** 読み上げを停止。 */
-export function stopSpeak(): void {
+/**
+ * 音声エンジンの初期化（ウォームアップ）。読み上げONや戦闘前に呼ぶと
+ * 初回の遅延（音声リスト未ロード・コールドスタート）を軽減できる。
+ */
+export function primeSpeech(): void {
+  const s = synth();
+  if (!s) return;
   try {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-    window.speechSynthesis.cancel();
+    pickVoice();
+    s.onvoiceschanged = pickVoice;
+    // 無音の短い発話でエンジンを温める（Windows/WebView2 の初回遅延対策）
+    const u = new SpeechSynthesisUtterance(" ");
+    u.lang = "ja-JP";
+    u.volume = 0;
+    s.speak(u);
   } catch {
     /* 無視 */
+  }
+}
+
+/**
+ * 日本語読み上げ。連続発話のたびに cancel() しない（Windows で後続が止まる不具合の回避）。
+ * 各読み上げは時間的に離れている前提。明示停止は stopSpeak()。
+ */
+export function speak(text: string): void {
+  const s = synth();
+  if (!s) return;
+  try {
+    if (!jaVoice) pickVoice();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "ja-JP";
+    if (jaVoice) u.voice = jaVoice;
+    s.resume(); // 一時停止状態だと無音になるため念のため解除
+    s.speak(u);
+  } catch {
+    /* 無視 */
+  }
+}
+
+/** 読み上げを停止（キュー含め全クリア）。 */
+export function stopSpeak(): void {
+  const s = synth();
+  if (!s) return;
+  try {
+    s.cancel();
+  } catch {
+    /* 無視 */
+  }
+}
+
+/** エンジンが勝手に一時停止して止まるのを防ぐキープアライブ（一定間隔で resume）。 */
+let keepAliveId: ReturnType<typeof setInterval> | null = null;
+export function startKeepAlive(): void {
+  const s = synth();
+  if (!s || keepAliveId != null) return;
+  keepAliveId = setInterval(() => {
+    try {
+      if (s.speaking || s.pending) s.resume();
+    } catch {
+      /* 無視 */
+    }
+  }, 4000);
+}
+export function stopKeepAlive(): void {
+  if (keepAliveId != null) {
+    clearInterval(keepAliveId);
+    keepAliveId = null;
   }
 }
 
