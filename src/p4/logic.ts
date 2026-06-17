@@ -8,8 +8,8 @@ import type { Choice, Role } from "@/p4/types";
  */
 export function raiMizuAction(role: Role, truth: Choice): string | null {
   if (!role) return null;
-  const spread = "💥 散開（1人）";
-  const stack = "🤝 頭割り";
+  const spread = "散開（1人）";
+  const stack = "頭割り";
   if (role === "nashi") return stack; // 無職＝頭割り参加（真偽不問）
   if (!truth) return null;
   if (role === "rai") return truth === "shin" ? spread : stack;
@@ -28,13 +28,13 @@ export function tsunamiHonooAction(role: Role, truth: Choice): string | null {
 /** 呪詛の叫声: 真→見ない / 偽→見る */
 export function juso(truth: Choice): string | null {
   if (!truth) return null;
-  return truth === "shin" ? "👁 見ない" : "👁 見る";
+  return truth === "shin" ? "見ない" : "見る";
 }
 
 /** 加速度爆弾: 真→止まる / 偽→動く */
 export function accel(truth: Choice): string | null {
   if (!truth) return null;
-  return truth === "shin" ? "🛑 止まる" : "🏃 動く";
+  return truth === "shin" ? "止まる" : "動く";
 }
 
 /**

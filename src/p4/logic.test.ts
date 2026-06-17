@@ -10,8 +10,8 @@ import {
 } from "@/p4/logic";
 
 describe("raiMizuAction", () => {
-  const spread = "💥 散開（1人）";
-  const stack = "🤝 頭割り";
+  const spread = "散開（1人）";
+  const stack = "頭割り";
   it("rai × shin = 散開", () => expect(raiMizuAction("rai", "shin")).toBe(spread));
   it("rai × gi = 頭割り", () => expect(raiMizuAction("rai", "gi")).toBe(stack));
   it("mizu × shin = 頭割り", () => expect(raiMizuAction("mizu", "shin")).toBe(stack));
@@ -37,14 +37,14 @@ describe("tsunamiHonooAction", () => {
 });
 
 describe("juso", () => {
-  it("shin = 見ない", () => expect(juso("shin")).toBe("👁 見ない"));
-  it("gi = 見る", () => expect(juso("gi")).toBe("👁 見る"));
+  it("shin = 見ない", () => expect(juso("shin")).toBe("見ない"));
+  it("gi = 見る", () => expect(juso("gi")).toBe("見る"));
   it("\"\" → null", () => expect(juso("")).toBeNull());
 });
 
 describe("accel", () => {
-  it("shin = 止まる", () => expect(accel("shin")).toBe("🛑 止まる"));
-  it("gi = 動く", () => expect(accel("gi")).toBe("🏃 動く"));
+  it("shin = 止まる", () => expect(accel("shin")).toBe("止まる"));
+  it("gi = 動く", () => expect(accel("gi")).toBe("動く"));
   it("\"\" → null", () => expect(accel("")).toBeNull());
 });
 

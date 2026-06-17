@@ -1,5 +1,15 @@
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { Choice, Role, Judge } from "@/p4/types";
+import { DEBUFF_ICON } from "@/p4/icons";
+
+/** 行動テキストに対応するデバフアイコン（散開/頭割り・止まる/動く・見る/見ない）。 */
+function actionIcon(text: string): string | null {
+  if (text.includes("散開")) return DEBUFF_ICON.rai;
+  if (text.includes("頭割り")) return DEBUFF_ICON.mizu;
+  if (text.includes("止まる") || text.includes("動く")) return DEBUFF_ICON.accel;
+  if (text.includes("見ない") || text.includes("見る")) return DEBUFF_ICON.juso;
+  return null;
+}
 
 /** 行動テキストバー or プレースホルダ */
 export function ActionBar({ text }: { text: string | null }) {
@@ -10,9 +20,13 @@ export function ActionBar({ text }: { text: string | null }) {
       </div>
     );
   }
+  const icon = actionIcon(text);
   return (
-    <div className="mt-1 rounded-md bg-primary/15 px-2 py-1.5 text-base font-bold leading-tight text-foreground">
-      {text}
+    <div className="mt-1 flex items-center gap-1.5 rounded-md bg-primary/15 px-2 py-1.5 text-base font-bold leading-tight text-foreground">
+      {icon && (
+        <img src={icon} alt="" className="size-6 shrink-0 rounded-[3px]" draggable={false} />
+      )}
+      <span>{text}</span>
     </div>
   );
 }
@@ -75,7 +89,7 @@ function OptLabel({ icon, label }: { icon?: string; label: string }) {
   return (
     <>
       {icon && (
-        <img src={icon} alt="" className="size-4 shrink-0 rounded-[3px]" draggable={false} />
+        <img src={icon} alt="" className="size-6 shrink-0 rounded-[3px]" draggable={false} />
       )}
       <span>{label}</span>
     </>
@@ -241,7 +255,7 @@ export function ProcessStep({
                   key={i}
                   src={src as string}
                   alt=""
-                  className="size-4 shrink-0 rounded-[3px]"
+                  className="size-6 shrink-0 rounded-[3px]"
                   draggable={false}
                 />
               ))}
