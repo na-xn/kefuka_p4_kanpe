@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { ActionBar, TruthToggle, TruthInputRow, MarkerNote, ProcessStep } from "@/components/p4/primitives";
 import { raiMizuAction, tsunamiHonooAction, juso, accel, seishi, magicFinal, fumuText } from "@/p4/logic";
 import type { Choice } from "@/p4/types";
@@ -20,6 +20,13 @@ export function ProcessFlow({
   const blizza = get("magic_blizza") as Choice; // ブリザガ記憶
   const outThunda = get("magic_out_thunda") as Choice; // マジックアウト（サンダガ）
   const outBlizza = get("magic_out_blizza") as Choice; // マジックアウト（ブリザガ）
+
+  // マジックアウトは両方デフォルト「真」。偽の場所だけクリックすればよいようにする。
+  useEffect(() => {
+    if (!get("magic_out_thunda")) set("magic_out_thunda", "shin");
+    if (!get("magic_out_blizza")) set("magic_out_blizza", "shin");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // 各GCの真偽は1つ（gc{n}_role）。呪詛・雷水・加速度すべてをこの真偽で決める。
   const gc1Role = get("gc1_role__role");
