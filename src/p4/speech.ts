@@ -1,4 +1,4 @@
-import { raiMizuAction, tsunamiHonooAction, juso, accel } from "@/p4/logic";
+import { raiMizuAction, tsunamiHonooAction, juso, accel, magicFinal } from "@/p4/logic";
 import type { Choice } from "@/p4/types";
 
 function synth(): SpeechSynthesis | null {
@@ -295,7 +295,8 @@ export function buildSpeechSteps(
   opts?: { readSanBuri?: boolean }
 ): SpeechStep[] {
   const t = (k: string) => timings[k] ?? DEFAULT_TIMINGS[k];
-  const readSanBuri = opts?.readSanBuri !== false;
+  // マジックアウトでサンダガ/ブリザガの踏む/踏まないを読み上げるか（既定OFF）。
+  const readSanBuri = opts?.readSanBuri === true;
   return [
     {
       key: "seija",
@@ -335,7 +336,7 @@ export function buildSpeechSteps(
         const parts: string[] = [];
         const j = juso(gc1Truth);
         if (j) parts.push(j);
-        if (readSanBuri) parts.push("サンダガの真偽を押してください");
+        parts.push("サンダガの真偽を押してください");
         return parts.length ? parts.join("。") : null;
       },
     },
@@ -362,7 +363,7 @@ export function buildSpeechSteps(
           const a = accel(osoTruth);
           parts.push(a ? `${a}。加速度` : "加速度");
         }
-        if (readSanBuri) parts.push("ブリザガの真偽を押してください");
+        parts.push("ブリザガの真偽を押してください");
         return parts.length ? parts.join("。") : null;
       },
     },
@@ -379,11 +380,31 @@ export function buildSpeechSteps(
       key: "magicOut",
       atSec: t("magicOut"),
       label: "マジックアウト＋混沌（遅）",
-      // 混沌（遅）＝後半の つなみ/ほのお（タケノコ/ドーナツ）のみ読み上げ。
-      // マジックアウトの踏む/踏まないはクリック判定のため読み上げない。
+      // 混沌（遅）＝後半の つなみ/ほのお（タケノコ/ドーナツ）を読み上げ。
+      // readSanBuri が ON のときのみ、サンダガ/ブリザガの踏む/踏まないも読み上げる。
       text: (get) => {
+        const parts: string[] = [];
         const { lateWaveRole, lateWaveTruth } = waveTimings(get);
-        return simplify(tsunamiHonooAction(lateWaveRole, lateWaveTruth));
+        const w = simplify(tsunamiHonooAction(lateWaveRole, lateWaveTruth));
+        if (w) parts.push(w);
+        if (readSanBuri) {
+          const thunda = get("magic_thunda") as Choice;
+          const blizza = get("magic_blizza") as Choice;
+          const mof = get("magic_out_false");
+          const outThunda: Choice = mof === "rai" || mof === "both" ? "gi" : "shin";
+          const outBlizza: Choice = mof === "koori" || mof === "both" ? "gi" : "shin";
+          const tf = magicFinal(thunda, outThunda);
+          const bf = magicFinal(blizza, outBlizza);
+          const fumu = (x: "shin" | "gi") => (x === "shin" ? "踏まない" : "踏む");
+          if (tf !== null && bf !== null) {
+            parts.push(
+              tf === bf
+                ? `サンダガブリザガ両方${fumu(tf)}`
+                : `サンダガ${fumu(tf)}。ブリザガ${fumu(bf)}`
+            );
+          }
+        }
+        return parts.length ? parts.join("。") : null;
       },
     },
   ];

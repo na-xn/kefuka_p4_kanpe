@@ -183,7 +183,7 @@ export default function App() {
   const [update, setUpdate] = useState<UpdateState>({ s: "idle" });
   // 読み上げ（TTS）
   const [ttsOn, setTtsOn] = useState(false);
-  const [readSanBuri, setReadSanBuri] = useState(true); // サンダガ/ブリザガを読み上げる
+  const [readSanBuri, setReadSanBuri] = useState(false); // マジックアウトで踏む/踏まないを読み上げる
   const [ttsTimings, setTtsTimings] = useState<Record<string, number>>(DEFAULT_TIMINGS);
   const [showTtsSettings, setShowTtsSettings] = useState(false);
   const [ttsHotkey, setTtsHotkey] = useState("Control+Shift+R");
@@ -1055,7 +1055,7 @@ export default function App() {
               ⚙ 設定
             </button>
             <label className="mt-1.5 flex cursor-pointer items-center justify-between text-[11px] font-medium text-muted-foreground">
-              <span>サンダガ/ブリザガを読み上げる</span>
+              <span>マジックアウトで踏む/踏まないを読み上げる</span>
               <input
                 type="checkbox"
                 checked={readSanBuri}
