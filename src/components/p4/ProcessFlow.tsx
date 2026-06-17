@@ -8,9 +8,12 @@ import type { Choice } from "@/p4/types";
 export function ProcessFlow({
   get,
   set,
+  hideEdge = false,
 }: {
   get: (k: string) => string;
   set: (k: string, v: string) => void;
+  /** ①生者の傷・⑧アルテマを隠す */
+  hideEdge?: boolean;
 }) {
   // --- 状態の読み出し ---
   const gc3Role = get("gc3_role__role"); // "aragan" | "shi" | ""
@@ -134,7 +137,8 @@ export function ProcessFlow({
 
   return (
     <div className="flex flex-col gap-0">
-      {/* 1. 生者の傷（GC3）処理 */}
+      {/* 1. 生者の傷（GC3）処理（非表示可） */}
+      {!hideEdge && (
       <ProcessStep index={1} name="生者の傷（GC3）処理" icons={[gc3Icon(gc3Role)]}>
         {!gc3Role ? (
           <div className="rounded-md border border-dashed px-2 py-1.5 text-[11px] text-muted-foreground">
@@ -162,6 +166,7 @@ export function ProcessFlow({
           </div>
         )}
       </ProcessStep>
+      )}
 
       {/* 2. 水属性圧縮＋フォークライトニング＋加速度爆弾（早） — 水雷は2回目(GC2)が早 */}
       <ProcessStep
@@ -242,8 +247,13 @@ export function ProcessFlow({
         )}
       </ProcessStep>
 
-      {/* 7. マジックアウト＋混沌（遅） */}
-      <ProcessStep index={7} name="マジックアウト＋混沌（遅）処理" icons={[chaosIcon(lateWaveRole)]}>
+      {/* 7. マジックアウト＋混沌（遅）。⑧非表示なら末尾 */}
+      <ProcessStep
+        index={7}
+        name="マジックアウト＋混沌（遅）処理"
+        icons={[chaosIcon(lateWaveRole)]}
+        last={hideEdge}
+      >
         {/* 既定は両方「真」。偽の所だけ選ぶ（雷=サンダガ / 氷=ブリザガ / 両方） */}
         <div className="rounded-md border bg-card px-2 py-1.5">
           <div className="flex items-center justify-between gap-2">
@@ -282,10 +292,12 @@ export function ProcessFlow({
         />
       </ProcessStep>
 
-      {/* 8. どきどきアルテマ（全体攻撃） */}
-      <ProcessStep index={8} name="どきどきアルテマ（全体攻撃）" last>
-        <MarkerNote text="🔥 24.9% 以下で最終フェーズ" />
-      </ProcessStep>
+      {/* 8. どきどきアルテマ（全体攻撃）（非表示可） */}
+      {!hideEdge && (
+        <ProcessStep index={8} name="どきどきアルテマ（全体攻撃）" last>
+          <MarkerNote text="🔥 24.9% 以下で最終フェーズ" />
+        </ProcessStep>
+      )}
     </div>
   );
 }
