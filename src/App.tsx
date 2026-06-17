@@ -61,6 +61,19 @@ const STEP_GROUPS: string[][] = [
 const EVENT_BY_ID = Object.fromEntries(INPUT_EVENTS.map((e) => [e.id, e]));
 
 /**
+ * キー入力(F1〜F3)の選択肢。WebView2 は F キーをシステムキーとして横取りするため
+ * アプリ内「記録」では F キーを拾えない。ドロップダウンで選ばせる（フォーカス不要）。
+ * ゲームのホットバーと衝突する場合に備え、修飾キー付きの候補も用意。
+ */
+const KEY_CHOICES = [
+  "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12",
+  "Control+Shift+F1", "Control+Shift+F2", "Control+Shift+F3",
+  "Control+Shift+1", "Control+Shift+2", "Control+Shift+3",
+  "Alt+1", "Alt+2", "Alt+3",
+  "Control+Shift+Z", "Control+Shift+X", "Control+Shift+C",
+];
+
+/**
  * キー押下イベントから Tauri アクセラレータの「メインキー」部分を返す。
  * 修飾キー単独（Control/Shift/Alt/Meta）の場合は null（記録継続用）。
  */
@@ -1251,41 +1264,33 @@ export default function App() {
               )}
 
               {([
-                { idx: 1 as const, label: "キー1", target: "k1" as const, val: posKey1, set: setPosKey1, def: "F1" },
-                { idx: 2 as const, label: "キー2", target: "k2" as const, val: posKey2, set: setPosKey2, def: "F2" },
-                { idx: 3 as const, label: "キー3", target: "k3" as const, val: posKey3, set: setPosKey3, def: "F3" },
-              ]).map((k) => (
-                <div key={k.target}>
-                  <div className="mt-2 text-[11px] font-medium text-muted-foreground">{k.label}</div>
-                  <div className="mt-1 flex items-center justify-between gap-2">
-                    <span className="min-w-0 flex-1 truncate rounded border bg-background px-2 py-1 text-[11px] tabular-nums text-foreground">
-                      {recordingTarget === k.target
-                        ? "キーを押してください…（Escで中止）"
-                        : k.val || "(未設定)"}
+                { label: "キー1（1番目の選択肢）", val: posKey1, set: setPosKey1 },
+                { label: "キー2（2番目の選択肢）", val: posKey2, set: setPosKey2 },
+                { label: "キー3（3番目の選択肢）", val: posKey3, set: setPosKey3 },
+              ]).map((k) => {
+                const opts = KEY_CHOICES.includes(k.val) ? KEY_CHOICES : [k.val, ...KEY_CHOICES];
+                return (
+                  <div key={k.label} className="mt-2 flex items-center justify-between gap-2">
+                    <span className="min-w-0 flex-1 text-[11px] font-medium text-muted-foreground">
+                      {k.label}
                     </span>
-                    <Button
-                      variant={recordingTarget === k.target ? "destructive" : "secondary"}
-                      size="xs"
-                      onClick={() =>
-                        setRecordingTarget((r) => (r === k.target ? null : k.target))
-                      }
+                    <select
+                      value={k.val}
+                      onChange={(e) => k.set(e.target.value)}
+                      className="shrink-0 rounded border bg-background px-2 py-1 text-[11px] tabular-nums text-foreground"
                     >
-                      {recordingTarget === k.target ? "中止" : "記録"}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="xs"
-                      onClick={() => {
-                        setRecordingTarget(null);
-                        k.set(k.def);
-                      }}
-                      title={`既定(${k.def})に戻す`}
-                    >
-                      既定
-                    </Button>
+                      {opts.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                </div>
-              ))}
+                );
+              })}
+              <p className="mt-1.5 text-[10px] text-muted-foreground">
+                ※記録ではなく選択式（WebView2 が F キーを横取りするため）。ON の間、選んだキーはゲーム側へ渡らないので、ホットバーと重複しないキーを推奨。
+              </p>
             </div>
 
             <div className="mt-3 flex justify-end gap-2">
