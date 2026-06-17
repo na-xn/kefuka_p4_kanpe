@@ -1,64 +1,65 @@
 # 絶妖星乱舞 P4 真偽判定カンペ
 
-FF14「絶妖星乱舞 P4」用の真偽判定カンペ。ゲーム画面の最前面に常駐し、クリックしてもゲームのフォーカスを奪わないオーバーレイ（Tauri v2 + React + Tailwind v4 + shadcn）。
+[![release](https://img.shields.io/github/v/release/na-xn/kefuka_p4_kanpe)](https://github.com/na-xn/kefuka_p4_kanpe/releases/latest)
+[![test](https://github.com/na-xn/kefuka_p4_kanpe/actions/workflows/test.yml/badge.svg)](https://github.com/na-xn/kefuka_p4_kanpe/actions/workflows/test.yml)
+[![license](https://img.shields.io/github/license/na-xn/kefuka_p4_kanpe)](./LICENSE)
 
-- 各ギミックの「真 / 偽」をトグルし、選んだ側の指示テキストを表示
-- ALLリセットで一括クリア
-- ボーダーレス / 常に最前面 / クリックでアクティブを奪わない（`WS_EX_NOACTIVATE`）
-- 右クリックで透過度スライダー、ヘッダーの鍵アイコンで位置ロック
+FFXIV「絶妖星乱舞 P4」フェーズの**真偽判定カンペ**デスクトップアプリ。判定（真/偽・担当）を入力すると、自分のやるべき行動が**処理順（タイムライン）**で表示されます。ゲーム画面の**最前面に常駐**し、**クリックしてもゲームのフォーカスを奪いません**（オーバーレイ）。
 
-開発環境（Linux/SSH）と利用環境（Windows）を分けて運用する。
+> ⚠️ 個人制作のファンツールです。Square Enix とは無関係で、FINAL FANTASY XIV 関連の名称・ギミック表記の権利は © SQUARE ENIX に帰属します。ゲームの利用規約の範囲内でご利用ください。
 
-| やること | 場所 |
-| --- | --- |
-| UI / ロジック開発 | Linux（SSH 可。GTK 不要、Vite dev サーバのみ） |
-| 「常に最前面」の最終確認・常用 | Windows 実機（WebView2） |
-| 配布用 `.exe` ビルド | GitHub Actions（windows-latest） |
+## 特長
 
-> `setAlwaysOnTop` は同一デスクトップ内の z-order を操作するため、SSH 越しの転送表示では「手元の最前面」にはならない。最前面の体験確認は必ず Windows 実機で行う。
+- 入力ウィザード（3画面: GC1+つなみ/ほのお1 / GC2+つなみ/ほのお2 / GC3）→ 確定 → 処理タイムライン
+- 担当・加速度・呪詛・早遅などの**排他関係を自動補助**して入力タップを最小化
+- 自分が担当する**加速度爆弾・呪詛発生源**のステップを★強調
+- ボーダーレス / 常に最前面 / **フォーカス非奪取**（Windows `WS_EX_NOACTIVATE`）
+- 右クリックで**透過度スライダー**と**自動確定**（全入力後 N 秒で次へ）、ヘッダーの鍵で位置ロック
+- ウィンドウ高さはコンテンツに**自動フィット**（最大＝画面高さ）
 
-## 1. Linux/SSH での開発（UI・ロジック）
+## ダウンロード / インストール（Windows）
 
-Vite の dev サーバはただの Web サーバなので GTK 無しで動く。手元から SSH トンネルを張ってブラウザで開く。
+[**Releases**](https://github.com/na-xn/kefuka_p4_kanpe/releases/latest) から `p4-kanpe.exe` をダウンロードし、ダブルクリックで起動（インストール不要）。
+
+- Windows 10 / 11 対応。初回は [WebView2 ランタイム](https://developer.microsoft.com/microsoft-edge/webview2/) が必要（Win11 は標準同梱）。
+- SmartScreen の「発行元不明」警告が出た場合は **「詳細情報」→「実行」**。コード署名証明書を使っていないための表示で、動作に問題はありません。
+- くわしい使い方は同梱の `README.md`（[release/README.md](release/README.md)）参照。
+
+## 開発
+
+Linux/SSH で UI・ロジックを開発（GTK 不要、Vite のみ）。「常に最前面」など実機挙動の最終確認は Windows（WebView2）で行う。
 
 ```bash
-# 手元のターミナル
-ssh -L 1420:localhost:1420 <user>@<remote-host>
-
-# リモート側
 pnpm install
-pnpm dev            # http://localhost:1420
+pnpm dev      # http://localhost:1420 をブラウザで（Tauri 呼び出しはガード済み）
+pnpm build    # 型チェック + フロントの本番ビルド
+pnpm test     # ユニット（Vitest）
+pnpm e2e      # E2E（Playwright / chromium）
+pnpm tauri dev    # デスクトップアプリ起動（要 Rust + WebView2 + GUI セッション）
 ```
 
-ブラウザでは `setAlwaysOnTop` は no-op（try/catch で無視）になるが、カウンタ等の UI/ロジックはすべて動作確認できる。
+### 配布ビルド / リリース
 
-## 2. Windows 実機での確認（pnpm tauri dev）
+`.github/workflows/build-windows.yml` が windows-latest 上で `--no-bundle` ビルド（単体 exe のみ）。
 
-前提（1 回だけ）:
+- **手動**: Actions →「build-windows」→ Run workflow → `p4-kanpe-windows` アーティファクト（`p4-kanpe.exe` + `README.md`）。
+- **リリース**: `git tag vX.Y.Z && git push origin vX.Y.Z` で Draft Release に `p4-kanpe.exe` + `README.md` を添付。
 
-- [Rust](https://www.rust-lang.org/tools/install)（`rustup`、MSVC toolchain）
-- [Node.js 22+](https://nodejs.org/) と `corepack enable` で pnpm
-- [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)（Win11 は同梱、Win10 は要インストール）
-- Visual Studio Build Tools（C++ デスクトップ開発ワークロード）
+## 技術スタック
 
-```powershell
-git clone <repo> ; cd kefuka_p4_kanpe
-pnpm install
-pnpm tauri dev      # 320x220 の小窓が常に最前面で起動
-```
+Tauri v2 / React 19 / TypeScript / Vite / Tailwind CSS v4 / shadcn(radix-ui) / Vitest / Playwright
 
-## 3. 配布用 .exe（GitHub Actions）
+## ディレクトリ
 
-`.github/workflows/build-windows.yml` が windows-latest 上で `--no-bundle` ビルドする（インストーラは作らず、ダブルクリック起動の単体 `p4-kanpe.exe` のみ）。Windows 側にツールチェーンは不要。アーティファクト／リリースに同梱する README はユーザー向けの [release/README.md](release/README.md)。
-
-- **手動ビルド**: GitHub の Actions タブ →「build-windows」→ Run workflow。完了後 `p4-kanpe-windows` アーティファクト（`p4-kanpe.exe` と `README.md` のみ）を DL。
-- **リリース**: `git tag v0.1.0 && git push origin v0.1.0` で Draft Release に `p4-kanpe.exe` と `README.md` だけが添付される。
-
-## スクリプト
-
-| コマンド | 内容 |
+| パス | 役割 |
 | --- | --- |
-| `pnpm dev` | Vite dev サーバ（フロントのみ） |
-| `pnpm build` | 型チェック + フロントの本番ビルド（`dist/`） |
-| `pnpm tauri dev` | デスクトップアプリ開発起動（GUI セッション必須） |
-| `pnpm tauri build` | ローカルでのネイティブビルド |
+| `src/p4/` | ゲームロジック（純粋関数）・型・イベントデータ |
+| `src/components/p4/` | UI 部品（入力カード・処理タイムライン） |
+| `src/App.tsx` | 状態管理・入力ウィザード・ウィンドウ枠 |
+| `src-tauri/` | Tauri（Rust）側。`WS_EX_NOACTIVATE` 付与など |
+| `e2e/` | Playwright E2E |
+| `release/README.md` | 配布物に同梱するユーザー向け説明 |
+
+## ライセンス
+
+[MIT](./LICENSE)
