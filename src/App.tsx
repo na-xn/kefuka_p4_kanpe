@@ -209,6 +209,8 @@ export default function App() {
   const [posKey2, setPosKey2] = useState("F2");
   const [posKey3, setPosKey3] = useState("F3");
   const [keyRegMsg, setKeyRegMsg] = useState(""); // キー登録の成否（診断表示）
+  const [keyHit, setKeyHit] = useState(""); // 直近に受信した位置キー（発火診断）
+  const keyHitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // 記録対象: null=記録停止 / "tts"=読み上げ開始 / "k1"|"k2"|"k3"=位置キー
   const [recordingTarget, setRecordingTarget] = useState<"tts" | "k1" | "k2" | "k3" | null>(null);
   const recordingHotkey = recordingTarget === "tts";
@@ -254,6 +256,32 @@ export default function App() {
       cancelAnimationFrame(raf);
     };
   }, []);
+
+  // 右クリックメニュー/設定パネルは縦長で小さい窓からはみ出すため、開いている間は窓を一時的に拡大。
+  // 閉じたら内容に合わせて元の高さへ戻す。
+  const grewRef = useRef(false);
+  useEffect(() => {
+    const open = !!menu || showTtsSettings;
+    const screenH = window.screen.availHeight || window.innerHeight;
+    try {
+      const win = getCurrentWindow();
+      if (open) {
+        grewRef.current = true;
+        const tall = Math.round(Math.min(screenH, 760));
+        lastHeight.current = tall;
+        win.setSize(new LogicalSize(window.innerWidth, tall)).catch(() => {});
+      } else if (grewRef.current) {
+        // 開いていたものを閉じたときだけ、内容高さへ戻す（初回マウントでは縮めない）。
+        grewRef.current = false;
+        const el = contentRef.current;
+        const target = Math.min((el?.scrollHeight ?? 360) + 64, screenH);
+        lastHeight.current = Math.round(target);
+        win.setSize(new LogicalSize(window.innerWidth, Math.round(target))).catch(() => {});
+      }
+    } catch {
+      /* ブラウザプレビュー等では無視 */
+    }
+  }, [menu, showTtsSettings]);
 
   // メニュー外クリック / Esc で閉じる
   useEffect(() => {
@@ -708,6 +736,15 @@ export default function App() {
   const chooseAtCursor = (n: 1 | 2 | 3) => {
     const g = (k: string) => stateRef.current[k] ?? "";
     const first = fieldOrder(g).find((fd) => !fd.filled);
+    // キーが届いたことを画面に可視化（発火診断）。欄が無くても受信は表示。
+    const flash = first
+      ? first.values[n - 1] !== undefined
+        ? `F${n}受信 → ${first.id}`
+        : `F${n}受信（${n}番目の選択肢なし）`
+      : `F${n}受信（入力欄なし）`;
+    setKeyHit(flash);
+    if (keyHitTimer.current) clearTimeout(keyHitTimer.current);
+    keyHitTimer.current = setTimeout(() => setKeyHit(""), 1800);
     if (!first) return;
     if (first.values[n - 1] !== undefined) first.choose(n - 1);
   };
@@ -996,6 +1033,13 @@ export default function App() {
         </div>
       </div>
 
+      {/* キー受信インジケータ（発火診断: グローバルキーが届いたか可視化） */}
+      {keyInputOn && keyHit && (
+        <div className="pointer-events-none fixed left-1/2 top-1 z-[70] -translate-x-1/2 rounded bg-primary px-2 py-0.5 text-[10px] font-bold text-primary-foreground shadow">
+          🎹 {keyHit}
+        </div>
+      )}
+
       {/* 右クリックメニュー: 透過度スライダー */}
       {menu && (
         <div
@@ -1106,6 +1150,33 @@ export default function App() {
             {ttsOn && (
               <p className="mt-1 text-[10px] text-muted-foreground">
                 開始ホットキー: <span className="tabular-nums">{ttsHotkey || "(未設定)"}</span>
+              </p>
+            )}
+          </div>
+
+          {/* キー入力（F1〜F3 でアクティブ入力欄の選択肢を選ぶ） */}
+          <div className="mt-2 border-t pt-2">
+            <label className="flex cursor-pointer items-center justify-between text-[11px] font-medium text-muted-foreground">
+              <span>キー入力（F1〜F3）</span>
+              <input
+                type="checkbox"
+                checked={keyInputOn}
+                onChange={(e) => setKeyInputOn(e.target.checked)}
+                className="size-3.5 accent-primary"
+              />
+            </label>
+            {keyInputOn && keyRegMsg && (
+              <p
+                className={`mt-1 text-[10px] ${
+                  keyRegMsg.startsWith("登録失敗") ? "text-red-500" : "text-green-600"
+                }`}
+              >
+                {keyRegMsg}
+              </p>
+            )}
+            {keyInputOn && (
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                キーの変更は「⚙ 設定」内。押すと上部に🎹受信表示。
               </p>
             )}
           </div>
