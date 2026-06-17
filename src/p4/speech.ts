@@ -48,10 +48,15 @@ export function setSpeechVolume(v: number): void {
 }
 
 /**
- * 日本語読み上げ。連続発話のたびに cancel() しない（Windows で後続が止まる不具合の回避）。
- * 各読み上げは時間的に離れている前提。明示停止は stopSpeak()。
+ * 日本語読み上げ。各読み上げは時間的に離れている前提。
+ *
+ * 終盤（マジックアウト付近）で読み上げが止まる症状の対策:
+ * WebView2/SAPI では稀に発話の onend が来ず `speaking` が true のまま固着し、
+ * 以降の speak() が全てキュー待ちになって無音になる。読み上げ間隔は数秒空くので、
+ * このタイミングで speaking/pending が残っていれば固着とみなして cancel() でクリアしてから話す。
+ * （cancel 直後は Windows で speak が取りこぼされるため少し待ってから発話する。）
  */
-export function speak(text: string): void {
+export function speak(text: string, retry = false): void {
   const s = synth();
   if (!s) return;
   try {
@@ -60,8 +65,36 @@ export function speak(text: string): void {
     u.lang = "ja-JP";
     u.volume = speakVolume;
     if (jaVoice) u.voice = jaVoice;
-    s.resume(); // 一時停止状態だと無音になるため念のため解除
-    s.speak(u);
+    let started = false;
+    u.onstart = () => {
+      started = true;
+    };
+    const stuck = s.speaking || s.pending;
+    if (stuck) s.cancel();
+    const go = () => {
+      try {
+        s.resume();
+        s.speak(u);
+      } catch {
+        /* 無視 */
+      }
+    };
+    if (stuck) setTimeout(go, 150);
+    else go();
+    // ウォッチドッグ: 一定時間たっても一度も発話開始せず無音のままなら
+    // 取りこぼしとみなして 1 回だけ再試行（最後の読み上げ＝呪詛 も拾えるように）。
+    if (!retry) {
+      setTimeout(() => {
+        try {
+          if (!started && !s.speaking) {
+            s.cancel();
+            setTimeout(() => speak(text, true), 120);
+          }
+        } catch {
+          /* 無視 */
+        }
+      }, 1400);
+    }
   } catch {
     /* 無視 */
   }
@@ -80,31 +113,25 @@ export function stopSpeak(): void {
 
 /**
  * エンジンが勝手に止まる/眠るのを防ぐキープアライブ。
- * - 毎回 resume()（自動 pause 対策。無害）
- * - アイドルが続くと後続発話が無音になる端末向けに、数秒おきに 0 音量の発話で温存。
- *   （マジックアウト前後で読み上げが止まる症状の対策）
+ * 発話中は pause()→resume() の定番ハックで眠りを防ぎ、アイドル時は resume() で
+ * 一時停止状態を解除しておく。（0 音量の温存発話は逆にキューを詰まらせうるため使わない。）
  */
 let keepAliveId: ReturnType<typeof setInterval> | null = null;
-let warmTick = 0;
 export function startKeepAlive(): void {
   const s = synth();
   if (!s || keepAliveId != null) return;
-  warmTick = 0;
   keepAliveId = setInterval(() => {
     try {
-      s.resume();
-      warmTick++;
-      if (!s.speaking && !s.pending && warmTick % 3 === 0) {
-        const u = new SpeechSynthesisUtterance(" ");
-        u.lang = "ja-JP";
-        u.volume = 0;
-        if (jaVoice) u.voice = jaVoice;
-        s.speak(u);
+      if (s.speaking) {
+        s.pause();
+        s.resume();
+      } else {
+        s.resume();
       }
     } catch {
       /* 無視 */
     }
-  }, 3000);
+  }, 5000);
 }
 export function stopKeepAlive(): void {
   if (keepAliveId != null) {
