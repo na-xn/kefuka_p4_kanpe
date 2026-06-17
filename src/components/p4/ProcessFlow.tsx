@@ -169,9 +169,9 @@ export function ProcessFlow({
         )}
       </ProcessStep>
 
-      {/* 4. どきどきアルテマ＋混沌（1回目） */}
-      <ProcessStep index={4} name="どきどきアルテマ＋混沌（1回目）処理">
-        <ActionBar text={tsunamiHonooAction(wave1Role, wave1Truth)} />
+      {/* 4. どきどきアルテマ＋混沌（処理は2回目側が先） */}
+      <ProcessStep index={4} name="どきどきアルテマ＋混沌（2回目）処理">
+        <ActionBar text={tsunamiHonooAction(wave2Role, wave2Truth)} />
       </ProcessStep>
 
       {/* 5. ひろげるブリザガ＋水＋雷＋加速度（遅）（GC2グループ） */}
@@ -203,8 +203,8 @@ export function ProcessFlow({
         )}
       </ProcessStep>
 
-      {/* 7. マジックアウト＋混沌（2回目） */}
-      <ProcessStep index={7} name="マジックアウト＋混沌（2回目）処理">
+      {/* 7. マジックアウト＋混沌（処理は1回目側が後） */}
+      <ProcessStep index={7} name="マジックアウト＋混沌（1回目）処理">
         <TruthInputRow
           label="🎭 マジックアウト（サンダガ）"
           value={outThunda}
@@ -232,7 +232,7 @@ export function ProcessFlow({
         ) : (
           magicOutBars.map((t, i) => <ActionBar key={i} text={t} />)
         )}
-        <ActionBar text={tsunamiHonooAction(wave2Role, wave2Truth)} />
+        <ActionBar text={tsunamiHonooAction(wave1Role, wave1Truth)} />
       </ProcessStep>
 
       {/* 8. どきどきアルテマ（全体攻撃） */}
