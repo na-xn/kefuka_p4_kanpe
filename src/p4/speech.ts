@@ -1,4 +1,4 @@
-import { raiMizuAction, tsunamiHonooAction, juso, accel, magicFinal } from "@/p4/logic";
+import { raiMizuAction, tsunamiHonooAction, juso, accel } from "@/p4/logic";
 import type { Choice } from "@/p4/types";
 
 function synth(): SpeechSynthesis | null {
@@ -375,31 +375,11 @@ export function buildSpeechSteps(timings: Record<string, number>): SpeechStep[] 
       key: "magicOut",
       atSec: t("magicOut"),
       label: "マジックアウト＋混沌（遅）",
+      // 混沌（遅）＝後半の つなみ/ほのお（タケノコ/ドーナツ）のみ読み上げ。
+      // マジックアウトの踏む/踏まないはクリック判定のため読み上げない。
       text: (get) => {
-        const parts: string[] = [];
-        // 混沌（遅）＝後半の つなみ/ほのお（タケノコ/ドーナツ）
         const { lateWaveRole, lateWaveTruth } = waveTimings(get);
-        const w = simplify(tsunamiHonooAction(lateWaveRole, lateWaveTruth));
-        if (w) parts.push(w);
-        // マジックアウト＝記憶 × アウト の XNOR で 踏む/踏まない
-        const thunda = get("magic_thunda") as Choice;
-        const blizza = get("magic_blizza") as Choice;
-        const mof = get("magic_out_false");
-        const outThunda: Choice = mof === "rai" || mof === "both" ? "gi" : "shin";
-        const outBlizza: Choice = mof === "koori" || mof === "both" ? "gi" : "shin";
-        const tf = magicFinal(thunda, outThunda);
-        const bf = magicFinal(blizza, outBlizza);
-        const fumu = (f: "shin" | "gi") => (f === "shin" ? "踏まない" : "踏む");
-        if (tf !== null && bf !== null) {
-          parts.push(
-            tf === bf
-              ? `マジックアウト。両方${fumu(tf)}`
-              : `マジックアウト。サンダガ${fumu(tf)}。ブリザガ${fumu(bf)}`
-          );
-        } else {
-          parts.push("マジックアウトの偽を押してください");
-        }
-        return parts.length ? parts.join("。") : null;
+        return simplify(tsunamiHonooAction(lateWaveRole, lateWaveTruth));
       },
     },
   ];
