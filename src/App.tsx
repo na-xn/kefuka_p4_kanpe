@@ -17,6 +17,7 @@ import {
   startKeepAlive,
   stopKeepAlive,
   stepImpactSec,
+  resetSec,
   DEFAULT_TIMINGS,
 } from "@/p4/speech";
 import { register, unregister } from "@tauri-apps/plugin-global-shortcut";
@@ -397,15 +398,19 @@ export default function App() {
       }, ms);
       ttsTimers.current.push(timer);
     }
+    // 全処理が終わったら ALLリセット（次の周回に備えて画面を初期化）。
+    const reset = setTimeout(() => resetAllRef.current(), resetSec(ttsTimings) * 1000);
+    ttsTimers.current.push(reset);
   };
 
   /**
-   * 読み上げ開始トリガーの一本化。開始ボタン・GC3担当選択・ホットキーすべてここを呼ぶ。
-   * 処理画面へ遷移し、現在時刻を 0:00 として読み上げスケジュールを開始（既に process でも 0:00 から再スタート）。
+   * 読み上げ開始トリガーの一本化。GC3担当選択・開始ボタン・ホットキーすべてここを呼ぶ。
+   * 処理画面へ遷移すると phase 変化を拾った effect が読み上げを開始する。
+   * 既に処理画面なら（ホットキー等）その場で 0:00 から再スタート。
    */
   const startTtsByTrigger = () => {
-    setPhase("process");
-    startTts();
+    if (phase === "process") startTts();
+    else setPhase("process");
   };
   // ホットキーコールバックが古い closure を掴まないよう、最新の関数を ref で参照。
   const startTtsByTriggerRef = useRef(startTtsByTrigger);
@@ -435,10 +440,17 @@ export default function App() {
     setInputStep(0);
     setPhase("input");
   };
+  // 読み上げタイマー（最後のリセット）から最新の resetAll を呼ぶための ref。
+  const resetAllRef = useRef(resetAll);
+  resetAllRef.current = resetAll;
 
-  // process 以外のフェーズに居る間は読み上げを止める（編集に戻る・リセット時の保険）。
+  // 処理画面に遷移したら読み上げを開始、処理画面を離れたら停止。
   useEffect(() => {
-    if (phase !== "process") stopTts();
+    if (phase === "process") {
+      if (ttsOn) startTts();
+    } else {
+      stopTts();
+    }
     // アンマウント時も停止
     return () => {
       if (phase !== "process") stopTts();
@@ -664,26 +676,15 @@ export default function App() {
           className="flex h-8 shrink-0 items-center justify-between gap-2 border-b px-2"
         >
           {phase === "process" ? (
-            <div className="flex shrink-0 items-center gap-1">
-              <Button
-                variant="secondary"
-                size="xs"
-                onClick={() => setPhase("input")}
-              >
-                <ChevronLeft />
-                判定を編集
-              </Button>
-              {ttsOn && (
-                <Button
-                  variant="default"
-                  size="xs"
-                  onClick={startTtsByTrigger}
-                  title="この瞬間を0:00として読み上げを開始/再開"
-                >
-                  ▶ 読み上げ開始
-                </Button>
-              )}
-            </div>
+            <Button
+              variant="secondary"
+              size="xs"
+              onClick={() => setPhase("input")}
+              className="shrink-0"
+            >
+              <ChevronLeft />
+              判定を編集
+            </Button>
           ) : (
             <span {...dragProps} className="truncate text-xs font-bold select-none">
               🤡 絶妖星乱舞 P4 真偽判定

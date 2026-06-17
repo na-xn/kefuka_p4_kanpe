@@ -134,6 +134,15 @@ export function stepImpactSec(timings: Record<string, number>): Record<number, n
   };
 }
 
+/**
+ * 全処理が着弾し終わったあと ALLリセットを走らせる秒数。
+ * 最後の着弾（マジックアウト）＋最終アルテマぶんの余裕を見て少し後ろに置く。
+ */
+export function resetSec(timings: Record<string, number>): number {
+  const impacts = Object.values(stepImpactSec(timings));
+  return Math.max(...impacts) + 8;
+}
+
 /** 散開→「散開、1人」のように読み上げ用に簡潔化。 */
 function simplify(s: string | null): string | null {
   if (!s) return null;
