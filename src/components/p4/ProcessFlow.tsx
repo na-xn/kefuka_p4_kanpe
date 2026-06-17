@@ -19,7 +19,8 @@ export function ProcessFlow({
 
   const thunda = get("magic_thunda") as Choice; // サンダガ記憶
   const blizza = get("magic_blizza") as Choice; // ブリザガ記憶
-  const magicOut = get("magic_out") as Choice; // マジックアウト
+  const outThunda = get("magic_out_thunda") as Choice; // マジックアウト（サンダガ）
+  const outBlizza = get("magic_out_blizza") as Choice; // マジックアウト（ブリザガ）
 
   // 各GCの真偽は1つ（gc{n}_role）。呪詛・雷水・加速度すべてをこの真偽で決める。
   const gc1Role = get("gc1_role__role");
@@ -88,13 +89,14 @@ export function ProcessFlow({
   // ⑦ ひろげるブリザガ＝記憶値で直接
   const blizzaDirect: string | null = !blizza ? null : `❄ ブリザガ ${fumu(blizza)}`;
 
-  // ⑨ XNOR(記憶 × マジックアウト) 一致=本当→踏まない / 不一致=嘘→踏む
-  const xnorTruth = (memory: Choice): "shin" | "gi" | null => {
-    if (!memory || !magicOut) return null;
-    return memory === magicOut ? "shin" : "gi";
+  // ⑨ XNOR(記憶 × マジックアウト) 一致=本当→踏まない / 不一致=嘘→踏む。
+  // マジックアウトはサンダガ・ブリザガそれぞれに真偽がある。
+  const xnorTruth = (memory: Choice, out: Choice): "shin" | "gi" | null => {
+    if (!memory || !out) return null;
+    return memory === out ? "shin" : "gi";
   };
-  const thundaFinal = xnorTruth(thunda);
-  const blizzaFinal = xnorTruth(blizza);
+  const thundaFinal = xnorTruth(thunda, outThunda);
+  const blizzaFinal = xnorTruth(blizza, outBlizza);
   // 両方が同じ（両方踏む／両方踏まない）なら1行に集約、違えば2行
   const magicOutBars: string[] =
     thundaFinal === null || blizzaFinal === null
@@ -208,17 +210,22 @@ export function ProcessFlow({
       {/* 7. マジックアウト＋混沌（2回目） */}
       <ProcessStep index={7} name="マジックアウト＋混沌（2回目）処理">
         <TruthInputRow
-          label="🎭 マジックアウト"
-          value={magicOut}
-          onChange={(v) => set("magic_out", v)}
+          label="🎭 マジックアウト（サンダガ）"
+          value={outThunda}
+          onChange={(v) => set("magic_out_thunda", v)}
         />
-        {magicOut && (
+        <TruthInputRow
+          label="🎭 マジックアウト（ブリザガ）"
+          value={outBlizza}
+          onChange={(v) => set("magic_out_blizza", v)}
+        />
+        {(outThunda || outBlizza) && (
           <div className="rounded-md border border-dashed bg-muted/30 px-2 py-1 text-[10px] text-muted-foreground">
-            ⚡記憶 {memLabel(thunda)} × アウト {memLabel(magicOut)} →{" "}
+            ⚡記憶 {memLabel(thunda)} × アウト {memLabel(outThunda)} →{" "}
             <b className="text-foreground">
               {thundaFinal === "shin" ? "本当" : thundaFinal === "gi" ? "嘘" : "—"}
             </b>
-            {"　"}❄記憶 {memLabel(blizza)} × アウト {memLabel(magicOut)} →{" "}
+            {"　"}❄記憶 {memLabel(blizza)} × アウト {memLabel(outBlizza)} →{" "}
             <b className="text-foreground">
               {blizzaFinal === "shin" ? "本当" : blizzaFinal === "gi" ? "嘘" : "—"}
             </b>

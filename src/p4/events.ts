@@ -56,7 +56,8 @@ export const EVENTS: EventDef[] = [
     judges: [
       { id: "magic_thunda", label: "もりもりサンダガ（記憶）", resolve: () => null },
       { id: "magic_blizza", label: "ひろげるブリザガ（記憶）", resolve: () => null },
-      { id: "magic_out", label: "マジックアウト", resolve: () => null },
+      { id: "magic_out_thunda", label: "マジックアウト（サンダガ）", resolve: () => null },
+      { id: "magic_out_blizza", label: "マジックアウト（ブリザガ）", resolve: () => null },
     ],
   },
 ];
