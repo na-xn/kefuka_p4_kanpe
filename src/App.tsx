@@ -18,6 +18,7 @@ import {
   stopKeepAlive,
   stepImpactSec,
   resetSec,
+  setSpeechVolume,
   DEFAULT_TIMINGS,
 } from "@/p4/speech";
 import { register, unregister } from "@tauri-apps/plugin-global-shortcut";
@@ -183,6 +184,7 @@ export default function App() {
   const [ttsTimings, setTtsTimings] = useState<Record<string, number>>(DEFAULT_TIMINGS);
   const [showTtsSettings, setShowTtsSettings] = useState(false);
   const [ttsHotkey, setTtsHotkey] = useState("Control+Shift+R");
+  const [ttsVolume, setTtsVolume] = useState(1); // 読み上げ音量 0〜1
   // 真偽キー入力（本当/嘘のグローバルホットキーで真偽欄を順に埋める）
   const [truthKeysOn, setTruthKeysOn] = useState(false);
   const [truthTrueKey, setTruthTrueKey] = useState("Control+Shift+Up");
@@ -282,6 +284,8 @@ export default function App() {
       if (tm) setTtsTimings({ ...DEFAULT_TIMINGS, ...JSON.parse(tm) });
       const hk = localStorage.getItem("ttsHotkey");
       if (hk) setTtsHotkey(hk);
+      const vol = localStorage.getItem("ttsVolume");
+      if (vol != null) setTtsVolume(Math.max(0, Math.min(1, Number(vol))));
       const tk = localStorage.getItem("truthKeysOn");
       if (tk != null) setTruthKeysOn(tk === "true");
       const ttk = localStorage.getItem("truthTrueKey");
@@ -315,6 +319,15 @@ export default function App() {
       /* 無視 */
     }
   }, [ttsHotkey]);
+  // 音量を speech モジュールへ反映＆永続化。
+  useEffect(() => {
+    setSpeechVolume(ttsVolume);
+    try {
+      localStorage.setItem("ttsVolume", String(ttsVolume));
+    } catch {
+      /* 無視 */
+    }
+  }, [ttsVolume]);
   useEffect(() => {
     try {
       localStorage.setItem("truthKeysOn", String(truthKeysOn));
@@ -942,6 +955,22 @@ export default function App() {
               >
                 <X />
               </Button>
+            </div>
+            {/* 音量 */}
+            <div className="mb-2 rounded-md border bg-card/40 p-2">
+              <div className="mb-1 flex items-center justify-between text-[11px] font-medium text-muted-foreground">
+                <span>🔊 音量</span>
+                <span className="tabular-nums">{Math.round(ttsVolume * 100)}%</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.05}
+                value={ttsVolume}
+                onChange={(e) => setTtsVolume(Number(e.target.value))}
+                className="w-full accent-primary"
+              />
             </div>
             <p className="mb-2 text-[10px] text-muted-foreground">
               開始(0:00)から各処理までの秒数。

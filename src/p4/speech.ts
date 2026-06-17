@@ -41,6 +41,12 @@ export function primeSpeech(): void {
   }
 }
 
+/** 読み上げ音量（0〜1）。スライダーから設定。 */
+let speakVolume = 1;
+export function setSpeechVolume(v: number): void {
+  speakVolume = Math.max(0, Math.min(1, v));
+}
+
 /**
  * 日本語読み上げ。連続発話のたびに cancel() しない（Windows で後続が止まる不具合の回避）。
  * 各読み上げは時間的に離れている前提。明示停止は stopSpeak()。
@@ -52,6 +58,7 @@ export function speak(text: string): void {
     if (!jaVoice) pickVoice();
     const u = new SpeechSynthesisUtterance(text);
     u.lang = "ja-JP";
+    u.volume = speakVolume;
     if (jaVoice) u.voice = jaVoice;
     s.resume(); // 一時停止状態だと無音になるため念のため解除
     s.speak(u);
@@ -71,18 +78,33 @@ export function stopSpeak(): void {
   }
 }
 
-/** エンジンが勝手に一時停止して止まるのを防ぐキープアライブ（一定間隔で resume）。 */
+/**
+ * エンジンが勝手に止まる/眠るのを防ぐキープアライブ。
+ * - 毎回 resume()（自動 pause 対策。無害）
+ * - アイドルが続くと後続発話が無音になる端末向けに、数秒おきに 0 音量の発話で温存。
+ *   （マジックアウト前後で読み上げが止まる症状の対策）
+ */
 let keepAliveId: ReturnType<typeof setInterval> | null = null;
+let warmTick = 0;
 export function startKeepAlive(): void {
   const s = synth();
   if (!s || keepAliveId != null) return;
+  warmTick = 0;
   keepAliveId = setInterval(() => {
     try {
-      if (s.speaking || s.pending) s.resume();
+      s.resume();
+      warmTick++;
+      if (!s.speaking && !s.pending && warmTick % 3 === 0) {
+        const u = new SpeechSynthesisUtterance(" ");
+        u.lang = "ja-JP";
+        u.volume = 0;
+        if (jaVoice) u.voice = jaVoice;
+        s.speak(u);
+      }
     } catch {
       /* 無視 */
     }
-  }, 4000);
+  }, 3000);
 }
 export function stopKeepAlive(): void {
   if (keepAliveId != null) {
