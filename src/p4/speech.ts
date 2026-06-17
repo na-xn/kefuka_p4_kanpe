@@ -1,4 +1,4 @@
-import { raiMizuAction, tsunamiHonooAction, juso, accel } from "@/p4/logic";
+import { raiMizuAction, tsunamiHonooAction, juso, accel, magicFinal } from "@/p4/logic";
 import type { Choice } from "@/p4/types";
 
 function synth(): SpeechSynthesis | null {
@@ -180,12 +180,11 @@ export const DEFAULT_TIMINGS: Record<string, number> = {
   chaosHaya: 35, // どきどきアルテマ＋混沌（早）
   oso: 40, // ひろげるブリザガ＋水＋雷＋加速度（遅）
   jusoOso: 47, // 呪詛の叫声（GC2）
+  magicOut: 52, // マジックアウト＋混沌（遅）
 };
 
 /** 読み上げは処理着弾の何秒前か（着弾＝読み上げ時刻＋このオフセット）。 */
 export const IMPACT_OFFSET = 5;
-/** マジックアウト（読み上げ無し）の着弾相当の読み上げ時刻。 */
-const MAGIC_OUT_SEC = 52;
 
 /**
  * 処理画面の各ステップ(1〜7)の「着弾秒数」（＝読み上げ時刻＋5秒）。
@@ -201,7 +200,7 @@ export function stepImpactSec(timings: Record<string, number>): Record<number, n
     4: t("chaosHaya") + off,
     5: t("oso") + off,
     6: t("jusoOso") + off,
-    7: MAGIC_OUT_SEC + off,
+    7: t("magicOut") + off,
   };
 }
 
@@ -370,6 +369,37 @@ export function buildSpeechSteps(timings: Record<string, number>): SpeechStep[] 
       text: (get) => {
         const gc2Truth = get("gc2_role") as Choice;
         return juso(gc2Truth);
+      },
+    },
+    {
+      key: "magicOut",
+      atSec: t("magicOut"),
+      label: "マジックアウト＋混沌（遅）",
+      text: (get) => {
+        const parts: string[] = [];
+        // 混沌（遅）＝後半の つなみ/ほのお（タケノコ/ドーナツ）
+        const { lateWaveRole, lateWaveTruth } = waveTimings(get);
+        const w = simplify(tsunamiHonooAction(lateWaveRole, lateWaveTruth));
+        if (w) parts.push(w);
+        // マジックアウト＝記憶 × アウト の XNOR で 踏む/踏まない
+        const thunda = get("magic_thunda") as Choice;
+        const blizza = get("magic_blizza") as Choice;
+        const mof = get("magic_out_false");
+        const outThunda: Choice = mof === "rai" || mof === "both" ? "gi" : "shin";
+        const outBlizza: Choice = mof === "koori" || mof === "both" ? "gi" : "shin";
+        const tf = magicFinal(thunda, outThunda);
+        const bf = magicFinal(blizza, outBlizza);
+        const fumu = (f: "shin" | "gi") => (f === "shin" ? "踏まない" : "踏む");
+        if (tf !== null && bf !== null) {
+          parts.push(
+            tf === bf
+              ? `マジックアウト。両方${fumu(tf)}`
+              : `マジックアウト。サンダガ${fumu(tf)}。ブリザガ${fumu(bf)}`
+          );
+        } else {
+          parts.push("マジックアウトの偽を押してください");
+        }
+        return parts.length ? parts.join("。") : null;
       },
     },
   ];
