@@ -1,5 +1,5 @@
-import { useEffect, useMemo } from "react";
-import { ActionBar, TruthToggle, TruthInputRow, MarkerNote, ProcessStep } from "@/components/p4/primitives";
+import { useMemo } from "react";
+import { ActionBar, TruthToggle, TruthInputRow, MarkerNote, ProcessStep, SelectToggle } from "@/components/p4/primitives";
 import { raiMizuAction, tsunamiHonooAction, juso, accel, seishi, magicFinal, fumuText } from "@/p4/logic";
 import type { Choice } from "@/p4/types";
 
@@ -18,15 +18,12 @@ export function ProcessFlow({
 
   const thunda = get("magic_thunda") as Choice; // サンダガ記憶
   const blizza = get("magic_blizza") as Choice; // ブリザガ記憶
-  const outThunda = get("magic_out_thunda") as Choice; // マジックアウト（サンダガ）
-  const outBlizza = get("magic_out_blizza") as Choice; // マジックアウト（ブリザガ）
-
-  // マジックアウトは両方デフォルト「真」。偽の場所だけクリックすればよいようにする。
-  useEffect(() => {
-    if (!get("magic_out_thunda")) set("magic_out_thunda", "shin");
-    if (!get("magic_out_blizza")) set("magic_out_blizza", "shin");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // マジックアウトは「偽の所だけ選ぶ」1欄: ""=両方真 / rai=雷(サンダガ)偽 / koori=氷(ブリザガ)偽 / both=両方偽
+  const magicOutFalse = get("magic_out_false");
+  const outThunda: Choice =
+    magicOutFalse === "rai" || magicOutFalse === "both" ? "gi" : "shin";
+  const outBlizza: Choice =
+    magicOutFalse === "koori" || magicOutFalse === "both" ? "gi" : "shin";
 
   // 各GCの真偽は1つ（gc{n}_role）。呪詛・雷水・加速度すべてをこの真偽で決める。
   const gc1Role = get("gc1_role__role");
@@ -236,18 +233,23 @@ export function ProcessFlow({
 
       {/* 7. マジックアウト＋混沌（遅） */}
       <ProcessStep index={7} name="マジックアウト＋混沌（遅）処理">
-        <TruthInputRow
-          label="🎭 マジックアウト（サンダガ）"
-          value={outThunda}
-          onChange={(v) => set("magic_out_thunda", v)}
-        />
-        <TruthInputRow
-          label="🎭 マジックアウト（ブリザガ）"
-          value={outBlizza}
-          onChange={(v) => set("magic_out_blizza", v)}
-        />
-        {(outThunda || outBlizza) && (
-          <div className="rounded-md border border-dashed bg-muted/30 px-2 py-1 text-[10px] text-muted-foreground">
+        {/* 既定は両方「真」。偽の所だけ選ぶ（雷=サンダガ / 氷=ブリザガ / 両方） */}
+        <div className="rounded-md border bg-card px-2 py-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="min-w-0 flex-1 text-xs font-semibold">
+              🎭 マジックアウト（偽のみ選択）
+            </span>
+            <SelectToggle
+              value={magicOutFalse}
+              onChange={(v) => set("magic_out_false", v)}
+              options={[
+                { value: "rai", label: "⚡雷" },
+                { value: "koori", label: "❄氷" },
+                { value: "both", label: "両方" },
+              ]}
+            />
+          </div>
+          <div className="mt-1 rounded-md border border-dashed bg-muted/30 px-2 py-1 text-[10px] text-muted-foreground">
             ⚡記憶 {memLabel(thunda)} × アウト {memLabel(outThunda)} →{" "}
             <b className="text-foreground">
               {thundaFinal === "shin" ? "本当" : thundaFinal === "gi" ? "嘘" : "—"}
@@ -257,7 +259,7 @@ export function ProcessFlow({
               {blizzaFinal === "shin" ? "本当" : blizzaFinal === "gi" ? "嘘" : "—"}
             </b>
           </div>
-        )}
+        </div>
         {magicOutBars.length === 0 ? (
           <ActionBar text={null} />
         ) : (
