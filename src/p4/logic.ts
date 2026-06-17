@@ -4,14 +4,16 @@ import type { Choice, Role } from "@/p4/types";
  * 雷/水/なし × 真/偽 の散開・頭割りマッピング。
  * - 雷: 本当→散開 / 嘘→頭割り
  * - 水: 本当→頭割り / 嘘→散開
- * - なし（雷も水も付かない人）: 水と一緒に頭割り＝水と同じ判定
+ * - なし（雷も水も付かない無職）: 真偽に関係なく必ず頭割り参加
  */
 export function raiMizuAction(role: Role, truth: Choice): string | null {
-  if (!role || !truth) return null;
+  if (!role) return null;
   const spread = "💥 散開（1人）";
   const stack = "🤝 頭割り";
+  if (role === "nashi") return stack; // 無職＝頭割り参加（真偽不問）
+  if (!truth) return null;
   if (role === "rai") return truth === "shin" ? spread : stack;
-  // mizu / nashi（なしは水判定）
+  // mizu
   return truth === "shin" ? stack : spread;
 }
 

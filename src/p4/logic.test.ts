@@ -16,10 +16,11 @@ describe("raiMizuAction", () => {
   it("rai × gi = 頭割り", () => expect(raiMizuAction("rai", "gi")).toBe(stack));
   it("mizu × shin = 頭割り", () => expect(raiMizuAction("mizu", "shin")).toBe(stack));
   it("mizu × gi = 散開", () => expect(raiMizuAction("mizu", "gi")).toBe(spread));
-  it("nashi × shin = 頭割り（水判定）", () => expect(raiMizuAction("nashi", "shin")).toBe(stack));
-  it("nashi × gi = 散開", () => expect(raiMizuAction("nashi", "gi")).toBe(spread));
+  it("nashi × shin = 頭割り（無職＝頭割り参加）", () => expect(raiMizuAction("nashi", "shin")).toBe(stack));
+  it("nashi × gi = 頭割り（無職＝頭割り参加）", () => expect(raiMizuAction("nashi", "gi")).toBe(stack));
+  it("nashi × 真偽未入力 = 頭割り（真偽不問）", () => expect(raiMizuAction("nashi", "")).toBe(stack));
   it("未入力 → null（role 空）", () => expect(raiMizuAction("", "shin")).toBeNull());
-  it("未入力 → null（truth 空）", () => expect(raiMizuAction("rai", "")).toBeNull());
+  it("未入力 → null（雷で truth 空）", () => expect(raiMizuAction("rai", "")).toBeNull());
 });
 
 describe("tsunamiHonooAction", () => {
