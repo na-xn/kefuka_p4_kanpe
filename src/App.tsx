@@ -195,6 +195,7 @@ export default function App() {
   const [posKey1, setPosKey1] = useState("F1");
   const [posKey2, setPosKey2] = useState("F2");
   const [posKey3, setPosKey3] = useState("F3");
+  const [keyRegMsg, setKeyRegMsg] = useState(""); // キー登録の成否（診断表示）
   // 記録対象: null=記録停止 / "tts"=読み上げ開始 / "k1"|"k2"|"k3"=位置キー
   const [recordingTarget, setRecordingTarget] = useState<"tts" | "k1" | "k2" | "k3" | null>(null);
   const recordingHotkey = recordingTarget === "tts";
@@ -259,10 +260,11 @@ export default function App() {
   const openMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     const w = 184;
-    const h = 320;
+    // メニューは項目が多く縦長。なるべく上寄せで開き、入りきらなければ縦スクロール。
+    const h = 480;
     setMenu({
       x: Math.min(e.clientX, window.innerWidth - w - 8),
-      y: Math.min(e.clientY, window.innerHeight - h - 8),
+      y: Math.max(8, Math.min(e.clientY, window.innerHeight - h - 8)),
     });
   };
 
@@ -538,23 +540,32 @@ export default function App() {
   // キー入力のグローバルホットキー登録: keyInputOn のとき posKey1/2/3 を登録、
   // OFF/キー変更/アンマウントで解除。ttsHotkey と同じ作法（try/catch・最新ハンドラは ref）。
   useEffect(() => {
-    if (!keyInputOn) return;
+    if (!keyInputOn) {
+      setKeyRegMsg("");
+      return;
+    }
     const keys: string[] = [];
+    const ok: string[] = [];
+    const ng: string[] = [];
     const reg = async (accel: string, idx: 1 | 2 | 3) => {
       if (!accel) return;
       try {
+        // 既に登録済みなら一旦解除してから登録（取りこぼし防止）
+        await unregister(accel).catch(() => {});
         await register(accel, (e) => {
           if (e.state === "Pressed") chooseAtCursorRef.current(idx);
         });
         keys.push(accel);
-      } catch {
-        /* Tauri 外 / 重複登録 などは無視 */
+        ok.push(accel);
+      } catch (err) {
+        ng.push(`${accel}(${String(err).slice(0, 24)})`);
       }
     };
     (async () => {
       await reg(posKey1, 1);
       await reg(posKey2, 2);
       await reg(posKey3, 3);
+      setKeyRegMsg(ng.length ? `登録失敗: ${ng.join(", ")}` : `登録OK: ${ok.join(" ")}`);
     })();
     return () => {
       for (const k of keys) unregister(k).catch(() => {});
@@ -592,6 +603,11 @@ export default function App() {
         : "nashi";
       // 担当欄: GC2加速度固定側(nashi)は順序に入れない。GC2雷水側は[rai,mizu]、GC1は[rai,mizu,accel]。
       if (gc2Side === "wait") return; // GC1未入力なら何も列挙しない
+      // 真偽（最初に入力する欄）
+      f(`gc${n}_role`, ["shin", "gi"], g(`gc${n}_role`) !== "", (idx) =>
+        set(`gc${n}_role`, ["shin", "gi"][idx])
+      );
+      // 担当（GC2加速度固定側は省略）
       if (gc2Side !== "nashi") {
         const values = gc2Side === "raimizu" ? ["rai", "mizu"] : ["rai", "mizu", "accel"];
         f(roleKey, values, role !== "", (idx) => {
@@ -615,10 +631,6 @@ export default function App() {
           set(earlyKey, ["haya", "oso"][idx])
         );
       }
-      // 真偽
-      f(`gc${n}_role`, ["shin", "gi"], g(`gc${n}_role`) !== "", (idx) =>
-        set(`gc${n}_role`, ["shin", "gi"][idx])
-      );
       // 呪詛（加速度担当時のみ）
       if (isNashi) {
         f(`gc${n}_juso`, ["yes", "no"], g(`gc${n}_juso`) !== "", (idx) =>
@@ -629,11 +641,12 @@ export default function App() {
 
     const waveFields = (n: "1" | "2") => {
       const typeRoleKey = `wave${n}_type__role`;
-      f(typeRoleKey, ["honoo", "tsunami"], g(typeRoleKey) !== "", (idx) =>
-        set(typeRoleKey, ["honoo", "tsunami"][idx])
-      );
+      // 真偽（最初）→ 種類 → 早遅
       f(`wave${n}_type`, ["shin", "gi"], g(`wave${n}_type`) !== "", (idx) =>
         set(`wave${n}_type`, ["shin", "gi"][idx])
+      );
+      f(typeRoleKey, ["honoo", "tsunami"], g(typeRoleKey) !== "", (idx) =>
+        set(typeRoleKey, ["honoo", "tsunami"][idx])
       );
       // wave2 の早遅は自動設定なので順序に含めない
       if (n === "1") {
@@ -974,8 +987,13 @@ export default function App() {
       {menu && (
         <div
           ref={menuRef}
-          className="fixed z-50 rounded-lg border bg-popover p-2 text-popover-foreground shadow-xl"
-          style={{ left: menu.x, top: menu.y, width: 184 }}
+          className="fixed z-50 overflow-y-auto rounded-lg border bg-popover p-2 text-popover-foreground shadow-xl"
+          style={{
+            left: menu.x,
+            top: menu.y,
+            width: 184,
+            maxHeight: `calc(100vh - ${menu.y + 12}px)`,
+          }}
           onContextMenu={(e) => e.preventDefault()}
         >
           <div className="mb-1.5 flex items-center justify-between text-[11px] font-medium text-muted-foreground">
@@ -1222,6 +1240,15 @@ export default function App() {
               <p className="mt-1 text-[10px] text-muted-foreground">
                 F1〜F3で、いまの入力欄(強調枠)の1/2/3番目の選択肢を選び順に進みます。
               </p>
+              {keyInputOn && keyRegMsg && (
+                <p
+                  className={`mt-1 text-[10px] ${
+                    keyRegMsg.startsWith("登録失敗") ? "text-red-500" : "text-green-600"
+                  }`}
+                >
+                  {keyRegMsg}
+                </p>
+              )}
 
               {([
                 { idx: 1 as const, label: "キー1", target: "k1" as const, val: posKey1, set: setPosKey1, def: "F1" },
