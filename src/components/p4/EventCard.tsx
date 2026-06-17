@@ -3,11 +3,10 @@ import { ActionBar, TruthToggle, RoleToggle, SelectToggle } from "@/components/p
 import { seishi, raiMizuAction, tsunamiHonooAction } from "@/p4/logic";
 import type { Choice, Judge, EventDef } from "@/p4/types";
 
-/** イベント見出しに置く「真偽トグル」の状態キー（GC・つなみ/ほのお・GC3）。 */
+/** イベント見出しに置く「真偽トグル」の状態キー（GC・つなみ/ほのお）。GC3は真偽不要。 */
 const HEADER_TRUTH_KEY: Record<string, string> = {
   gc1: "gc1_role",
   gc2: "gc2_role",
-  gc3: "gc3_truth",
   wave1: "wave1_type",
   wave2: "wave2_type",
 };
@@ -299,7 +298,6 @@ function Gc3RolePicker({
 }) {
   const roleKey = "gc3_role__role";
   const role = get(roleKey);
-  const truth = get("gc3_truth") as Choice;
   return (
     <div className="rounded-md border bg-card px-2 py-1.5">
       <div className="flex items-center justify-between gap-2">
@@ -313,7 +311,7 @@ function Gc3RolePicker({
           onChange={(v) => set(roleKey, v)}
         />
       </div>
-      <ActionBar text={seishi(role, truth)} />
+      <ActionBar text={seishi(role)} />
     </div>
   );
 }

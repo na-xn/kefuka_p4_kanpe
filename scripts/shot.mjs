@@ -78,7 +78,6 @@ try {
   await page.getByRole("button", { name: /確定/ }).click();
   const gc3 = group(page, "グランドクロス 3回目（生者の傷）");
   await radio(gc3, "アラガン").click();
-  await radio(gc3, "真").click();
   await page.getByRole("button", { name: /確定/ }).click();
 
   await page.getByText("生者の傷（GC3）処理").waitFor();

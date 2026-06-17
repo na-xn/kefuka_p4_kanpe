@@ -48,15 +48,12 @@ describe("accel", () => {
   it("\"\" → null", () => expect(accel("")).toBeNull());
 });
 
-describe("seishi", () => {
+describe("seishi（担当のみで決まる）", () => {
   const live = "生きる（無敵/ダメージ受けない）";
   const die = "死ぬ（ダメージ受ける）";
-  it("aragan × shin = 生きる", () => expect(seishi("aragan", "shin")).toBe(live));
-  it("aragan × gi = 死ぬ", () => expect(seishi("aragan", "gi")).toBe(die));
-  it("shi × shin = 死ぬ", () => expect(seishi("shi", "shin")).toBe(die));
-  it("shi × gi = 生きる", () => expect(seishi("shi", "gi")).toBe(live));
-  it("未入力 → null（role 空）", () => expect(seishi("", "shin")).toBeNull());
-  it("未入力 → null（truth 空）", () => expect(seishi("aragan", "")).toBeNull());
+  it("aragan = 生きる", () => expect(seishi("aragan")).toBe(live));
+  it("shi = 死ぬ", () => expect(seishi("shi")).toBe(die));
+  it("未入力 → null", () => expect(seishi("")).toBeNull());
 });
 
 describe("magicFinal", () => {

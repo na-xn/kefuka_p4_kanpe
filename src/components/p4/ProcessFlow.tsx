@@ -14,8 +14,7 @@ export function ProcessFlow({
   // --- 状態の読み出し ---
   const gc3Role = get("gc3_role__role"); // "aragan" | "shi" | ""
   const gc3Mu = get("gc3_mu") as Choice; // 無の氾濫
-  const gc3Truth = get("gc3_truth") as Choice; // アラガン/死の超越 真偽（生死）
-  const gc3Seishi = seishi(gc3Role, gc3Truth); // 生死テキスト
+  const gc3Seishi = seishi(gc3Role); // 生死（担当だけで決まる）
 
   const thunda = get("magic_thunda") as Choice; // サンダガ記憶
   const blizza = get("magic_blizza") as Choice; // ブリザガ記憶

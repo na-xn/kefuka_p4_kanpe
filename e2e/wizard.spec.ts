@@ -36,8 +36,7 @@ test.describe("P4 判定入力ウィザード", () => {
     // ③ GC3 → 処理フロー
     await expect(page.getByText("判定 3 / 3")).toBeVisible();
     const gc3 = group(page, "グランドクロス 3回目（生者の傷）");
-    await radio(gc3, "アラガン").click();
-    await radio(gc3, "真").click();
+    await radio(gc3, "アラガン").click(); // GC3 は担当のみ（真偽不要）
     await page.getByRole("button", { name: /確定/ }).click();
 
     // 処理フロー表示の確認
