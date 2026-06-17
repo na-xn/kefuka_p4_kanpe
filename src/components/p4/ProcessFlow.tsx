@@ -144,14 +144,14 @@ export function ProcessFlow({
         )}
       </ProcessStep>
 
-      {/* 2. 水属性圧縮＋フォークライトニング＋加速度爆弾（早）（GC1グループ） */}
+      {/* 2. 水属性圧縮＋フォークライトニング＋加速度爆弾（早） — 水雷は2回目(GC2)が早 */}
       <ProcessStep
         index={2}
         name="水属性圧縮＋フォークライトニング＋加速度爆弾（早）処理"
         highlight={hayaActive}
       >
-        {/* 散開/頭割りは全員 */}
-        <ActionBar text={raiMizuAction(gc1Role, gc1Truth)} />
+        {/* 散開/頭割り（早＝GC2の水雷） */}
+        <ActionBar text={raiMizuAction(gc2Role, gc2Truth)} />
         {/* 加速度（早）: 該当者のみ行を出す */}
         {hayaActive && (
           <ActionBar text={`${accel(hayaTruth)}（加速度・早）`} />
@@ -184,7 +184,7 @@ export function ProcessFlow({
         <ActionBar text={tsunamiHonooAction(earlyWaveRole, earlyWaveTruth)} />
       </ProcessStep>
 
-      {/* 5. ひろげるブリザガ＋水＋雷＋加速度（遅）（GC2グループ） */}
+      {/* 5. ひろげるブリザガ＋水＋雷＋加速度（遅） — 水雷は1回目(GC1)が遅 */}
       <ProcessStep
         index={5}
         name="ひろげるブリザガ＋水＋雷＋加速度（遅）処理"
@@ -196,8 +196,8 @@ export function ProcessFlow({
           onChange={(v) => set("magic_blizza", v)}
         />
         <ActionBar text={blizzaDirect} />
-        {/* 散開/頭割りは全員 */}
-        <ActionBar text={raiMizuAction(gc2Role, gc2Truth)} />
+        {/* 散開/頭割り（遅＝GC1の水雷） */}
+        <ActionBar text={raiMizuAction(gc1Role, gc1Truth)} />
         {/* 加速度（遅）: 該当者のみ行を出す */}
         {osoActive && <ActionBar text={`${accel(osoTruth)}（加速度・遅）`} />}
       </ProcessStep>
