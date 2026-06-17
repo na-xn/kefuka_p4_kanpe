@@ -70,6 +70,21 @@ const ACC_OSO = {
   onClass:
     "data-[state=on]:bg-orange-700 data-[state=on]:text-white data-[state=on]:border-orange-700",
 };
+// 早/遅の汎用（つなみ・ほのおの処理タイミング用）
+const WHEN_OPTIONS = [
+  {
+    value: "haya",
+    label: "早",
+    onClass:
+      "data-[state=on]:bg-amber-500 data-[state=on]:text-black data-[state=on]:border-amber-500",
+  },
+  {
+    value: "oso",
+    label: "遅",
+    onClass:
+      "data-[state=on]:bg-orange-700 data-[state=on]:text-white data-[state=on]:border-orange-700",
+  },
+];
 // 呪詛は「発生源」かどうかの有/無のみ（早/遅は GC1=早・GC2=遅 で確定。見る見ないは全員）。
 const JUSO_OPTIONS = [
   {
@@ -196,7 +211,9 @@ function TsunamiInputCard({
   const roleKey = `wave${suffix}_type__role`;
   const role = get(roleKey);
   const truth = get(`wave${suffix}_type`) as Choice;
+  const whenVal = get(`wave${suffix}_when`); // haya | oso（処理の早/遅）
   return (
+    <>
     <div className="rounded-md border bg-card px-2 py-1.5">
       <div className="flex items-center justify-between gap-2">
         <span className="min-w-0 flex-1 text-xs font-semibold">種類</span>
@@ -211,6 +228,17 @@ function TsunamiInputCard({
       </div>
       <ActionBar text={tsunamiHonooAction(role, truth)} />
     </div>
+    <div className="rounded-md border bg-card px-2 py-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="min-w-0 flex-1 text-xs font-semibold">処理（早/遅）</span>
+        <SelectToggle
+          value={whenVal}
+          onChange={(v) => set(`wave${suffix}_when`, v)}
+          options={WHEN_OPTIONS}
+        />
+      </div>
+    </div>
+    </>
   );
 }
 

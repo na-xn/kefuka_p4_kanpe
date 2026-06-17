@@ -13,9 +13,10 @@ test.describe("P4 判定入力ウィザード", () => {
     await page.getByRole("button", { name: /確定/ }).click();
     await expect(page.getByText("判定 2 / 5")).toBeVisible();
 
-    // 3. つなみ/ほのお1: 炎 + 真 + 確定 → 判定 3 / 5
+    // 3. つなみ/ほのお1: 炎 + 真 + 早 + 確定 → 判定 3 / 5
     await page.getByRole("radio", { name: "炎(ほのお)", exact: true }).click();
     await page.getByRole("radio", { name: "真", exact: true }).click();
+    await page.getByRole("radio", { name: "早", exact: true }).click();
     await page.getByRole("button", { name: /確定/ }).click();
     await expect(page.getByText("判定 3 / 5")).toBeVisible();
 
@@ -26,9 +27,10 @@ test.describe("P4 判定入力ウィザード", () => {
     await page.getByRole("button", { name: /確定/ }).click();
     await expect(page.getByText("判定 4 / 5")).toBeVisible();
 
-    // 5. つなみ/ほのお2: 種類 + 真 + 確定 → 判定 5 / 5
+    // 5. つなみ/ほのお2: 種類 + 真 + 遅 + 確定 → 判定 5 / 5
     await page.getByRole("radio", { name: "水(つなみ)", exact: true }).click();
     await page.getByRole("radio", { name: "真", exact: true }).click();
+    await page.getByRole("radio", { name: "遅", exact: true }).click();
     await page.getByRole("button", { name: /確定/ }).click();
     await expect(page.getByText("判定 5 / 5")).toBeVisible();
 

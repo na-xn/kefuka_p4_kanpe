@@ -63,8 +63,18 @@ export function ProcessFlow({
 
   const wave1Role = get("wave1_type__role");
   const wave1Truth = get("wave1_type") as Choice;
+  const wave1When = get("wave1_when"); // haya | oso
   const wave2Role = get("wave2_type__role");
   const wave2Truth = get("wave2_type") as Choice;
+  const wave2When = get("wave2_when");
+
+  // ほのお/つなみは早遅が入れ替わる。処理タイミング(早/遅)で配置する。
+  const earlyWaveRole = wave1When === "haya" ? wave1Role : wave2When === "haya" ? wave2Role : "";
+  const earlyWaveTruth: Choice =
+    wave1When === "haya" ? wave1Truth : wave2When === "haya" ? wave2Truth : "";
+  const lateWaveRole = wave1When === "oso" ? wave1Role : wave2When === "oso" ? wave2Role : "";
+  const lateWaveTruth: Choice =
+    wave1When === "oso" ? wave1Truth : wave2When === "oso" ? wave2Truth : "";
 
   // --- 派生 ---
   // ① 生者の傷（GC3）: 既存 Gc3Body と同一ロジック
@@ -169,9 +179,9 @@ export function ProcessFlow({
         )}
       </ProcessStep>
 
-      {/* 4. どきどきアルテマ＋混沌（処理は2回目側が先） */}
-      <ProcessStep index={4} name="どきどきアルテマ＋混沌（2回目）処理">
-        <ActionBar text={tsunamiHonooAction(wave2Role, wave2Truth)} />
+      {/* 4. どきどきアルテマ＋混沌（早） */}
+      <ProcessStep index={4} name="どきどきアルテマ＋混沌（早）処理">
+        <ActionBar text={tsunamiHonooAction(earlyWaveRole, earlyWaveTruth)} />
       </ProcessStep>
 
       {/* 5. ひろげるブリザガ＋水＋雷＋加速度（遅）（GC2グループ） */}
@@ -203,8 +213,8 @@ export function ProcessFlow({
         )}
       </ProcessStep>
 
-      {/* 7. マジックアウト＋混沌（処理は1回目側が後） */}
-      <ProcessStep index={7} name="マジックアウト＋混沌（1回目）処理">
+      {/* 7. マジックアウト＋混沌（遅） */}
+      <ProcessStep index={7} name="マジックアウト＋混沌（遅）処理">
         <TruthInputRow
           label="🎭 マジックアウト（サンダガ）"
           value={outThunda}
@@ -232,7 +242,7 @@ export function ProcessFlow({
         ) : (
           magicOutBars.map((t, i) => <ActionBar key={i} text={t} />)
         )}
-        <ActionBar text={tsunamiHonooAction(wave1Role, wave1Truth)} />
+        <ActionBar text={tsunamiHonooAction(lateWaveRole, lateWaveTruth)} />
       </ProcessStep>
 
       {/* 8. どきどきアルテマ（全体攻撃） */}
