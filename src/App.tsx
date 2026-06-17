@@ -231,6 +231,16 @@ export default function App() {
   const validateStep = (step: number): string[] =>
     (STEP_GROUPS[step] ?? []).flatMap((id) => eventMissing(id, get));
 
+  // ①⑧を隠す設定のときは GC3 ステップ（最後）も入力ウィザードから省く。
+  const activeStepGroups = hideEdgeSteps ? STEP_GROUPS.slice(0, -1) : STEP_GROUPS;
+
+  // hideEdge 切替で現在ステップが範囲外になったらクランプ。
+  useEffect(() => {
+    if (inputStep > activeStepGroups.length - 1) {
+      setInputStep(activeStepGroups.length - 1);
+    }
+  }, [activeStepGroups.length, inputStep]);
+
   /** 現在ステップの確定処理（検証して次へ。最終ステップなら処理フェーズへ）。 */
   const confirmStep = () => {
     const missing = validateStep(inputStep);
@@ -239,7 +249,7 @@ export default function App() {
       return;
     }
     setErrors([]);
-    if (inputStep >= STEP_GROUPS.length - 1) {
+    if (inputStep >= activeStepGroups.length - 1) {
       setPhase("process");
     } else {
       setInputStep((s) => s + 1);
@@ -327,7 +337,7 @@ export default function App() {
               {/* 進捗表示 */}
               <div className="flex items-center justify-between px-0.5">
                 <span className="text-xs font-bold text-muted-foreground">
-                  判定 {inputStep + 1} / {STEP_GROUPS.length}
+                  判定 {inputStep + 1} / {activeStepGroups.length}
                 </span>
                 {autoConfirm && (
                   <span className="text-[11px] text-muted-foreground">
@@ -336,7 +346,7 @@ export default function App() {
                 )}
               </div>
 
-              {STEP_GROUPS[inputStep].map((id, i) => (
+              {(activeStepGroups[inputStep] ?? []).map((id, i) => (
                 <EventCard
                   key={id}
                   index={i + 1}
@@ -372,7 +382,7 @@ export default function App() {
                   className="h-11 flex-1 text-sm font-bold"
                   onClick={confirmStep}
                 >
-                  {inputStep >= INPUT_EVENTS.length - 1 ? "確定 → 処理フローへ →" : "確定 →"}
+                  {inputStep >= activeStepGroups.length - 1 ? "確定 → 処理フローへ →" : "確定 →"}
                 </Button>
               </div>
             </div>
