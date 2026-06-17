@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { ActionBar, TruthToggle, RoleToggle, SelectToggle } from "@/components/p4/primitives";
 import { seishi, raiMizuAction, tsunamiHonooAction } from "@/p4/logic";
+import { DEBUFF_ICON } from "@/p4/icons";
 import type { Choice, Judge, EventDef } from "@/p4/types";
 
 /** イベント見出しに置く「真偽トグル」の状態キー（GC・つなみ/ほのお）。GC3は真偽不要。 */
@@ -44,17 +45,7 @@ function JudgeRow({
   );
 }
 
-// 各デバフのアイコン（public/icon/）。
-const ICON = {
-  rai: "/icon/fork_lightning.png", // フォークライトニング
-  mizu: "/icon/water_compression.png", // 水属性圧縮
-  accel: "/icon/accelerator_bomb.png", // 加速度爆弾
-  juso: "/icon/curse_screem.png", // 呪詛の叫声
-  honoo: "/icon/chaos_fire.png", // 混沌の炎
-  tsunami: "/icon/chaos_water.png", // 混沌の水
-  aragan: "/icon/aragan_field.png", // アラガンフィールド
-  shi: "/icon/death_over.png", // 死の超越
-};
+const ICON = DEBUFF_ICON;
 
 // 担当に加速度(早/遅)を統合した選択肢。なし＝加速度持ち（早/遅）なので、雷/水/加早/加遅 の4択。
 const RAI_OPT = {

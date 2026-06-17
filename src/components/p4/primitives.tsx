@@ -200,6 +200,7 @@ export function ProcessStep({
   children,
   last = false,
   highlight = false,
+  icons,
 }: {
   index: number;
   name: string;
@@ -208,6 +209,8 @@ export function ProcessStep({
   last?: boolean;
   /** 自分の担当ステップ（加速度・呪詛発生源）。枠を強調＋先頭に ★ */
   highlight?: boolean;
+  /** このステップで処理するデバフのアイコン（名前の右に表示） */
+  icons?: (string | null)[];
 }) {
   return (
     <div className="flex gap-2.5">
@@ -231,6 +234,17 @@ export function ProcessStep({
         >
           <div className="mb-1 flex items-center gap-1 text-[13px] font-bold leading-tight">
             {highlight && <span className="text-amber-400">★</span>}
+            {icons
+              ?.filter(Boolean)
+              .map((src, i) => (
+                <img
+                  key={i}
+                  src={src as string}
+                  alt=""
+                  className="size-4 shrink-0 rounded-[3px]"
+                  draggable={false}
+                />
+              ))}
             <span>{name}</span>
           </div>
           <div className="flex flex-col gap-1.5">{children}</div>

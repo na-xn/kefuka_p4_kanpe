@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { ActionBar, TruthToggle, TruthInputRow, MarkerNote, ProcessStep, SelectToggle } from "@/components/p4/primitives";
 import { raiMizuAction, tsunamiHonooAction, juso, accel, seishi, magicFinal, fumuText } from "@/p4/logic";
+import { DEBUFF_ICON, raiMizuIcon, chaosIcon, gc3Icon } from "@/p4/icons";
 import type { Choice } from "@/p4/types";
 
 /** 処理フローフェーズ本体（記事タイムライン準拠の処理順） */
@@ -134,7 +135,7 @@ export function ProcessFlow({
   return (
     <div className="flex flex-col gap-0">
       {/* 1. 生者の傷（GC3）処理 */}
-      <ProcessStep index={1} name="生者の傷（GC3）処理">
+      <ProcessStep index={1} name="生者の傷（GC3）処理" icons={[gc3Icon(gc3Role)]}>
         {!gc3Role ? (
           <div className="rounded-md border border-dashed px-2 py-1.5 text-[11px] text-muted-foreground">
             判定入力で担当を選択してください
@@ -167,6 +168,7 @@ export function ProcessFlow({
         index={2}
         name="水属性圧縮＋フォークライトニング＋加速度爆弾（早）処理"
         highlight={hayaActive}
+        icons={[raiMizuIcon(earlyGcRole), hayaActive ? DEBUFF_ICON.accel : null]}
       >
         {/* 散開/頭割り（早側の水雷） */}
         <ActionBar text={raiMizuAction(earlyGcRole, earlyGcTruth)} />
@@ -181,6 +183,7 @@ export function ProcessFlow({
         index={3}
         name="もりもりサンダガ＋呪詛の叫声（GC1）処理"
         highlight={jusoSrcHaya}
+        icons={[DEBUFF_ICON.juso]}
       >
         <TruthInputRow
           label="⚡ もりもりサンダガ（真偽）"
@@ -198,7 +201,11 @@ export function ProcessFlow({
       </ProcessStep>
 
       {/* 4. どきどきアルテマ＋混沌（早） */}
-      <ProcessStep index={4} name="どきどきアルテマ＋混沌（早）処理">
+      <ProcessStep
+        index={4}
+        name="どきどきアルテマ＋混沌（早）処理"
+        icons={[chaosIcon(earlyWaveRole)]}
+      >
         <ActionBar text={tsunamiHonooAction(earlyWaveRole, earlyWaveTruth)} />
       </ProcessStep>
 
@@ -207,6 +214,7 @@ export function ProcessFlow({
         index={5}
         name="ひろげるブリザガ＋水＋雷＋加速度（遅）処理"
         highlight={osoActive}
+        icons={[raiMizuIcon(lateGcRole), osoActive ? DEBUFF_ICON.accel : null]}
       >
         <TruthInputRow
           label="❄ ひろげるブリザガ（真偽）"
@@ -221,7 +229,7 @@ export function ProcessFlow({
       </ProcessStep>
 
       {/* 6. 呪詛の叫声（GC2） */}
-      <ProcessStep index={6} name="呪詛の叫声（GC2）処理" highlight={jusoSrcOso}>
+      <ProcessStep index={6} name="呪詛の叫声（GC2）処理" highlight={jusoSrcOso} icons={[DEBUFF_ICON.juso]}>
         {/* 見る/見ないは全員が対処（GC2真偽） */}
         <ActionBar text={juso(gc2Truth) && `${juso(gc2Truth)}（呪詛・全員）`} />
         {jusoSrcOso && (
@@ -232,7 +240,7 @@ export function ProcessFlow({
       </ProcessStep>
 
       {/* 7. マジックアウト＋混沌（遅） */}
-      <ProcessStep index={7} name="マジックアウト＋混沌（遅）処理">
+      <ProcessStep index={7} name="マジックアウト＋混沌（遅）処理" icons={[chaosIcon(lateWaveRole)]}>
         {/* 既定は両方「真」。偽の所だけ選ぶ（雷=サンダガ / 氷=ブリザガ / 両方） */}
         <div className="rounded-md border bg-card px-2 py-1.5">
           <div className="flex items-center justify-between gap-2">
