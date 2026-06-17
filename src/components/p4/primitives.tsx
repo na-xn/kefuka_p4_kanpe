@@ -108,10 +108,13 @@ export function RoleToggle({
   role,
   value,
   onChange,
+  active = false,
 }: {
   role: NonNullable<Judge["role"]>;
   value: Role;
   onChange: (v: Role) => void;
+  /** キー入力のカーソルがこの欄にあるとき強調 */
+  active?: boolean;
 }) {
   return (
     <ToggleGroup
@@ -120,7 +123,9 @@ export function RoleToggle({
       onValueChange={(v) => onChange(v as Role)}
       variant="outline"
       size="sm"
-      className="shrink-0"
+      className={`shrink-0${
+        active ? " rounded-md ring-2 ring-primary ring-offset-1 ring-offset-background" : ""
+      }`}
     >
       <ToggleGroupItem
         value={role.left.value}
@@ -154,10 +159,13 @@ export function SelectToggle({
   options,
   value,
   onChange,
+  active = false,
 }: {
   options: { value: string; label: string; onClass?: string; icon?: string }[];
   value: string;
   onChange: (v: string) => void;
+  /** キー入力のカーソルがこの欄にあるとき強調 */
+  active?: boolean;
 }) {
   return (
     <ToggleGroup
@@ -166,7 +174,9 @@ export function SelectToggle({
       onValueChange={(v) => v && onChange(v)}
       variant="outline"
       size="sm"
-      className="shrink-0"
+      className={`shrink-0${
+        active ? " rounded-md ring-2 ring-primary ring-offset-1 ring-offset-background" : ""
+      }`}
     >
       {options.map((o) => (
         <ToggleGroupItem

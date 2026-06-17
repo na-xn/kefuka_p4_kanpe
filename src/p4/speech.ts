@@ -290,8 +290,12 @@ function waveTimings(get: (k: string) => string) {
 }
 
 /** タイムライン順の読み上げステップ定義。 */
-export function buildSpeechSteps(timings: Record<string, number>): SpeechStep[] {
+export function buildSpeechSteps(
+  timings: Record<string, number>,
+  opts?: { readSanBuri?: boolean }
+): SpeechStep[] {
   const t = (k: string) => timings[k] ?? DEFAULT_TIMINGS[k];
+  const readSanBuri = opts?.readSanBuri !== false;
   return [
     {
       key: "seija",
@@ -331,8 +335,8 @@ export function buildSpeechSteps(timings: Record<string, number>): SpeechStep[] 
         const parts: string[] = [];
         const j = juso(gc1Truth);
         if (j) parts.push(j);
-        parts.push("サンダガの真偽を押してください");
-        return parts.join("。");
+        if (readSanBuri) parts.push("サンダガの真偽を押してください");
+        return parts.length ? parts.join("。") : null;
       },
     },
     {
@@ -358,8 +362,8 @@ export function buildSpeechSteps(timings: Record<string, number>): SpeechStep[] 
           const a = accel(osoTruth);
           parts.push(a ? `${a}。加速度` : "加速度");
         }
-        parts.push("ブリザガの真偽を押してください");
-        return parts.join("。");
+        if (readSanBuri) parts.push("ブリザガの真偽を押してください");
+        return parts.length ? parts.join("。") : null;
       },
     },
     {

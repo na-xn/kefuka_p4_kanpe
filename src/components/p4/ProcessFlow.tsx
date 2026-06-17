@@ -10,7 +10,7 @@ export function ProcessFlow({
   set,
   hideEdge = false,
   passedSteps = [],
-  activeTruthKey = null,
+  activeFieldKey = null,
 }: {
   get: (k: string) => string;
   set: (k: string, v: string) => void;
@@ -18,8 +18,8 @@ export function ProcessFlow({
   hideEdge?: boolean;
   /** 着弾済み（非活性化）の処理ステップ番号 */
   passedSteps?: number[];
-  /** 真偽キー入力のカーソル位置（このキーの真偽欄を強調） */
-  activeTruthKey?: string | null;
+  /** キー入力のカーソル位置（このキーの欄を強調） */
+  activeFieldKey?: string | null;
 }) {
   const isPassed = (n: number) => passedSteps.includes(n);
   // --- 状態の読み出し ---
@@ -163,7 +163,7 @@ export function ProcessFlow({
               <TruthToggle
                 value={gc3Mu}
                 onChange={(v) => set("gc3_mu", v)}
-                active={activeTruthKey === "gc3_mu"}
+                active={activeFieldKey === "gc3_mu"}
               />
             </div>
             <div className="mt-1 rounded-md border border-dashed px-2 py-1 text-[11px]">
@@ -207,7 +207,7 @@ export function ProcessFlow({
           label="⚡ もりもりサンダガ（真偽）"
           value={thunda}
           onChange={(v) => set("magic_thunda", v)}
-          active={activeTruthKey === "magic_thunda"}
+          active={activeFieldKey === "magic_thunda"}
         />
         <ActionBar text={thundaDirect} />
         {/* 見る/見ないは全員が対処（GC1真偽） */}
@@ -244,7 +244,7 @@ export function ProcessFlow({
           label="❄ ひろげるブリザガ（真偽）"
           value={blizza}
           onChange={(v) => set("magic_blizza", v)}
-          active={activeTruthKey === "magic_blizza"}
+          active={activeFieldKey === "magic_blizza"}
         />
         <ActionBar text={blizzaDirect} />
         {/* 散開/頭割り（遅側の水雷）。アイコンは自分の担当(雷/水) */}
@@ -281,6 +281,7 @@ export function ProcessFlow({
             <SelectToggle
               value={magicOutFalse}
               onChange={(v) => set("magic_out_false", v)}
+              active={activeFieldKey === "magic_out_false"}
               options={[
                 { value: "rai", label: "⚡雷" },
                 { value: "koori", label: "❄氷" },

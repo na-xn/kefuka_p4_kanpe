@@ -47,7 +47,7 @@ function JudgeRow({
 
 const ICON = DEBUFF_ICON;
 
-// 担当に加速度(早/遅)を統合した選択肢。なし＝加速度持ち（早/遅）なので、雷/水/加早/加遅 の4択。
+// GC 担当の3択（雷/水/加速度）。加速度=役割キーは "nashi"、表示valueは "accel"。
 const RAI_OPT = {
   value: "rai",
   label: "雷",
@@ -62,21 +62,14 @@ const MIZU_OPT = {
   onClass:
     "data-[state=on]:bg-sky-400 data-[state=on]:text-black data-[state=on]:border-sky-400",
 };
-const ACC_HAYA = {
-  value: "haya",
-  label: "加早",
+const ACCEL_OPT = {
+  value: "accel",
+  label: "加速度",
   icon: ICON.accel,
   onClass:
     "data-[state=on]:bg-amber-500 data-[state=on]:text-black data-[state=on]:border-amber-500",
 };
-const ACC_OSO = {
-  value: "oso",
-  label: "加遅",
-  icon: ICON.accel,
-  onClass:
-    "data-[state=on]:bg-orange-700 data-[state=on]:text-white data-[state=on]:border-orange-700",
-};
-// 早/遅の汎用（つなみ・ほのおの処理タイミング用）
+// 早/遅の汎用（つなみ・ほのおの処理タイミング・GC処理用）
 const WHEN_OPTIONS = [
   {
     value: "haya",
@@ -103,22 +96,26 @@ const JUSO_OPTIONS = [
   { value: "no", label: "無" },
 ];
 
-/** ①③ GC1 / GC2 入力カード。真偽は見出しにあるので body には担当・加速度・呪詛のみ。 */
+/** ①③ GC1 / GC2 入力カード。真偽は見出しにあるので body には担当・処理早遅・呪詛のみ。 */
 function GcInputCard({
   suffix,
   get,
   set,
+  activeFieldKey = null,
 }: {
   /** "1" | "2" */
   suffix: string;
   get: (k: string) => string;
   set: (k: string, v: string) => void;
+  activeFieldKey?: string | null;
 }) {
   const roleKey = `gc${suffix}_role__role`;
   const accelKey = `gc${suffix}_accel`;
+  const whenKey = `gc${suffix}_when`;
   const role = get(roleKey); // "rai" | "mizu" | "nashi" | ""
   const truth = get(`gc${suffix}_role`) as Choice; // GC真偽（見出し）
   const accelVal = get(accelKey); // "haya" | "oso" | ""
+  const whenVal = get(whenKey); // 散開/頭割りの処理タイミング（早/遅）
   const jusoVal = get(`gc${suffix}_juso`);
   const gc1Role = get("gc1_role__role");
 
@@ -140,34 +137,36 @@ function GcInputCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isGc2, gc2Side, role]);
 
-  const isNashi = isGc2 ? gc2Side === "nashi" : role === "nashi";
+  const isNashi = role === "nashi"; // 加速度担当
   const isRaiMizu = role === "rai" || role === "mizu"; // 水雷持ち
-  const whenVal = get(`gc${suffix}_when`); // 散開/頭割りの処理タイミング（早/遅）
+  const roleDecided = isNashi || isRaiMizu; // 担当が決まったか
 
-  // 担当＋加速度を統合した1つの値（雷/水/加早/加遅）
-  const combined =
-    role === "rai" || role === "mizu" ? role : role === "nashi" ? accelVal : "";
-  const setCombined = (v: string) => {
+  // 担当トグル: 表示value（雷/水/加速度）。
+  const roleValue = role === "rai" ? "rai" : role === "mizu" ? "mizu" : role === "nashi" ? "accel" : "";
+  const setRole = (v: string) => {
     if (v === "rai" || v === "mizu") {
       set(roleKey, v);
       if (accelVal) set(accelKey, "");
     } else {
+      // "accel"
       set(roleKey, "nashi");
-      set(accelKey, v); // haya | oso
+      if (whenVal) set(whenKey, "");
     }
   };
 
-  // 表示する選択肢: GC1=4択 / GC2なし側=加早遅 / GC2雷水側=雷水
-  const combinedOptions =
-    isGc2 && gc2Side === "nashi"
-      ? [ACC_HAYA, ACC_OSO]
-      : isGc2 && gc2Side === "raimizu"
-      ? [RAI_OPT, MIZU_OPT]
-      : [RAI_OPT, MIZU_OPT, ACC_HAYA, ACC_OSO];
+  // GC1=3択 / GC2なし側=雷水2択 / GC2雷水側=担当トグル非表示（加速度固定）
+  const roleOptions =
+    isGc2 && gc2Side === "raimizu" ? [RAI_OPT, MIZU_OPT] : [RAI_OPT, MIZU_OPT, ACCEL_OPT];
+  // GC2の加速度固定側は担当トグルを出さず静的ラベル表示
+  const showRoleToggle = !(isGc2 && gc2Side === "nashi");
+
+  // 早/遅: 担当=雷水→gcN_when / 担当=加速度→gcN_accel
+  const earlyKey = isNashi ? accelKey : whenKey;
+  const earlyVal = isNashi ? accelVal : whenVal;
 
   return (
     <>
-      {/* 担当（＋加速度早遅を統合） */}
+      {/* 担当（雷/水/加速度） */}
       {isGc2 && gc2Side === "wait" ? (
         <div className="rounded-md border border-dashed px-2 py-1.5 text-[11px] text-muted-foreground">
           GC1 の担当を先に入力してください
@@ -175,41 +174,52 @@ function GcInputCard({
       ) : (
         <div className="rounded-md border bg-card px-2 py-1.5">
           <div className="flex items-center justify-between gap-2">
-            <span className="min-w-0 flex-1 text-xs font-semibold">担当 / 加速度</span>
-            <SelectToggle value={combined} onChange={setCombined} options={combinedOptions} />
+            <span className="min-w-0 flex-1 text-xs font-semibold">担当</span>
+            {showRoleToggle ? (
+              <SelectToggle
+                value={roleValue}
+                onChange={setRole}
+                options={roleOptions}
+                active={activeFieldKey === roleKey}
+              />
+            ) : (
+              <span className="shrink-0 rounded bg-amber-500 px-2 py-0.5 text-xs font-bold text-black">
+                加速度
+              </span>
+            )}
           </div>
           <ActionBar text={raiMizuAction(role, truth)} icon={raiMizuIcon(role)} />
         </div>
       )}
 
-      {/* 水雷持ち（雷/水）の散開/頭割りの処理タイミング（もう片方のなしGCは逆＝排他） */}
-      {isRaiMizu && (
+      {/* 処理（早/遅）: 担当が決まったら常に表示。雷水→when / 加速度→accel */}
+      {roleDecided && (
         <div className="rounded-md border bg-card px-2 py-1.5">
           <div className="flex items-center justify-between gap-2">
-            <span className="min-w-0 flex-1 text-xs font-semibold">水雷の処理（早/遅）</span>
+            <span className="min-w-0 flex-1 text-xs font-semibold">処理（早/遅）</span>
             <SelectToggle
-              value={whenVal}
-              onChange={(v) => set(`gc${suffix}_when`, v)}
+              value={earlyVal}
+              onChange={(v) => set(earlyKey, v)}
               options={WHEN_OPTIONS}
+              active={activeFieldKey === `gc${suffix}_early`}
             />
           </div>
         </div>
       )}
 
-      {/* 担当=なし のときだけ 呪詛（発生源） */}
+      {/* 担当=加速度 のときだけ 呪詛（発生源） */}
       {isNashi && (
-        <>
-          <div className="rounded-md border bg-card px-2 py-1.5">
-            <div className="flex items-center justify-between gap-2">
-              <span className="min-w-0 flex-1 text-xs font-semibold">呪詛（発生源）</span>
-              <SelectToggle
-                value={jusoVal}
-                onChange={(v) => set(`gc${suffix}_juso`, v)}
-                options={JUSO_OPTIONS}
-              />
-            </div>
+        <div className="rounded-md border bg-card px-2 py-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="min-w-0 flex-1 text-xs font-semibold">呪詛（発生源）</span>
+            <SelectToggle
+              value={jusoVal}
+              onChange={(v) => set(`gc${suffix}_juso`, v)}
+              options={JUSO_OPTIONS}
+              active={activeFieldKey === `gc${suffix}_juso`}
+            />
           </div>
-        </>
+        </div>
       )}
 
       {isGc2 && (
@@ -226,10 +236,12 @@ function TsunamiInputCard({
   suffix,
   get,
   set,
+  activeFieldKey = null,
 }: {
   suffix: string;
   get: (k: string) => string;
   set: (k: string, v: string) => void;
+  activeFieldKey?: string | null;
 }) {
   const roleKey = `wave${suffix}_type__role`;
   const role = get(roleKey);
@@ -266,6 +278,7 @@ function TsunamiInputCard({
           }}
           value={role}
           onChange={(v) => set(roleKey, v)}
+          active={activeFieldKey === roleKey}
         />
       </div>
       <ActionBar text={tsunamiHonooAction(role, truth)} icon={chaosIcon(role)} />
@@ -288,6 +301,7 @@ function TsunamiInputCard({
             value={whenVal}
             onChange={(v) => set(whenKey, v)}
             options={WHEN_OPTIONS}
+            active={activeFieldKey === whenKey}
           />
         )}
       </div>
@@ -300,9 +314,11 @@ function TsunamiInputCard({
 function Gc3RolePicker({
   get,
   set,
+  activeFieldKey = null,
 }: {
   get: (k: string) => string;
   set: (k: string, v: string) => void;
+  activeFieldKey?: string | null;
 }) {
   const roleKey = "gc3_role__role";
   const role = get(roleKey);
@@ -317,6 +333,7 @@ function Gc3RolePicker({
           }}
           value={role}
           onChange={(v) => set(roleKey, v)}
+          active={activeFieldKey === roleKey}
         />
       </div>
       <ActionBar text={seishi(role)} />
@@ -330,14 +347,14 @@ export function EventCard({
   event,
   get,
   set,
-  activeTruthKey = null,
+  activeFieldKey = null,
 }: {
   index: number;
   event: EventDef;
   get: (k: string) => string;
   set: (k: string, v: string) => void;
-  /** 真偽キー入力のカーソル位置（このキーの真偽欄を強調） */
-  activeTruthKey?: string | null;
+  /** キー入力のカーソル位置（このキーの欄を強調） */
+  activeFieldKey?: string | null;
 }) {
   const truthKey = HEADER_TRUTH_KEY[event.id];
   return (
@@ -354,18 +371,28 @@ export function EventCard({
           <TruthToggle
             value={get(truthKey) as Choice}
             onChange={(v) => set(truthKey, v)}
-            active={activeTruthKey === truthKey}
+            active={activeFieldKey === truthKey}
           />
         )}
       </div>
 
       <div className="flex flex-col gap-1.5">
         {event.id === "gc1" || event.id === "gc2" ? (
-          <GcInputCard suffix={event.id === "gc1" ? "1" : "2"} get={get} set={set} />
+          <GcInputCard
+            suffix={event.id === "gc1" ? "1" : "2"}
+            get={get}
+            set={set}
+            activeFieldKey={activeFieldKey}
+          />
         ) : event.id === "wave1" || event.id === "wave2" ? (
-          <TsunamiInputCard suffix={event.id === "wave1" ? "1" : "2"} get={get} set={set} />
+          <TsunamiInputCard
+            suffix={event.id === "wave1" ? "1" : "2"}
+            get={get}
+            set={set}
+            activeFieldKey={activeFieldKey}
+          />
         ) : event.id === "gc3" ? (
-          <Gc3RolePicker get={get} set={set} />
+          <Gc3RolePicker get={get} set={set} activeFieldKey={activeFieldKey} />
         ) : (
           event.judges.map((j) => <JudgeRow key={j.id} judge={j} get={get} set={set} />)
         )}

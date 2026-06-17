@@ -24,7 +24,8 @@ test.describe("P4 判定入力ウィザード", () => {
     // ② GC2 + つなみ/ほのお2 → 判定 2 / 3
     await expect(page.getByText("判定 2 / 3")).toBeVisible();
     const gc2 = group(page, "グランドクロス 2回目");
-    await radio(gc2, "加早").click(); // GC1が雷水なので自動でなし側
+    // GC1が雷水なのでGC2は加速度固定側。担当トグルは出ず、処理(早/遅)と呪詛を入力。
+    await radio(gc2, "早").click(); // 処理（早/遅）→ gc2_accel
     await radio(gc2, "無").click(); // 呪詛
     await radio(gc2, "真").click();
     const wave2 = group(page, "つなみ / ほのお 2回目");

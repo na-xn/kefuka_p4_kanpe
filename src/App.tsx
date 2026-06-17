@@ -183,18 +183,20 @@ export default function App() {
   const [update, setUpdate] = useState<UpdateState>({ s: "idle" });
   // 読み上げ（TTS）
   const [ttsOn, setTtsOn] = useState(false);
+  const [readSanBuri, setReadSanBuri] = useState(true); // サンダガ/ブリザガを読み上げる
   const [ttsTimings, setTtsTimings] = useState<Record<string, number>>(DEFAULT_TIMINGS);
   const [showTtsSettings, setShowTtsSettings] = useState(false);
   const [ttsHotkey, setTtsHotkey] = useState("Control+Shift+R");
   const [ttsVolume, setTtsVolume] = useState(1); // 読み上げ音量 0〜1
   const [showSpeechLog, setShowSpeechLog] = useState(false); // 読み上げログ表示
   const [speechLog, setSpeechLog] = useState<SpeechLogEntry[]>([]);
-  // 真偽キー入力（本当/嘘のグローバルホットキーで真偽欄を順に埋める）
-  const [truthKeysOn, setTruthKeysOn] = useState(false);
-  const [truthTrueKey, setTruthTrueKey] = useState("Control+Shift+Up");
-  const [truthFalseKey, setTruthFalseKey] = useState("Control+Shift+Down");
-  // 記録対象: null=記録停止 / "tts"=読み上げ開始 / "true"=本当 / "false"=嘘
-  const [recordingTarget, setRecordingTarget] = useState<"tts" | "true" | "false" | null>(null);
+  // キー入力（位置キー F1/F2/F3 でアクティブ入力欄の1/2/3番目の選択肢を選ぶ）
+  const [keyInputOn, setKeyInputOn] = useState(false);
+  const [posKey1, setPosKey1] = useState("F1");
+  const [posKey2, setPosKey2] = useState("F2");
+  const [posKey3, setPosKey3] = useState("F3");
+  // 記録対象: null=記録停止 / "tts"=読み上げ開始 / "k1"|"k2"|"k3"=位置キー
+  const [recordingTarget, setRecordingTarget] = useState<"tts" | "k1" | "k2" | "k3" | null>(null);
   const recordingHotkey = recordingTarget === "tts";
   const menuRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -284,6 +286,8 @@ export default function App() {
     try {
       const on = localStorage.getItem("ttsOn");
       if (on != null) setTtsOn(on === "true");
+      const rsb = localStorage.getItem("readSanBuri");
+      if (rsb != null) setReadSanBuri(rsb === "true");
       const tm = localStorage.getItem("ttsTimings");
       if (tm) setTtsTimings({ ...DEFAULT_TIMINGS, ...JSON.parse(tm) });
       const hk = localStorage.getItem("ttsHotkey");
@@ -293,11 +297,13 @@ export default function App() {
       const sl = localStorage.getItem("showSpeechLog");
       if (sl != null) setShowSpeechLog(sl === "true");
       const tk = localStorage.getItem("truthKeysOn");
-      if (tk != null) setTruthKeysOn(tk === "true");
-      const ttk = localStorage.getItem("truthTrueKey");
-      if (ttk) setTruthTrueKey(ttk);
-      const tfk = localStorage.getItem("truthFalseKey");
-      if (tfk) setTruthFalseKey(tfk);
+      if (tk != null) setKeyInputOn(tk === "true");
+      const pk1 = localStorage.getItem("posKey1");
+      if (pk1) setPosKey1(pk1);
+      const pk2 = localStorage.getItem("posKey2");
+      if (pk2) setPosKey2(pk2);
+      const pk3 = localStorage.getItem("posKey3");
+      if (pk3) setPosKey3(pk3);
     } catch {
       /* 無視 */
     }
@@ -311,6 +317,13 @@ export default function App() {
       /* 無視 */
     }
   }, [ttsOn]);
+  useEffect(() => {
+    try {
+      localStorage.setItem("readSanBuri", String(readSanBuri));
+    } catch {
+      /* 無視 */
+    }
+  }, [readSanBuri]);
   useEffect(() => {
     try {
       localStorage.setItem("ttsTimings", JSON.stringify(ttsTimings));
@@ -348,25 +361,32 @@ export default function App() {
   }, []);
   useEffect(() => {
     try {
-      localStorage.setItem("truthKeysOn", String(truthKeysOn));
+      localStorage.setItem("truthKeysOn", String(keyInputOn));
     } catch {
       /* 無視 */
     }
-  }, [truthKeysOn]);
+  }, [keyInputOn]);
   useEffect(() => {
     try {
-      localStorage.setItem("truthTrueKey", truthTrueKey);
+      localStorage.setItem("posKey1", posKey1);
     } catch {
       /* 無視 */
     }
-  }, [truthTrueKey]);
+  }, [posKey1]);
   useEffect(() => {
     try {
-      localStorage.setItem("truthFalseKey", truthFalseKey);
+      localStorage.setItem("posKey2", posKey2);
     } catch {
       /* 無視 */
     }
-  }, [truthFalseKey]);
+  }, [posKey2]);
+  useEffect(() => {
+    try {
+      localStorage.setItem("posKey3", posKey3);
+    } catch {
+      /* 無視 */
+    }
+  }, [posKey3]);
 
   // GitHub の最新リリースを確認。
   const checkUpdate = async () => {
@@ -418,7 +438,7 @@ export default function App() {
     setSpeechLog([]);
     setTtsStartMs(Date.now());
     setElapsedSec(0);
-    const steps = buildSpeechSteps(ttsTimings);
+    const steps = buildSpeechSteps(ttsTimings, { readSanBuri });
     const getLatest = (k: string) => stateRef.current[k] ?? "";
     for (const step of steps) {
       // hideEdge のとき生者の傷ステップはスキップ
@@ -515,33 +535,31 @@ export default function App() {
     };
   }, [ttsOn, ttsHotkey]);
 
-  // 真偽キー入力のグローバルホットキー登録: truthKeysOn のとき本当/嘘キーを登録、
+  // キー入力のグローバルホットキー登録: keyInputOn のとき posKey1/2/3 を登録、
   // OFF/キー変更/アンマウントで解除。ttsHotkey と同じ作法（try/catch・最新ハンドラは ref）。
   useEffect(() => {
-    if (!truthKeysOn) return;
+    if (!keyInputOn) return;
     const keys: string[] = [];
-    (async () => {
+    const reg = async (accel: string, idx: 1 | 2 | 3) => {
+      if (!accel) return;
       try {
-        if (truthTrueKey) {
-          await register(truthTrueKey, (e) => {
-            if (e.state === "Pressed") setTruthAtCursorRef.current("shin");
-          });
-          keys.push(truthTrueKey);
-        }
-        if (truthFalseKey) {
-          await register(truthFalseKey, (e) => {
-            if (e.state === "Pressed") setTruthAtCursorRef.current("gi");
-          });
-          keys.push(truthFalseKey);
-        }
+        await register(accel, (e) => {
+          if (e.state === "Pressed") chooseAtCursorRef.current(idx);
+        });
+        keys.push(accel);
       } catch {
         /* Tauri 外 / 重複登録 などは無視 */
       }
+    };
+    (async () => {
+      await reg(posKey1, 1);
+      await reg(posKey2, 2);
+      await reg(posKey3, 3);
     })();
     return () => {
       for (const k of keys) unregister(k).catch(() => {});
     };
-  }, [truthKeysOn, truthTrueKey, truthFalseKey]);
+  }, [keyInputOn, posKey1, posKey2, posKey3]);
 
   /** 現在の入力ステップ（複数イベント）の必須未入力を検証。不足ラベルの配列を返す。 */
   const validateStep = (step: number): string[] =>
@@ -550,52 +568,126 @@ export default function App() {
   // ①⑧を隠す設定のときは GC3 ステップ（最後）も入力ウィザードから省く。
   const activeStepGroups = hideEdgeSteps ? STEP_GROUPS.slice(0, -1) : STEP_GROUPS;
 
-  // --- 真偽キー入力: 現在フェーズ/ステップで埋めるべき真偽欄の順序リスト ---
-  const truthKeyOrder = (): string[] => {
-    if (phase === "input") {
-      const ids = activeStepGroups[inputStep] ?? [];
-      // GC1+つなみ1 → ["gc1_role","wave1_type"] / GC2+つなみ2 → ["gc2_role","wave2_type"]
-      // GC3 の回は真偽欄なし。
-      const order: string[] = [];
-      for (const id of ids) {
-        if (id === "gc1") order.push("gc1_role");
-        else if (id === "gc2") order.push("gc2_role");
-        else if (id === "wave1") order.push("wave1_type");
-        else if (id === "wave2") order.push("wave2_type");
+  // --- キー入力: 画面の入力欄を順序通りに列挙したフィールド記述子 ---
+  // values=位置順の選択肢値（F1→values[0]…） / filled=入力済み / choose(idx)=values[idx]を反映。
+  type Field = { id: string; values: string[]; filled: boolean; choose: (idx: number) => void };
+  const fieldOrder = (g: (k: string) => string): Field[] => {
+    const fields: Field[] = [];
+    const f = (id: string, values: string[], filled: boolean, choose: (idx: number) => void) =>
+      fields.push({ id, values, filled, choose });
+
+    // GC1/GC2 イベント: 担当 → 早遅 → 真偽 → 呪詛(加速度時のみ)
+    const gcFields = (n: "1" | "2") => {
+      const roleKey = `gc${n}_role__role`;
+      const role = g(roleKey);
+      const isGc2 = n === "2";
+      const gc1Role = g("gc1_role__role");
+      // GC2 の側（GC1の担当に応じ自動排他）
+      const gc2Side = !isGc2
+        ? null
+        : !gc1Role
+        ? "wait"
+        : gc1Role === "nashi"
+        ? "raimizu"
+        : "nashi";
+      // 担当欄: GC2加速度固定側(nashi)は順序に入れない。GC2雷水側は[rai,mizu]、GC1は[rai,mizu,accel]。
+      if (gc2Side === "wait") return; // GC1未入力なら何も列挙しない
+      if (gc2Side !== "nashi") {
+        const values = gc2Side === "raimizu" ? ["rai", "mizu"] : ["rai", "mizu", "accel"];
+        f(roleKey, values, role !== "", (idx) => {
+          const v = values[idx];
+          if (v === "rai" || v === "mizu") {
+            set(roleKey, v);
+            if (g(`gc${n}_accel`)) set(`gc${n}_accel`, "");
+          } else {
+            set(roleKey, "nashi");
+            if (g(`gc${n}_when`)) set(`gc${n}_when`, "");
+          }
+        });
       }
-      return order;
+      // 担当が決まったか（GC2加速度固定側は role==="nashi"）
+      const isNashi = role === "nashi";
+      const isRaiMizu = role === "rai" || role === "mizu";
+      if (isNashi || isRaiMizu) {
+        // 早遅: 雷水→gcN_when / 加速度→gcN_accel
+        const earlyKey = isNashi ? `gc${n}_accel` : `gc${n}_when`;
+        f(`gc${n}_early`, ["haya", "oso"], g(earlyKey) !== "", (idx) =>
+          set(earlyKey, ["haya", "oso"][idx])
+        );
+      }
+      // 真偽
+      f(`gc${n}_role`, ["shin", "gi"], g(`gc${n}_role`) !== "", (idx) =>
+        set(`gc${n}_role`, ["shin", "gi"][idx])
+      );
+      // 呪詛（加速度担当時のみ）
+      if (isNashi) {
+        f(`gc${n}_juso`, ["yes", "no"], g(`gc${n}_juso`) !== "", (idx) =>
+          set(`gc${n}_juso`, ["yes", "no"][idx])
+        );
+      }
+    };
+
+    const waveFields = (n: "1" | "2") => {
+      const typeRoleKey = `wave${n}_type__role`;
+      f(typeRoleKey, ["honoo", "tsunami"], g(typeRoleKey) !== "", (idx) =>
+        set(typeRoleKey, ["honoo", "tsunami"][idx])
+      );
+      f(`wave${n}_type`, ["shin", "gi"], g(`wave${n}_type`) !== "", (idx) =>
+        set(`wave${n}_type`, ["shin", "gi"][idx])
+      );
+      // wave2 の早遅は自動設定なので順序に含めない
+      if (n === "1") {
+        f(`wave${n}_when`, ["haya", "oso"], g(`wave${n}_when`) !== "", (idx) =>
+          set(`wave${n}_when`, ["haya", "oso"][idx])
+        );
+      }
+    };
+
+    if (phase === "input") {
+      for (const id of activeStepGroups[inputStep] ?? []) {
+        if (id === "gc1") gcFields("1");
+        else if (id === "gc2") gcFields("2");
+        else if (id === "wave1") waveFields("1");
+        else if (id === "wave2") waveFields("2");
+        else if (id === "gc3")
+          f("gc3_role__role", ["aragan", "shi"], g("gc3_role__role") !== "", (idx) =>
+            set("gc3_role__role", ["aragan", "shi"][idx])
+          );
+      }
+    } else if (phase === "process") {
+      if (!hideEdgeSteps)
+        f("gc3_mu", ["shin", "gi"], g("gc3_mu") !== "", (idx) => set("gc3_mu", ["shin", "gi"][idx]));
+      f("magic_thunda", ["shin", "gi"], g("magic_thunda") !== "", (idx) =>
+        set("magic_thunda", ["shin", "gi"][idx])
+      );
+      f("magic_blizza", ["shin", "gi"], g("magic_blizza") !== "", (idx) =>
+        set("magic_blizza", ["shin", "gi"][idx])
+      );
+      f("magic_out_false", ["rai", "koori", "both"], g("magic_out_false") !== "", (idx) =>
+        set("magic_out_false", ["rai", "koori", "both"][idx])
+      );
     }
-    if (phase === "process") {
-      return hideEdgeSteps
-        ? ["magic_thunda", "magic_blizza"]
-        : ["gc3_mu", "magic_thunda", "magic_blizza"];
-    }
-    return [];
+    return fields;
   };
 
-  // アクティブな真偽欄＝順序リスト中で最初に未入力(get(key)==="")の欄。全部埋まっていれば null。
-  const activeTruthKey: string | null = (() => {
-    for (const k of truthKeyOrder()) {
-      if (get(k) === "") return k;
-    }
-    return null;
+  // アクティブ欄＝最初に filled=false の欄。全部埋まっていれば null。
+  const activeFieldKey: string | null = (() => {
+    const first = fieldOrder(get).find((fd) => !fd.filled);
+    return first ? first.id : null;
   })();
-  // truthKeysOn が false のときは強調しない（null 扱い）。
-  const shownActiveTruthKey = truthKeysOn ? activeTruthKey : null;
+  // keyInputOn が false のときは強調しない（null 扱い）。
+  const shownActiveFieldKey = keyInputOn ? activeFieldKey : null;
 
-  /** 現在の対象リストから最初の未入力キーに val を入れる（カーソルは自然に前進）。 */
-  const setTruthAtCursor = (val: "shin" | "gi") => {
+  /** 最新stateで最初の未入力欄を取り、values[n-1] があれば choose(n-1)。 */
+  const chooseAtCursor = (n: 1 | 2 | 3) => {
     const g = (k: string) => stateRef.current[k] ?? "";
-    for (const k of truthKeyOrder()) {
-      if (g(k) === "") {
-        set(k, val);
-        return;
-      }
-    }
+    const first = fieldOrder(g).find((fd) => !fd.filled);
+    if (!first) return;
+    if (first.values[n - 1] !== undefined) first.choose(n - 1);
   };
   // ホットキーコールバックが古い closure を掴まないよう、最新の関数を ref で参照。
-  const setTruthAtCursorRef = useRef(setTruthAtCursor);
-  setTruthAtCursorRef.current = setTruthAtCursor;
+  const chooseAtCursorRef = useRef(chooseAtCursor);
+  chooseAtCursorRef.current = chooseAtCursor;
 
   // hideEdge 切替で現在ステップが範囲外になったらクランプ。
   useEffect(() => {
@@ -663,7 +755,7 @@ export default function App() {
   }, [ttsOn, hideEdgeSteps, phase, inputStep, gc3Role]);
 
   // ホットキー記録: recordingTarget の間、次の単一キー押下を捕捉してアクセラレータ文字列を生成。
-  // 記録対象は tts（読み上げ開始）/ true（本当）/ false（嘘）を切替え。
+  // 記録対象は tts（読み上げ開始）/ k1|k2|k3（位置キー）を切替え。
   useEffect(() => {
     if (!recordingTarget) return;
     const onKey = (e: KeyboardEvent) => {
@@ -683,8 +775,9 @@ export default function App() {
       if (!main) return;
       const accel = [...mods, main].join("+");
       if (recordingTarget === "tts") setTtsHotkey(accel);
-      else if (recordingTarget === "true") setTruthTrueKey(accel);
-      else if (recordingTarget === "false") setTruthFalseKey(accel);
+      else if (recordingTarget === "k1") setPosKey1(accel);
+      else if (recordingTarget === "k2") setPosKey2(accel);
+      else if (recordingTarget === "k3") setPosKey3(accel);
       setRecordingTarget(null);
     };
     window.addEventListener("keydown", onKey, true);
@@ -766,7 +859,7 @@ export default function App() {
                   event={EVENT_BY_ID[id]}
                   get={get}
                   set={set}
-                  activeTruthKey={shownActiveTruthKey}
+                  activeFieldKey={shownActiveFieldKey}
                 />
               ))}
 
@@ -821,7 +914,7 @@ export default function App() {
               set={set}
               hideEdge={hideEdgeSteps}
               passedSteps={passedSteps}
-              activeTruthKey={shownActiveTruthKey}
+              activeFieldKey={shownActiveFieldKey}
             />
           )}
 
@@ -961,6 +1054,15 @@ export default function App() {
             >
               ⚙ 設定
             </button>
+            <label className="mt-1.5 flex cursor-pointer items-center justify-between text-[11px] font-medium text-muted-foreground">
+              <span>サンダガ/ブリザガを読み上げる</span>
+              <input
+                type="checkbox"
+                checked={readSanBuri}
+                onChange={(e) => setReadSanBuri(e.target.checked)}
+                className="size-3.5 accent-primary"
+              />
+            </label>
             <label className="mt-1.5 flex cursor-pointer items-center justify-between text-[11px] font-medium text-muted-foreground">
               <span>読み上げログを表示</span>
               <input
@@ -1106,80 +1208,57 @@ export default function App() {
               </p>
             </div>
 
-            {/* 真偽キー入力（本当/嘘のグローバルホットキーで真偽欄を順に埋める） */}
+            {/* キー入力（F1〜F3 でアクティブ入力欄の選択肢を選ぶ） */}
             <div className="mt-3 border-t pt-2">
               <label className="flex cursor-pointer items-center justify-between text-[11px] font-medium text-muted-foreground">
-                <span>真偽キー入力</span>
+                <span>キー入力</span>
                 <input
                   type="checkbox"
-                  checked={truthKeysOn}
-                  onChange={(e) => setTruthKeysOn(e.target.checked)}
+                  checked={keyInputOn}
+                  onChange={(e) => setKeyInputOn(e.target.checked)}
                   className="size-3.5 accent-primary"
                 />
               </label>
               <p className="mt-1 text-[10px] text-muted-foreground">
-                本当/嘘キーで、いま入力すべき真偽欄（強調枠）を順に埋めます。
+                F1〜F3で、いまの入力欄(強調枠)の1/2/3番目の選択肢を選び順に進みます。
               </p>
 
-              {/* 本当キー */}
-              <div className="mt-2 text-[11px] font-medium text-muted-foreground">本当キー</div>
-              <div className="mt-1 flex items-center justify-between gap-2">
-                <span className="min-w-0 flex-1 truncate rounded border bg-background px-2 py-1 text-[11px] tabular-nums text-foreground">
-                  {recordingTarget === "true"
-                    ? "キーを押してください…（Escで中止）"
-                    : truthTrueKey || "(未設定)"}
-                </span>
-                <Button
-                  variant={recordingTarget === "true" ? "destructive" : "secondary"}
-                  size="xs"
-                  onClick={() =>
-                    setRecordingTarget((r) => (r === "true" ? null : "true"))
-                  }
-                >
-                  {recordingTarget === "true" ? "中止" : "記録"}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  onClick={() => {
-                    setRecordingTarget(null);
-                    setTruthTrueKey("Control+Shift+Up");
-                  }}
-                  title="既定(Ctrl+Shift+Up)に戻す"
-                >
-                  既定
-                </Button>
-              </div>
-
-              {/* 嘘キー */}
-              <div className="mt-2 text-[11px] font-medium text-muted-foreground">嘘キー</div>
-              <div className="mt-1 flex items-center justify-between gap-2">
-                <span className="min-w-0 flex-1 truncate rounded border bg-background px-2 py-1 text-[11px] tabular-nums text-foreground">
-                  {recordingTarget === "false"
-                    ? "キーを押してください…（Escで中止）"
-                    : truthFalseKey || "(未設定)"}
-                </span>
-                <Button
-                  variant={recordingTarget === "false" ? "destructive" : "secondary"}
-                  size="xs"
-                  onClick={() =>
-                    setRecordingTarget((r) => (r === "false" ? null : "false"))
-                  }
-                >
-                  {recordingTarget === "false" ? "中止" : "記録"}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  onClick={() => {
-                    setRecordingTarget(null);
-                    setTruthFalseKey("Control+Shift+Down");
-                  }}
-                  title="既定(Ctrl+Shift+Down)に戻す"
-                >
-                  既定
-                </Button>
-              </div>
+              {([
+                { idx: 1 as const, label: "キー1", target: "k1" as const, val: posKey1, set: setPosKey1, def: "F1" },
+                { idx: 2 as const, label: "キー2", target: "k2" as const, val: posKey2, set: setPosKey2, def: "F2" },
+                { idx: 3 as const, label: "キー3", target: "k3" as const, val: posKey3, set: setPosKey3, def: "F3" },
+              ]).map((k) => (
+                <div key={k.target}>
+                  <div className="mt-2 text-[11px] font-medium text-muted-foreground">{k.label}</div>
+                  <div className="mt-1 flex items-center justify-between gap-2">
+                    <span className="min-w-0 flex-1 truncate rounded border bg-background px-2 py-1 text-[11px] tabular-nums text-foreground">
+                      {recordingTarget === k.target
+                        ? "キーを押してください…（Escで中止）"
+                        : k.val || "(未設定)"}
+                    </span>
+                    <Button
+                      variant={recordingTarget === k.target ? "destructive" : "secondary"}
+                      size="xs"
+                      onClick={() =>
+                        setRecordingTarget((r) => (r === k.target ? null : k.target))
+                      }
+                    >
+                      {recordingTarget === k.target ? "中止" : "記録"}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => {
+                        setRecordingTarget(null);
+                        k.set(k.def);
+                      }}
+                      title={`既定(${k.def})に戻す`}
+                    >
+                      既定
+                    </Button>
+                  </div>
+                </div>
+              ))}
             </div>
 
             <div className="mt-3 flex justify-end gap-2">
