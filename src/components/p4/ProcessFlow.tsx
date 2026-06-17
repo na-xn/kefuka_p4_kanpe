@@ -9,12 +9,16 @@ export function ProcessFlow({
   get,
   set,
   hideEdge = false,
+  passedSteps = [],
 }: {
   get: (k: string) => string;
   set: (k: string, v: string) => void;
   /** ①生者の傷・⑧アルテマを隠す */
   hideEdge?: boolean;
+  /** 着弾済み（非活性化）の処理ステップ番号 */
+  passedSteps?: number[];
 }) {
+  const isPassed = (n: number) => passedSteps.includes(n);
   // --- 状態の読み出し ---
   const gc3Role = get("gc3_role__role"); // "aragan" | "shi" | ""
   const gc3Mu = get("gc3_mu") as Choice; // 無の氾濫
@@ -139,7 +143,7 @@ export function ProcessFlow({
     <div className="flex flex-col gap-0">
       {/* 1. 生者の傷（GC3）処理（非表示可） */}
       {!hideEdge && (
-      <ProcessStep index={1} name="生者の傷（GC3）処理" icons={[gc3Icon(gc3Role)]}>
+      <ProcessStep index={1} name="生者の傷（GC3）処理" icons={[gc3Icon(gc3Role)]} inactive={isPassed(1)}>
         {!gc3Role ? (
           <div className="rounded-md border border-dashed px-2 py-1.5 text-[11px] text-muted-foreground">
             判定入力で担当を選択してください
@@ -173,6 +177,7 @@ export function ProcessFlow({
         index={2}
         name="水属性圧縮＋フォークライトニング＋加速度爆弾（早）処理"
         highlight={hayaActive}
+        inactive={isPassed(2)}
         icons={[raiMizuIcon(earlyGcRole), hayaActive ? DEBUFF_ICON.accel : null]}
       >
         {/* 散開/頭割り（早側の水雷）。アイコンは自分の担当(雷/水) */}
@@ -188,6 +193,7 @@ export function ProcessFlow({
         index={3}
         name="もりもりサンダガ＋呪詛の叫声（GC1）処理"
         highlight={jusoSrcHaya}
+        inactive={isPassed(3)}
         icons={[DEBUFF_ICON.juso]}
       >
         <TruthInputRow
@@ -210,6 +216,7 @@ export function ProcessFlow({
         index={4}
         name="どきどきアルテマ＋混沌（早）処理"
         icons={[chaosIcon(earlyWaveRole)]}
+        inactive={isPassed(4)}
       >
         <ActionBar
           text={tsunamiHonooAction(earlyWaveRole, earlyWaveTruth)}
@@ -222,6 +229,7 @@ export function ProcessFlow({
         index={5}
         name="ひろげるブリザガ＋水＋雷＋加速度（遅）処理"
         highlight={osoActive}
+        inactive={isPassed(5)}
         icons={[raiMizuIcon(lateGcRole), osoActive ? DEBUFF_ICON.accel : null]}
       >
         <TruthInputRow
@@ -237,7 +245,7 @@ export function ProcessFlow({
       </ProcessStep>
 
       {/* 6. 呪詛の叫声（GC2） */}
-      <ProcessStep index={6} name="呪詛の叫声（GC2）処理" highlight={jusoSrcOso} icons={[DEBUFF_ICON.juso]}>
+      <ProcessStep index={6} name="呪詛の叫声（GC2）処理" highlight={jusoSrcOso} icons={[DEBUFF_ICON.juso]} inactive={isPassed(6)}>
         {/* 見る/見ないは全員が対処（GC2真偽） */}
         <ActionBar text={juso(gc2Truth) && `${juso(gc2Truth)}（呪詛・全員）`} />
         {jusoSrcOso && (
@@ -253,6 +261,7 @@ export function ProcessFlow({
         name="マジックアウト＋混沌（遅）処理"
         icons={[chaosIcon(lateWaveRole)]}
         last={hideEdge}
+        inactive={isPassed(7)}
       >
         {/* 既定は両方「真」。偽の所だけ選ぶ（雷=サンダガ / 氷=ブリザガ / 両方） */}
         <div className="rounded-md border bg-card px-2 py-1.5">

@@ -217,6 +217,7 @@ export function ProcessStep({
   last = false,
   highlight = false,
   icons,
+  inactive = false,
 }: {
   index: number;
   name: string;
@@ -227,9 +228,15 @@ export function ProcessStep({
   highlight?: boolean;
   /** このステップで処理するデバフのアイコン（名前の右に表示） */
   icons?: (string | null)[];
+  /** 着弾済み＝非活性（淡色＋操作不可） */
+  inactive?: boolean;
 }) {
   return (
-    <div className="flex gap-2.5">
+    <div
+      className={`flex gap-2.5 ${
+        inactive ? "pointer-events-none opacity-40 grayscale" : ""
+      }`}
+    >
       {/* レール（ノード＋連結ライン） */}
       <div className="flex flex-col items-center">
         <span

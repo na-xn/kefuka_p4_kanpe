@@ -101,7 +101,7 @@ export type SpeechStep = {
   text: (get: (k: string) => string) => string | null;
 };
 
-/** 各ステップの既定秒数。 */
+/** 各ステップの既定秒数（読み上げ時刻）。 */
 export const DEFAULT_TIMINGS: Record<string, number> = {
   seija: 3, // 生者の傷（超越/アラガン）
   haya: 15, // 水属性圧縮＋フォークライトニング＋加速度（早）
@@ -110,6 +110,29 @@ export const DEFAULT_TIMINGS: Record<string, number> = {
   oso: 40, // ひろげるブリザガ＋水＋雷＋加速度（遅）
   jusoOso: 47, // 呪詛の叫声（GC2）
 };
+
+/** 読み上げは処理着弾の何秒前か（着弾＝読み上げ時刻＋このオフセット）。 */
+export const IMPACT_OFFSET = 5;
+/** マジックアウト（読み上げ無し）の着弾相当の読み上げ時刻。 */
+const MAGIC_OUT_SEC = 52;
+
+/**
+ * 処理画面の各ステップ(1〜7)の「着弾秒数」（＝読み上げ時刻＋5秒）。
+ * elapsed がこの値を超えたら非活性化する。step8(最終アルテマ)は対象外。
+ */
+export function stepImpactSec(timings: Record<string, number>): Record<number, number> {
+  const t = (k: string) => timings[k] ?? DEFAULT_TIMINGS[k];
+  const off = IMPACT_OFFSET;
+  return {
+    1: t("seija") + off,
+    2: t("haya") + off,
+    3: t("thunda") + off,
+    4: t("chaosHaya") + off,
+    5: t("oso") + off,
+    6: t("jusoOso") + off,
+    7: MAGIC_OUT_SEC + off,
+  };
+}
 
 /** 散開→「散開、1人」のように読み上げ用に簡潔化。 */
 function simplify(s: string | null): string | null {

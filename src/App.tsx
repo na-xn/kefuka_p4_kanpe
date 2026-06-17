@@ -16,6 +16,7 @@ import {
   primeSpeech,
   startKeepAlive,
   stopKeepAlive,
+  stepImpactSec,
   DEFAULT_TIMINGS,
 } from "@/p4/speech";
 import { register, unregister } from "@tauri-apps/plugin-global-shortcut";
@@ -186,6 +187,8 @@ export default function App() {
   const contentRef = useRef<HTMLDivElement>(null);
   const lastHeight = useRef(0);
   const ttsTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const [ttsStartMs, setTtsStartMs] = useState<number | null>(null); // 読み上げ開始時刻
+  const [elapsedSec, setElapsedSec] = useState(0); // 読み上げ開始からの経過秒
   // 最新の state を読み上げ発火時に参照するための ref
   const stateRef = useRef<State>(state);
   stateRef.current = state;
@@ -339,12 +342,16 @@ export default function App() {
     ttsTimers.current = [];
     stopKeepAlive();
     stopSpeak();
+    setTtsStartMs(null);
+    setElapsedSec(0);
   };
 
   /** 現在時刻を 0:00 として読み上げスケジュールを開始。 */
   const startTts = () => {
     stopTts();
     startKeepAlive();
+    setTtsStartMs(Date.now());
+    setElapsedSec(0);
     const steps = buildSpeechSteps(ttsTimings);
     const getLatest = (k: string) => stateRef.current[k] ?? "";
     for (const step of steps) {
@@ -370,6 +377,23 @@ export default function App() {
   // ホットキーコールバックが古い closure を掴まないよう、最新の関数を ref で参照。
   const startTtsByTriggerRef = useRef(startTtsByTrigger);
   startTtsByTriggerRef.current = startTtsByTrigger;
+
+  // 読み上げ中は経過秒を刻む（着弾済みステップの非活性化に使う）。
+  useEffect(() => {
+    if (ttsStartMs == null) return;
+    const id = setInterval(() => {
+      setElapsedSec((Date.now() - ttsStartMs) / 1000);
+    }, 500);
+    return () => clearInterval(id);
+  }, [ttsStartMs]);
+
+  // 着弾済み（読み上げ＋5秒経過）の処理ステップ番号。
+  const passedSteps =
+    ttsStartMs == null
+      ? []
+      : Object.entries(stepImpactSec(ttsTimings))
+          .filter(([, sec]) => elapsedSec >= sec)
+          .map(([idx]) => Number(idx));
 
   const resetAll = () => {
     stopTts();
@@ -635,7 +659,12 @@ export default function App() {
               </Button>
             </div>
           ) : (
-            <ProcessFlow get={get} set={set} hideEdge={hideEdgeSteps} />
+            <ProcessFlow
+              get={get}
+              set={set}
+              hideEdge={hideEdgeSteps}
+              passedSteps={passedSteps}
+            />
           )}
           </div>
         </div>
