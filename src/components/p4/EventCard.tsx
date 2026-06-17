@@ -285,7 +285,7 @@ export function EventCard({
 }) {
   const truthKey = HEADER_TRUTH_KEY[event.id];
   return (
-    <div className="rounded-lg border bg-card/40 p-2">
+    <div className="rounded-lg border bg-card/40 p-2" role="group" aria-label={event.name}>
       {/* 見出し（番号＋名称＋真偽トグル） */}
       <div className="mb-1.5 flex items-center justify-between gap-1.5">
         <div className="flex min-w-0 items-center gap-1.5">
