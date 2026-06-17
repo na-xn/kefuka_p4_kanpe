@@ -26,7 +26,7 @@ export function ActionBar({ text, icon }: { text: string | null; icon?: string |
   return (
     <div className="mt-1 flex items-center gap-1.5 rounded-md bg-primary/15 px-2 py-1.5 text-base font-bold leading-tight text-foreground">
       {resolvedIcon && (
-        <img src={resolvedIcon} alt="" className="size-6 shrink-0 rounded-[3px]" draggable={false} />
+        <img src={resolvedIcon} alt="" className="h-6 w-auto shrink-0 rounded-[3px]" draggable={false} />
       )}
       <span>{text}</span>
     </div>
@@ -91,7 +91,7 @@ function OptLabel({ icon, label }: { icon?: string; label: string }) {
   return (
     <>
       {icon && (
-        <img src={icon} alt="" className="size-6 shrink-0 rounded-[3px]" draggable={false} />
+        <img src={icon} alt="" className="h-6 w-auto shrink-0 rounded-[3px]" draggable={false} />
       )}
       <span>{label}</span>
     </>
@@ -257,7 +257,7 @@ export function ProcessStep({
                   key={i}
                   src={src as string}
                   alt=""
-                  className="size-6 shrink-0 rounded-[3px]"
+                  className="h-6 w-auto shrink-0 rounded-[3px]"
                   draggable={false}
                 />
               ))}
