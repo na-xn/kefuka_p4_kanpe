@@ -664,15 +664,26 @@ export default function App() {
           className="flex h-8 shrink-0 items-center justify-between gap-2 border-b px-2"
         >
           {phase === "process" ? (
-            <Button
-              variant="secondary"
-              size="xs"
-              onClick={() => setPhase("input")}
-              className="shrink-0"
-            >
-              <ChevronLeft />
-              判定を編集
-            </Button>
+            <div className="flex shrink-0 items-center gap-1">
+              <Button
+                variant="secondary"
+                size="xs"
+                onClick={() => setPhase("input")}
+              >
+                <ChevronLeft />
+                判定を編集
+              </Button>
+              {ttsOn && (
+                <Button
+                  variant="default"
+                  size="xs"
+                  onClick={startTtsByTrigger}
+                  title="この瞬間を0:00として読み上げを開始/再開"
+                >
+                  ▶ 読み上げ開始
+                </Button>
+              )}
+            </div>
           ) : (
             <span {...dragProps} className="truncate text-xs font-bold select-none">
               🤡 絶妖星乱舞 P4 真偽判定

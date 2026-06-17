@@ -241,9 +241,7 @@ export function ProcessStep({
 }) {
   return (
     <div
-      className={`flex gap-2.5 ${
-        inactive ? "pointer-events-none opacity-40 grayscale" : ""
-      }`}
+      className={`flex gap-2.5 ${inactive ? "opacity-50" : ""}`}
     >
       {/* レール（ノード＋連結ライン） */}
       <div className="flex flex-col items-center">
