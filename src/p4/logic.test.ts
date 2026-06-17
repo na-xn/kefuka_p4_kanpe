@@ -25,13 +25,13 @@ describe("raiMizuAction", () => {
 
 describe("tsunamiHonooAction", () => {
   it("honoo × shin = タケノコ【炎】", () =>
-    expect(tsunamiHonooAction("honoo", "shin")).toBe("🎍 タケノコ回避【炎】"));
-  it("honoo × gi = ドーナツ", () =>
-    expect(tsunamiHonooAction("honoo", "gi")).toBe("🍩 ドーナツ＝中央で動かない"));
-  it("tsunami × shin = ドーナツ", () =>
-    expect(tsunamiHonooAction("tsunami", "shin")).toBe("🍩 ドーナツ＝中央で動かない"));
+    expect(tsunamiHonooAction("honoo", "shin")).toBe("タケノコ回避【炎】"));
+  it("honoo × gi = ドーナツ【炎】", () =>
+    expect(tsunamiHonooAction("honoo", "gi")).toBe("ドーナツ＝中央で動かない【炎】"));
+  it("tsunami × shin = ドーナツ【水】", () =>
+    expect(tsunamiHonooAction("tsunami", "shin")).toBe("ドーナツ＝中央で動かない【水】"));
   it("tsunami × gi = タケノコ【水】", () =>
-    expect(tsunamiHonooAction("tsunami", "gi")).toBe("🎍 タケノコ回避【水】"));
+    expect(tsunamiHonooAction("tsunami", "gi")).toBe("タケノコ回避【水】"));
   it("未入力 → null（role 空）", () => expect(tsunamiHonooAction("", "shin")).toBeNull());
   it("未入力 → null（truth 空）", () => expect(tsunamiHonooAction("honoo", "")).toBeNull());
 });

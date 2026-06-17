@@ -17,12 +17,13 @@ export function raiMizuAction(role: Role, truth: Choice): string | null {
   return truth === "shin" ? stack : spread;
 }
 
-/** 炎/水 × 真/偽 のタケノコ・ドーナツマッピング（② / ④ 共通） */
+/** 炎/水 × 真/偽 のタケノコ・ドーナツマッピング（② / ④ 共通）。【炎】/【水】でアイコン判定。 */
 export function tsunamiHonooAction(role: Role, truth: Choice): string | null {
   if (!role || !truth) return null;
-  if (role === "honoo") return truth === "shin" ? "🎍 タケノコ回避【炎】" : "🍩 ドーナツ＝中央で動かない";
+  if (role === "honoo")
+    return truth === "shin" ? "タケノコ回避【炎】" : "ドーナツ＝中央で動かない【炎】";
   // tsunami(水)
-  return truth === "shin" ? "🍩 ドーナツ＝中央で動かない" : "🎍 タケノコ回避【水】";
+  return truth === "shin" ? "ドーナツ＝中央で動かない【水】" : "タケノコ回避【水】";
 }
 
 /** 呪詛の叫声: 真→見ない / 偽→見る */

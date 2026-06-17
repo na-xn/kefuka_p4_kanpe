@@ -4,6 +4,8 @@ import { DEBUFF_ICON } from "@/p4/icons";
 
 /** 行動テキストに対応するデバフアイコン（散開/頭割り・止まる/動く・見る/見ない）。 */
 function actionIcon(text: string): string | null {
+  if (text.includes("【炎】")) return DEBUFF_ICON.honoo;
+  if (text.includes("【水】")) return DEBUFF_ICON.tsunami;
   if (text.includes("散開")) return DEBUFF_ICON.rai;
   if (text.includes("頭割り")) return DEBUFF_ICON.mizu;
   if (text.includes("止まる") || text.includes("動く")) return DEBUFF_ICON.accel;
