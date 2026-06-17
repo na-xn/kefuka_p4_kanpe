@@ -33,13 +33,16 @@ export function ActionBar({ text, icon }: { text: string | null; icon?: string |
   );
 }
 
-/** 真/偽トグル（真=青, 偽=赤） */
+/** 真/偽トグル（真=青, 偽=赤）。active=true で枠を強調（真偽キー入力の入力先）。 */
 export function TruthToggle({
   value,
   onChange,
+  active = false,
 }: {
   value: Choice;
   onChange: (v: Choice) => void;
+  /** 真偽キー入力のカーソルがこの欄にあるとき強調 */
+  active?: boolean;
 }) {
   return (
     <ToggleGroup
@@ -48,7 +51,9 @@ export function TruthToggle({
       onValueChange={(v) => onChange(v as Choice)}
       variant="outline"
       size="sm"
-      className="shrink-0"
+      className={`shrink-0 rounded-md${
+        active ? " ring-2 ring-primary ring-offset-1 ring-offset-background" : ""
+      }`}
     >
       <ToggleGroupItem
         value="shin"
@@ -185,16 +190,19 @@ export function TruthInputRow({
   label,
   value,
   onChange,
+  active = false,
 }: {
   label: string;
   value: Choice;
   onChange: (v: Choice) => void;
+  /** 真偽キー入力のカーソルがこの欄にあるとき強調 */
+  active?: boolean;
 }) {
   return (
     <div className="rounded-md border bg-card px-2 py-1.5">
       <div className="flex items-center justify-between gap-2">
         <span className="min-w-0 flex-1 text-xs font-semibold">{label}</span>
-        <TruthToggle value={value} onChange={onChange} />
+        <TruthToggle value={value} onChange={onChange} active={active} />
       </div>
     </div>
   );

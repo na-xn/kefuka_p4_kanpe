@@ -330,11 +330,14 @@ export function EventCard({
   event,
   get,
   set,
+  activeTruthKey = null,
 }: {
   index: number;
   event: EventDef;
   get: (k: string) => string;
   set: (k: string, v: string) => void;
+  /** 真偽キー入力のカーソル位置（このキーの真偽欄を強調） */
+  activeTruthKey?: string | null;
 }) {
   const truthKey = HEADER_TRUTH_KEY[event.id];
   return (
@@ -351,6 +354,7 @@ export function EventCard({
           <TruthToggle
             value={get(truthKey) as Choice}
             onChange={(v) => set(truthKey, v)}
+            active={activeTruthKey === truthKey}
           />
         )}
       </div>
