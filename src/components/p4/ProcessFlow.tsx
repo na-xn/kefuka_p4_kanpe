@@ -33,6 +33,21 @@ export function ProcessFlow({
   const gc2Accel = get("gc2_accel");
   const gc2Juso = get("gc2_juso");
 
+  // 水雷(散開/頭割り)の処理タイミング: 雷/水持ちのGCは入力値、なしGCはその逆（排他）。
+  const opp = (w: string) => (w === "haya" ? "oso" : w === "oso" ? "haya" : "");
+  const gc1When = get("gc1_when");
+  const gc2When = get("gc2_when");
+  const gc1Timing =
+    gc1Role === "rai" || gc1Role === "mizu" ? gc1When : opp(gc2When);
+  const gc2Timing =
+    gc2Role === "rai" || gc2Role === "mizu" ? gc2When : opp(gc1When);
+  const earlyGcRole = gc1Timing === "haya" ? gc1Role : gc2Timing === "haya" ? gc2Role : "";
+  const earlyGcTruth: Choice =
+    gc1Timing === "haya" ? gc1Truth : gc2Timing === "haya" ? gc2Truth : "";
+  const lateGcRole = gc1Timing === "oso" ? gc1Role : gc2Timing === "oso" ? gc2Role : "";
+  const lateGcTruth: Choice =
+    gc1Timing === "oso" ? gc1Truth : gc2Timing === "oso" ? gc2Truth : "";
+
   // --- 加速度爆弾: プレイヤーが「なし」かつ accel!=="none" のGCが加速度持ち。 ---
   // 早→GC1グループステップ / 遅→GC2グループステップ に配置（早/遅で配置）。
   const gc1HasAccel = gc1Role === "nashi" && gc1Accel !== "" && gc1Accel !== "none";
@@ -150,8 +165,8 @@ export function ProcessFlow({
         name="水属性圧縮＋フォークライトニング＋加速度爆弾（早）処理"
         highlight={hayaActive}
       >
-        {/* 散開/頭割り（早＝GC2の水雷） */}
-        <ActionBar text={raiMizuAction(gc2Role, gc2Truth)} />
+        {/* 散開/頭割り（早側の水雷） */}
+        <ActionBar text={raiMizuAction(earlyGcRole, earlyGcTruth)} />
         {/* 加速度（早）: 該当者のみ行を出す */}
         {hayaActive && (
           <ActionBar text={`${accel(hayaTruth)}（加速度・早）`} />
@@ -196,8 +211,8 @@ export function ProcessFlow({
           onChange={(v) => set("magic_blizza", v)}
         />
         <ActionBar text={blizzaDirect} />
-        {/* 散開/頭割り（遅＝GC1の水雷） */}
-        <ActionBar text={raiMizuAction(gc1Role, gc1Truth)} />
+        {/* 散開/頭割り（遅側の水雷） */}
+        <ActionBar text={raiMizuAction(lateGcRole, lateGcTruth)} />
         {/* 加速度（遅）: 該当者のみ行を出す */}
         {osoActive && <ActionBar text={`${accel(osoTruth)}（加速度・遅）`} />}
       </ProcessStep>

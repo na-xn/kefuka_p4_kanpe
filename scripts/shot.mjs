@@ -58,6 +58,7 @@ try {
   const gc1 = group(page, "グランドクロス 1回目");
   await radio(gc1, "雷").click();
   await radio(gc1, "真").click();
+  await radio(gc1, "早").click(); // 水雷の処理（早/遅）
   const wave1 = group(page, "つなみ / ほのお 1回目");
   await radio(wave1, "炎(ほのお)").click();
   await radio(wave1, "真").click();

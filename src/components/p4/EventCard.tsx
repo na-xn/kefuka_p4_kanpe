@@ -134,6 +134,8 @@ function GcInputCard({
   }, [isGc2, gc2Side, role]);
 
   const isNashi = isGc2 ? gc2Side === "nashi" : role === "nashi";
+  const isRaiMizu = role === "rai" || role === "mizu"; // 水雷持ち
+  const whenVal = get(`gc${suffix}_when`); // 散開/頭割りの処理タイミング（早/遅）
 
   // 担当＋加速度を統合した1つの値（雷/水/加早/加遅）
   const combined =
@@ -170,6 +172,20 @@ function GcInputCard({
             <SelectToggle value={combined} onChange={setCombined} options={combinedOptions} />
           </div>
           <ActionBar text={raiMizuAction(role, truth)} />
+        </div>
+      )}
+
+      {/* 水雷持ち（雷/水）の散開/頭割りの処理タイミング（もう片方のなしGCは逆＝排他） */}
+      {isRaiMizu && (
+        <div className="rounded-md border bg-card px-2 py-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="min-w-0 flex-1 text-xs font-semibold">水雷の処理（早/遅）</span>
+            <SelectToggle
+              value={whenVal}
+              onChange={(v) => set(`gc${suffix}_when`, v)}
+              options={WHEN_OPTIONS}
+            />
+          </div>
         </div>
       )}
 
