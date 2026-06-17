@@ -29,7 +29,7 @@ test.describe("P4 判定入力ウィザード", () => {
     const wave2 = group(page, "つなみ / ほのお 2回目");
     await radio(wave2, "水(つなみ)").click();
     await radio(wave2, "真").click();
-    await radio(wave2, "遅").click();
+    // 早/遅は1回目=早の排他で自動「遅」
     await page.getByRole("button", { name: /確定/ }).click();
 
     // ③ GC3 → 処理フロー

@@ -211,7 +211,26 @@ function TsunamiInputCard({
   const roleKey = `wave${suffix}_type__role`;
   const role = get(roleKey);
   const truth = get(`wave${suffix}_type`) as Choice;
-  const whenVal = get(`wave${suffix}_when`); // haya | oso（処理の早/遅）
+  const whenKey = `wave${suffix}_when`;
+  const whenVal = get(whenKey); // haya | oso（処理の早/遅）
+
+  // 2回目の早/遅は1回目と排他（1回目=早→2回目=遅、逆も）。
+  const isWave2 = suffix === "2";
+  const wave1When = get("wave1_when");
+  const autoWhen = isWave2
+    ? wave1When === "haya"
+      ? "oso"
+      : wave1When === "oso"
+      ? "haya"
+      : ""
+    : "";
+  useEffect(() => {
+    if (!isWave2) return;
+    if (autoWhen && whenVal !== autoWhen) set(whenKey, autoWhen);
+    if (!autoWhen && whenVal) set(whenKey, "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isWave2, autoWhen, whenVal]);
+
   return (
     <>
     <div className="rounded-md border bg-card px-2 py-1.5">
@@ -231,11 +250,23 @@ function TsunamiInputCard({
     <div className="rounded-md border bg-card px-2 py-1.5">
       <div className="flex items-center justify-between gap-2">
         <span className="min-w-0 flex-1 text-xs font-semibold">処理（早/遅）</span>
-        <SelectToggle
-          value={whenVal}
-          onChange={(v) => set(`wave${suffix}_when`, v)}
-          options={WHEN_OPTIONS}
-        />
+        {isWave2 ? (
+          autoWhen ? (
+            <span className="shrink-0 rounded bg-slate-500 px-2 py-0.5 text-xs font-bold text-white">
+              {autoWhen === "haya" ? "早" : "遅"}（自動）
+            </span>
+          ) : (
+            <span className="shrink-0 text-[10px] text-muted-foreground">
+              1回目の早/遅を先に選択
+            </span>
+          )
+        ) : (
+          <SelectToggle
+            value={whenVal}
+            onChange={(v) => set(whenKey, v)}
+            options={WHEN_OPTIONS}
+          />
+        )}
       </div>
     </div>
     </>
