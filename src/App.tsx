@@ -19,8 +19,10 @@ import {
   stepImpactSec,
   resetSec,
   setSpeechVolume,
+  setSpeechLogger,
   DEFAULT_TIMINGS,
 } from "@/p4/speech";
+import type { SpeechLogEntry } from "@/p4/speech";
 import { register, unregister } from "@tauri-apps/plugin-global-shortcut";
 
 const REPO = "na-xn/kefuka_p4_kanpe";
@@ -185,6 +187,8 @@ export default function App() {
   const [showTtsSettings, setShowTtsSettings] = useState(false);
   const [ttsHotkey, setTtsHotkey] = useState("Control+Shift+R");
   const [ttsVolume, setTtsVolume] = useState(1); // 読み上げ音量 0〜1
+  const [showSpeechLog, setShowSpeechLog] = useState(false); // 読み上げログ表示
+  const [speechLog, setSpeechLog] = useState<SpeechLogEntry[]>([]);
   // 真偽キー入力（本当/嘘のグローバルホットキーで真偽欄を順に埋める）
   const [truthKeysOn, setTruthKeysOn] = useState(false);
   const [truthTrueKey, setTruthTrueKey] = useState("Control+Shift+Up");
@@ -286,6 +290,8 @@ export default function App() {
       if (hk) setTtsHotkey(hk);
       const vol = localStorage.getItem("ttsVolume");
       if (vol != null) setTtsVolume(Math.max(0, Math.min(1, Number(vol))));
+      const sl = localStorage.getItem("showSpeechLog");
+      if (sl != null) setShowSpeechLog(sl === "true");
       const tk = localStorage.getItem("truthKeysOn");
       if (tk != null) setTruthKeysOn(tk === "true");
       const ttk = localStorage.getItem("truthTrueKey");
@@ -328,6 +334,18 @@ export default function App() {
       /* 無視 */
     }
   }, [ttsVolume]);
+  useEffect(() => {
+    try {
+      localStorage.setItem("showSpeechLog", String(showSpeechLog));
+    } catch {
+      /* 無視 */
+    }
+  }, [showSpeechLog]);
+  // 読み上げログの購読（speak() の各イベントを受信して蓄積、最新50件保持）。
+  useEffect(() => {
+    setSpeechLogger((e) => setSpeechLog((prev) => [...prev.slice(-49), e]));
+    return () => setSpeechLogger(null);
+  }, []);
   useEffect(() => {
     try {
       localStorage.setItem("truthKeysOn", String(truthKeysOn));
@@ -397,6 +415,7 @@ export default function App() {
   const startTts = () => {
     stopTts();
     startKeepAlive();
+    setSpeechLog([]);
     setTtsStartMs(Date.now());
     setElapsedSec(0);
     const steps = buildSpeechSteps(ttsTimings);
@@ -805,6 +824,55 @@ export default function App() {
               activeTruthKey={shownActiveTruthKey}
             />
           )}
+
+          {/* 読み上げログ（診断用。右クリックメニューで表示切替） */}
+          {showSpeechLog && (
+            <div className="mt-2 rounded-md border bg-card/40 p-2">
+              <div className="mb-1 flex items-center justify-between text-[11px] font-bold text-muted-foreground">
+                <span>📜 読み上げログ</span>
+                <button
+                  type="button"
+                  onClick={() => setSpeechLog([])}
+                  className="rounded border bg-background px-1.5 py-0.5 text-[10px] hover:bg-accent"
+                >
+                  クリア
+                </button>
+              </div>
+              {speechLog.length === 0 ? (
+                <p className="text-[10px] text-muted-foreground/70">
+                  読み上げ開始後にここへ発話の記録が出ます。
+                </p>
+              ) : (
+                <ul className="flex max-h-40 flex-col gap-0.5 overflow-y-auto text-[10px] leading-tight">
+                  {speechLog.map((e, i) => (
+                    <li key={i} className="flex gap-1.5">
+                      <span className="shrink-0 tabular-nums text-muted-foreground">
+                        {ttsStartMs != null
+                          ? `${((e.atMs - ttsStartMs) / 1000).toFixed(1)}s`
+                          : "-"}
+                      </span>
+                      <span
+                        className={`shrink-0 font-bold ${
+                          e.event === "失敗"
+                            ? "text-red-500"
+                            : e.event === "開始"
+                            ? "text-green-600"
+                            : e.event === "再試行" || e.event === "詰まり解消"
+                            ? "text-amber-500"
+                            : "text-foreground"
+                        }`}
+                      >
+                        {e.event}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                        {e.text}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
           </div>
         </div>
       </div>
@@ -891,8 +959,17 @@ export default function App() {
               }}
               className="mt-1.5 w-full rounded border bg-background px-2 py-1 text-[11px] text-foreground hover:bg-accent"
             >
-              ⏱ 秒数設定
+              ⚙ 設定
             </button>
+            <label className="mt-1.5 flex cursor-pointer items-center justify-between text-[11px] font-medium text-muted-foreground">
+              <span>読み上げログを表示</span>
+              <input
+                type="checkbox"
+                checked={showSpeechLog}
+                onChange={(e) => setShowSpeechLog(e.target.checked)}
+                className="size-3.5 accent-primary"
+              />
+            </label>
             {ttsOn && (
               <p className="mt-1 text-[10px] text-muted-foreground">
                 開始ホットキー: <span className="tabular-nums">{ttsHotkey || "(未設定)"}</span>
@@ -946,7 +1023,7 @@ export default function App() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-2 flex items-center justify-between">
-              <span className="text-xs font-bold">読み上げ秒数設定</span>
+              <span className="text-xs font-bold">読み上げ設定</span>
               <Button
                 variant="ghost"
                 size="icon-xs"

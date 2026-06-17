@@ -47,6 +47,20 @@ export function setSpeechVolume(v: number): void {
   speakVolume = Math.max(0, Math.min(1, v));
 }
 
+/** 読み上げログ。どの発話がいつ開始/失敗したか診断するための購読フック。 */
+export type SpeechLogEntry = { atMs: number; event: string; text: string };
+let logger: ((e: SpeechLogEntry) => void) | null = null;
+export function setSpeechLogger(fn: ((e: SpeechLogEntry) => void) | null): void {
+  logger = fn;
+}
+function logSpeech(event: string, text: string): void {
+  try {
+    logger?.({ atMs: Date.now(), event, text });
+  } catch {
+    /* 無視 */
+  }
+}
+
 /**
  * 日本語読み上げ。各読み上げは時間的に離れている前提。
  *
@@ -68,9 +82,17 @@ export function speak(text: string, retry = false): void {
     let started = false;
     u.onstart = () => {
       started = true;
+      logSpeech("開始", text);
+    };
+    u.onerror = (ev) => {
+      logSpeech("失敗", `${text}（${(ev as SpeechSynthesisErrorEvent).error ?? "error"}）`);
     };
     const stuck = s.speaking || s.pending;
-    if (stuck) s.cancel();
+    if (stuck) {
+      s.cancel();
+      logSpeech("詰まり解消", text);
+    }
+    logSpeech(retry ? "再試行" : "発話", text);
     const go = () => {
       try {
         s.resume();
