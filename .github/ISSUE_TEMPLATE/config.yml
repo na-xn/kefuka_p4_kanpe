@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 使い方・質問
+    url: https://github.com/na-xn/kefuka_p4_kanpe/discussions
+    about: バグ/要望以外の質問はこちら（Discussions が有効な場合）

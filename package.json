@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "e2e": "playwright test",
+    "shots": "pnpm build && node scripts/shot.mjs",
     "tauri": "tauri"
   },
   "devDependencies": {

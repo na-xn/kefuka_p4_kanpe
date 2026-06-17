@@ -1,0 +1,49 @@
+name: バグ報告
+description: 不具合・誤った行動表示などを報告する
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ご報告ありがとうございます。再現手順をできるだけ具体的にお願いします。
+  - type: input
+    id: version
+    attributes:
+      label: バージョン
+      placeholder: "例: v0.3.0 / コミットハッシュ"
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: 何が起きたか
+      description: 期待した動作と実際の動作
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: 再現手順
+      description: どの入力（担当・真偽・早遅など）で起きたか
+      placeholder: |
+        1. GC1 で 雷 / 真 を選択
+        2. ...
+        3. 処理フローで ○○ が △△ と表示される（××が正しい）
+    validations:
+      required: true
+  - type: dropdown
+    id: env
+    attributes:
+      label: 環境
+      options:
+        - Windows 11
+        - Windows 10
+        - ブラウザ（開発 / pnpm dev）
+        - その他
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: 補足（スクショ・ログ等）
