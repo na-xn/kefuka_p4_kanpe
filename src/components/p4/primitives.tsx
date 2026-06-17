@@ -70,6 +70,18 @@ function roleItemClass(value: string): string {
   return `${on} data-[state=on]:font-bold data-[state=off]:opacity-40`;
 }
 
+/** トグル選択肢の中身（デバフアイコン＋ラベル）。 */
+function OptLabel({ icon, label }: { icon?: string; label: string }) {
+  return (
+    <>
+      {icon && (
+        <img src={icon} alt="" className="size-4 shrink-0 rounded-[3px]" draggable={false} />
+      )}
+      <span>{label}</span>
+    </>
+  );
+}
+
 /** 担当セレクタ（値ごとに色分け） */
 export function RoleToggle({
   role,
@@ -94,7 +106,7 @@ export function RoleToggle({
         aria-label={role.left.label}
         className={roleItemClass(role.left.value)}
       >
-        {role.left.label}
+        <OptLabel icon={role.left.icon} label={role.left.label} />
       </ToggleGroupItem>
       {role.mid && (
         <ToggleGroupItem
@@ -102,7 +114,7 @@ export function RoleToggle({
           aria-label={role.mid.label}
           className={roleItemClass(role.mid.value)}
         >
-          {role.mid.label}
+          <OptLabel icon={role.mid.icon} label={role.mid.label} />
         </ToggleGroupItem>
       )}
       <ToggleGroupItem
@@ -110,7 +122,7 @@ export function RoleToggle({
         aria-label={role.right.label}
         className={roleItemClass(role.right.value)}
       >
-        {role.right.label}
+        <OptLabel icon={role.right.icon} label={role.right.label} />
       </ToggleGroupItem>
     </ToggleGroup>
   );
@@ -122,7 +134,7 @@ export function SelectToggle({
   value,
   onChange,
 }: {
-  options: { value: string; label: string; onClass?: string }[];
+  options: { value: string; label: string; onClass?: string; icon?: string }[];
   value: string;
   onChange: (v: string) => void;
 }) {
@@ -145,7 +157,7 @@ export function SelectToggle({
             "data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:border-primary"
           } data-[state=on]:font-bold data-[state=off]:opacity-40`}
         >
-          {o.label}
+          <OptLabel icon={o.icon} label={o.label} />
         </ToggleGroupItem>
       ))}
     </ToggleGroup>

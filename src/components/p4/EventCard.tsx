@@ -44,28 +44,44 @@ function JudgeRow({
   );
 }
 
+// 各デバフのアイコン（public/icon/）。
+const ICON = {
+  rai: "/icon/fork_lightning.png", // フォークライトニング
+  mizu: "/icon/water_compression.png", // 水属性圧縮
+  accel: "/icon/accelerator_bomb.png", // 加速度爆弾
+  juso: "/icon/curse_screem.png", // 呪詛の叫声
+  honoo: "/icon/chaos_fire.png", // 混沌の炎
+  tsunami: "/icon/chaos_water.png", // 混沌の水
+  aragan: "/icon/aragan_field.png", // アラガンフィールド
+  shi: "/icon/death_over.png", // 死の超越
+};
+
 // 担当に加速度(早/遅)を統合した選択肢。なし＝加速度持ち（早/遅）なので、雷/水/加早/加遅 の4択。
 const RAI_OPT = {
   value: "rai",
   label: "雷",
+  icon: ICON.rai,
   onClass:
     "data-[state=on]:bg-purple-600 data-[state=on]:text-white data-[state=on]:border-purple-600",
 };
 const MIZU_OPT = {
   value: "mizu",
   label: "水",
+  icon: ICON.mizu,
   onClass:
     "data-[state=on]:bg-sky-400 data-[state=on]:text-black data-[state=on]:border-sky-400",
 };
 const ACC_HAYA = {
   value: "haya",
   label: "加早",
+  icon: ICON.accel,
   onClass:
     "data-[state=on]:bg-amber-500 data-[state=on]:text-black data-[state=on]:border-amber-500",
 };
 const ACC_OSO = {
   value: "oso",
   label: "加遅",
+  icon: ICON.accel,
   onClass:
     "data-[state=on]:bg-orange-700 data-[state=on]:text-white data-[state=on]:border-orange-700",
 };
@@ -89,6 +105,7 @@ const JUSO_OPTIONS = [
   {
     value: "yes",
     label: "有",
+    icon: ICON.juso,
     onClass:
       "data-[state=on]:bg-fuchsia-600 data-[state=on]:text-white data-[state=on]:border-fuchsia-600",
   },
@@ -253,8 +270,8 @@ function TsunamiInputCard({
         <span className="min-w-0 flex-1 text-xs font-semibold">種類</span>
         <RoleToggle
           role={{
-            left: { value: "honoo", label: "炎(ほのお)" },
-            right: { value: "tsunami", label: "水(つなみ)" },
+            left: { value: "honoo", label: "炎(ほのお)", icon: ICON.honoo },
+            right: { value: "tsunami", label: "水(つなみ)", icon: ICON.tsunami },
           }}
           value={role}
           onChange={(v) => set(roleKey, v)}
@@ -304,8 +321,8 @@ function Gc3RolePicker({
         <span className="min-w-0 flex-1 text-xs font-semibold">担当</span>
         <RoleToggle
           role={{
-            left: { value: "aragan", label: "アラガン" },
-            right: { value: "shi", label: "死の超越" },
+            left: { value: "aragan", label: "アラガン", icon: ICON.aragan },
+            right: { value: "shi", label: "死の超越", icon: ICON.shi },
           }}
           value={role}
           onChange={(v) => set(roleKey, v)}

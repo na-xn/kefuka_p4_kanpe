@@ -13,9 +13,9 @@ export type Judge = {
   label: string;
   /** 担当セレクタ（任意）。指定時は別の状態キー `${id}__role` を使う。mid は任意の3つ目。 */
   role?: {
-    left: { value: Role; label: string };
-    mid?: { value: Role; label: string };
-    right: { value: Role; label: string };
+    left: { value: Role; label: string; icon?: string };
+    mid?: { value: Role; label: string; icon?: string };
+    right: { value: Role; label: string; icon?: string };
   };
   /** 真/偽トグルを出すか（デフォルト true） */
   truth?: boolean;
