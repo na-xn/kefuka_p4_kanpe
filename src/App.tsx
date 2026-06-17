@@ -172,7 +172,7 @@ export default function App() {
   const [ttsOn, setTtsOn] = useState(false);
   const [ttsTimings, setTtsTimings] = useState<Record<string, number>>(DEFAULT_TIMINGS);
   const [showTtsSettings, setShowTtsSettings] = useState(false);
-  const [ttsHotkey, setTtsHotkey] = useState("F8");
+  const [ttsHotkey, setTtsHotkey] = useState("Control+Shift+R");
   const [recordingHotkey, setRecordingHotkey] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -822,11 +822,11 @@ export default function App() {
                   size="xs"
                   onClick={() => {
                     setRecordingHotkey(false);
-                    setTtsHotkey("F8");
+                    setTtsHotkey("Control+Shift+R");
                   }}
-                  title="既定(F8)に戻す"
+                  title="既定(Ctrl+Shift+R)に戻す"
                 >
-                  F8
+                  既定
                 </Button>
               </div>
               <p className="mt-1 text-[10px] text-muted-foreground">
