@@ -536,7 +536,7 @@ dependencies = [
 
 [[package]]
 name = "p4-kanpe"
-version = "0.6.14"
+version = "0.6.15"
 dependencies = [
  "serde",
  "serde_json",
