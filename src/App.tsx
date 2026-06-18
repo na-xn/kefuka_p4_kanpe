@@ -282,7 +282,18 @@ export default function App() {
       const rsb = localStorage.getItem("readSanBuri");
       if (rsb != null) setReadSanBuri(rsb === "true");
       const tm = localStorage.getItem("ttsTimings");
-      if (tm) setTtsTimings({ ...DEFAULT_TIMINGS, ...JSON.parse(tm) });
+      if (tm) {
+        let saved = JSON.parse(tm) as Record<string, number>;
+        // 既存ユーザーの保存秒数も一度だけ 2 秒前倒し（新デフォルトに揃える）。
+        if (localStorage.getItem("ttsTimingsShiftV2") !== "1") {
+          saved = Object.fromEntries(
+            Object.entries(saved).map(([k, v]) => [k, Math.max(0, Number(v) - 2)])
+          );
+        }
+        setTtsTimings({ ...DEFAULT_TIMINGS, ...saved });
+      }
+      // 新規ユーザーは DEFAULT が既に前倒し済みなので shift 不要。フラグは必ず立てる。
+      localStorage.setItem("ttsTimingsShiftV2", "1");
       const hk = localStorage.getItem("ttsHotkey");
       if (hk) setTtsHotkey(hk);
       const vol = localStorage.getItem("ttsVolume");
