@@ -29,9 +29,8 @@ test.describe("P4 判定入力ウィザード", () => {
     await radio(gc2, "無").click(); // 呪詛
     await radio(gc2, "真").click();
     const wave2 = group(page, "つなみ / ほのお 2回目");
-    await radio(wave2, "水(つなみ)").click();
+    // 種類は1回目=炎の排他で自動「水(つなみ)」、早/遅も自動「遅」。真偽のみ入力。
     await radio(wave2, "真").click();
-    // 早/遅は1回目=早の排他で自動「遅」
     await page.getByRole("button", { name: /確定/ }).click();
 
     // ③ GC3 → 処理フロー

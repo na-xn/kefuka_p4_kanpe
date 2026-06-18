@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { X, Lock, LockOpen, RotateCcw, ChevronLeft, Settings } from "lucide-react";
+import { X, Lock, LockOpen, RotateCcw, ChevronLeft, Settings, Play, ScrollText, Keyboard, Volume2, Timer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { LogicalSize } from "@tauri-apps/api/dpi";
@@ -59,6 +59,9 @@ const STEP_GROUPS: string[][] = [
 ];
 
 const EVENT_BY_ID = Object.fromEntries(INPUT_EVENTS.map((e) => [e.id, e]));
+
+/** Tauri ランタイム内か（web版ではグローバルキー入力・閉じる等のデスクトップ専用UIを隠す）。 */
+const IS_TAURI = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 /**
  * キー入力(F1〜F3)の選択肢。WebView2 は F キーをシステムキーとして横取りするため
@@ -524,7 +527,7 @@ export default function App() {
   // グローバルホットキー登録: ttsOn && ttsHotkey のとき登録、依存変化/OFF/アンマウントで解除。
   // Tauri 外（ブラウザ）や重複登録では例外になり得るので try/catch で握りつぶす。
   useEffect(() => {
-    if (!ttsOn || !ttsHotkey) return;
+    if (!IS_TAURI || !ttsOn || !ttsHotkey) return;
     (async () => {
       try {
         await register(ttsHotkey, (e) => {
@@ -542,7 +545,7 @@ export default function App() {
   // キー入力のグローバルホットキー登録: keyInputOn のとき posKey1/2/3 を登録、
   // OFF/キー変更/アンマウントで解除。ttsHotkey と同じ作法（try/catch・最新ハンドラは ref）。
   useEffect(() => {
-    if (!keyInputOn) {
+    if (!IS_TAURI || !keyInputOn) {
       setKeyRegMsg("");
       return;
     }
@@ -658,13 +661,13 @@ export default function App() {
           set(`wave${n}_type`, ["shin", "gi"][idx])
         )
       );
-      rest.push(
-        mk(typeRoleKey, ["honoo", "tsunami"], g(typeRoleKey) !== "", (idx) =>
-          set(typeRoleKey, ["honoo", "tsunami"][idx])
-        )
-      );
-      // wave2 の早遅は自動設定なので順序に含めない
+      // wave2 の種類・早遅は1回目の逆で自動設定なので順序に含めない
       if (n === "1") {
+        rest.push(
+          mk(typeRoleKey, ["honoo", "tsunami"], g(typeRoleKey) !== "", (idx) =>
+            set(typeRoleKey, ["honoo", "tsunami"][idx])
+          )
+        );
         rest.push(
           mk(`wave${n}_when`, ["haya", "oso"], g(`wave${n}_when`) !== "", (idx) =>
             set(`wave${n}_when`, ["haya", "oso"][idx])
@@ -721,8 +724,8 @@ export default function App() {
     const first = fieldOrder(get).find((fd) => !fd.filled);
     return first ? first.id : null;
   })();
-  // keyInputOn が false のときは強調しない（null 扱い）。
-  const shownActiveFieldKey = keyInputOn ? activeFieldKey : null;
+  // keyInputOn が false / web版 のときは強調しない（null 扱い）。
+  const shownActiveFieldKey = IS_TAURI && keyInputOn ? activeFieldKey : null;
 
   /** 最新stateで最初の未入力欄を取り、values[n-1] があれば choose(n-1)。 */
   const chooseAtCursor = (n: 1 | 2 | 3) => {
@@ -810,8 +813,6 @@ export default function App() {
   }, [ttsOn, hideEdgeSteps, phase, inputStep, gc3Role]);
 
   const dragProps = locked ? {} : { "data-tauri-drag-region": true };
-  // Tauri ランタイム内か（web版では閉じる×などのデスクトップ専用UIを隠す）。
-  const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
   // 設定メニューを開く（スマホ＝右クリック不可のため歯車アイコンから）。
   const openSettingsMenu = (e: React.MouseEvent) => {
@@ -883,7 +884,7 @@ export default function App() {
             >
               <Settings />
             </Button>
-            {isTauri && (
+            {IS_TAURI && (
               <Button variant="ghost" size="icon-xs" onClick={closeWindow} aria-label="閉じる">
                 <X />
               </Button>
@@ -902,8 +903,8 @@ export default function App() {
                   判定 {inputStep + 1} / {activeStepGroups.length}
                 </span>
                 {autoConfirm && (
-                  <span className="text-[11px] text-muted-foreground">
-                    ⏱ 自動確定 ON（{autoConfirmSec}秒）
+                  <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                    <Timer className="size-3 shrink-0" /> 自動確定 ON（{autoConfirmSec}秒）
                   </span>
                 )}
               </div>
@@ -961,7 +962,7 @@ export default function App() {
                 className="h-16 w-40 text-lg font-bold"
                 onClick={startTtsByTrigger}
               >
-                ▶ 開始
+                <Play className="size-5" /> 開始
               </Button>
             </div>
           ) : (
@@ -978,7 +979,7 @@ export default function App() {
           {showSpeechLog && (
             <div className="mt-2 rounded-md border bg-card/40 p-2">
               <div className="mb-1 flex items-center justify-between text-[11px] font-bold text-muted-foreground">
-                <span>📜 読み上げログ</span>
+                <span className="inline-flex items-center gap-1"><ScrollText className="size-3.5" /> 読み上げログ</span>
                 <button
                   type="button"
                   onClick={() => setSpeechLog([])}
@@ -1027,9 +1028,9 @@ export default function App() {
       </div>
 
       {/* キー受信インジケータ（発火診断: グローバルキーが届いたか可視化） */}
-      {keyInputOn && keyHit && (
-        <div className="pointer-events-none fixed left-1/2 top-1 z-[70] -translate-x-1/2 rounded bg-primary px-2 py-0.5 text-[10px] font-bold text-primary-foreground shadow">
-          🎹 {keyHit}
+      {IS_TAURI && keyInputOn && keyHit && (
+        <div className="pointer-events-none fixed left-1/2 top-1 z-[70] -translate-x-1/2 rounded bg-primary px-2 py-0.5 text-[10px] font-bold text-primary-foreground shadow inline-flex items-center gap-1">
+          <Keyboard className="size-3" /> {keyHit}
         </div>
       )}
 
@@ -1120,7 +1121,7 @@ export default function App() {
               }}
               className="mt-1.5 w-full rounded border bg-background px-2 py-1 text-[11px] text-foreground hover:bg-accent"
             >
-              ⚙ 設定
+              <span className="inline-flex items-center gap-1"><Settings className="size-3.5" /> 設定</span>
             </button>
             <label className="mt-1.5 flex cursor-pointer items-center justify-between text-[11px] font-medium text-muted-foreground">
               <span>マジックアウトで踏む/踏まないを読み上げる</span>
@@ -1140,39 +1141,41 @@ export default function App() {
                 className="size-3.5 accent-primary"
               />
             </label>
-            {ttsOn && (
+            {IS_TAURI && ttsOn && (
               <p className="mt-1 text-[10px] text-muted-foreground">
                 開始ホットキー: <span className="tabular-nums">{ttsHotkey || "(未設定)"}</span>
               </p>
             )}
           </div>
 
-          {/* キー入力（F1〜F3 でアクティブ入力欄の選択肢を選ぶ） */}
-          <div className="mt-2 border-t pt-2">
-            <label className="flex cursor-pointer items-center justify-between text-[11px] font-medium text-muted-foreground">
-              <span>キー入力（F1〜F3）</span>
-              <input
-                type="checkbox"
-                checked={keyInputOn}
-                onChange={(e) => setKeyInputOn(e.target.checked)}
-                className="size-3.5 accent-primary"
-              />
-            </label>
-            {keyInputOn && keyRegMsg && (
-              <p
-                className={`mt-1 text-[10px] ${
-                  keyRegMsg.startsWith("登録失敗") ? "text-red-500" : "text-green-600"
-                }`}
-              >
-                {keyRegMsg}
-              </p>
-            )}
-            {keyInputOn && (
-              <p className="mt-1 text-[10px] text-muted-foreground">
-                キーの変更は「⚙ 設定」内。押すと上部に🎹受信表示。
-              </p>
-            )}
-          </div>
+          {/* キー入力（F1〜F3）。グローバルショートカット依存なので web版では非表示。 */}
+          {IS_TAURI && (
+            <div className="mt-2 border-t pt-2">
+              <label className="flex cursor-pointer items-center justify-between text-[11px] font-medium text-muted-foreground">
+                <span>キー入力（F1〜F3）</span>
+                <input
+                  type="checkbox"
+                  checked={keyInputOn}
+                  onChange={(e) => setKeyInputOn(e.target.checked)}
+                  className="size-3.5 accent-primary"
+                />
+              </label>
+              {keyInputOn && keyRegMsg && (
+                <p
+                  className={`mt-1 text-[10px] ${
+                    keyRegMsg.startsWith("登録失敗") ? "text-red-500" : "text-green-600"
+                  }`}
+                >
+                  {keyRegMsg}
+                </p>
+              )}
+              {keyInputOn && (
+                <p className="mt-1 text-[10px] text-muted-foreground">
+                  キーの変更は「設定」内。押すと上部に受信表示。
+                </p>
+              )}
+            </div>
+          )}
 
           {/* 更新確認 */}
           <div className="mt-2 border-t pt-2">
@@ -1233,7 +1236,7 @@ export default function App() {
             {/* 音量 */}
             <div className="mb-2 rounded-md border bg-card/40 p-2">
               <div className="mb-1 flex items-center justify-between text-[11px] font-medium text-muted-foreground">
-                <span>🔊 音量</span>
+                <span className="inline-flex items-center gap-1"><Volume2 className="size-3.5" /> 音量</span>
                 <span className="tabular-nums">{Math.round(ttsVolume * 100)}%</span>
               </div>
               <input
@@ -1270,7 +1273,8 @@ export default function App() {
                 </label>
               ))}
             </div>
-            {/* 開始ホットキー */}
+            {/* 開始ホットキー（グローバル）。web版では非表示。 */}
+            {IS_TAURI && (
             <div className="mt-3 border-t pt-2">
               <div className="flex items-center justify-between gap-2">
                 <span className="min-w-0 flex-1 text-[11px] font-medium text-muted-foreground">
@@ -1295,8 +1299,10 @@ export default function App() {
                 読み上げONのとき、このキーで処理画面へ移動し読み上げを開始します。
               </p>
             </div>
+            )}
 
-            {/* キー入力（F1〜F3 でアクティブ入力欄の選択肢を選ぶ） */}
+            {/* キー入力（F1〜F3）。グローバルショートカット依存なので web版では非表示。 */}
+            {IS_TAURI && (
             <div className="mt-3 border-t pt-2">
               <label className="flex cursor-pointer items-center justify-between text-[11px] font-medium text-muted-foreground">
                 <span>キー入力</span>
@@ -1349,6 +1355,7 @@ export default function App() {
                 ※記録ではなく選択式（WebView2 が F キーを横取りするため）。ON の間、選んだキーはゲーム側へ渡らないので、ホットバーと重複しないキーを推奨。
               </p>
             </div>
+            )}
 
             <div className="mt-3 flex justify-end gap-2">
               <Button

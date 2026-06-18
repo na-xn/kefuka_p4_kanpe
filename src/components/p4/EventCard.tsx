@@ -266,20 +266,54 @@ function TsunamiInputCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isWave2, autoWhen, whenVal]);
 
+  // 2回目の種類も1回目と排他（1回目=ほのお→2回目=つなみ、逆も）。
+  const wave1Role = get("wave1_type__role");
+  const autoType = isWave2
+    ? wave1Role === "honoo"
+      ? "tsunami"
+      : wave1Role === "tsunami"
+      ? "honoo"
+      : ""
+    : "";
+  useEffect(() => {
+    if (!isWave2) return;
+    if (autoType && role !== autoType) set(roleKey, autoType);
+    if (!autoType && role) set(roleKey, "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isWave2, autoType, role]);
+
   return (
     <>
     <div className="rounded-md border bg-card px-2 py-1.5">
       <div className="flex items-center justify-between gap-2">
         <span className="min-w-0 flex-1 text-xs font-semibold">種類</span>
-        <RoleToggle
-          role={{
-            left: { value: "honoo", label: "炎(ほのお)", icon: ICON.honoo },
-            right: { value: "tsunami", label: "水(つなみ)", icon: ICON.tsunami },
-          }}
-          value={role}
-          onChange={(v) => set(roleKey, v)}
-          active={activeFieldKey === roleKey}
-        />
+        {isWave2 ? (
+          autoType ? (
+            <span className="flex shrink-0 items-center gap-1 rounded bg-slate-500 px-2 py-0.5 text-xs font-bold text-white">
+              <img
+                src={autoType === "honoo" ? ICON.honoo : ICON.tsunami}
+                alt=""
+                className="h-5 w-auto rounded-[2px]"
+                draggable={false}
+              />
+              {autoType === "honoo" ? "炎" : "水"}（自動）
+            </span>
+          ) : (
+            <span className="shrink-0 text-[10px] text-muted-foreground">
+              1回目の種類を先に選択
+            </span>
+          )
+        ) : (
+          <RoleToggle
+            role={{
+              left: { value: "honoo", label: "炎(ほのお)", icon: ICON.honoo },
+              right: { value: "tsunami", label: "水(つなみ)", icon: ICON.tsunami },
+            }}
+            value={role}
+            onChange={(v) => set(roleKey, v)}
+            active={activeFieldKey === roleKey}
+          />
+        )}
       </div>
       <ActionBar text={tsunamiHonooAction(role, truth)} icon={chaosIcon(role)} />
     </div>

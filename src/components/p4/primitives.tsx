@@ -1,3 +1,4 @@
+import { Star } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { Choice, Role, Judge } from "@/p4/types";
 import { DEBUFF_ICON } from "@/p4/icons";
@@ -219,9 +220,10 @@ export function TruthInputRow({
 }
 
 /** 全体攻撃などのマーカー表示 */
-export function MarkerNote({ text }: { text: string }) {
+export function MarkerNote({ text, icon }: { text: string; icon?: React.ReactNode }) {
   return (
-    <div className="rounded-md border border-dashed bg-muted/30 px-2 py-1.5 text-xs font-medium text-muted-foreground">
+    <div className="flex items-center gap-1 rounded-md border border-dashed bg-muted/30 px-2 py-1.5 text-xs font-medium text-muted-foreground">
+      {icon}
       {text}
     </div>
   );
@@ -272,7 +274,7 @@ export function ProcessStep({
           }`}
         >
           <div className="mb-1 flex items-center gap-1 text-[13px] font-bold leading-tight">
-            {highlight && <span className="text-amber-400">★</span>}
+            {highlight && <Star className="size-3 shrink-0 fill-amber-400 text-amber-400" />}
             {icons
               ?.filter(Boolean)
               .map((src, i) => (

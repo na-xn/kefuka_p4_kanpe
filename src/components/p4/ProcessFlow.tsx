@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { Target, Zap, Snowflake, Sparkles, Drama, Flame } from "lucide-react";
 import { ActionBar, TruthToggle, TruthInputRow, MarkerNote, ProcessStep, SelectToggle } from "@/components/p4/primitives";
 import { raiMizuAction, tsunamiHonooAction, juso, accel, seishi, magicFinal, fumuText } from "@/p4/logic";
 import { DEBUFF_ICON, raiMizuIcon, chaosIcon, gc3Icon } from "@/p4/icons";
@@ -111,34 +112,38 @@ export function ProcessFlow({
     if (!gc3Role || !gc3Mu) return null;
     if (gc3Role === "aragan") {
       return gc3Mu === "shin"
-        ? "🎯 異色に当たる（生きる）"
-        : "🎯 同色に当たる（生きる）";
+        ? "異色に当たる（生きる）"
+        : "同色に当たる（生きる）";
     }
     return gc3Mu === "shin"
-      ? "🎯 同色に当たる（瀕死/死を回避）"
-      : "🎯 異色に当たる（瀕死/死を回避）";
+      ? "同色に当たる（瀕死/死を回避）"
+      : "異色に当たる（瀕死/死を回避）";
   }, [gc3Role, gc3Mu]);
 
   // 踏む/踏まない（本当=踏まない / 嘘=踏む）
   const fumu = fumuText;
 
   // ④ もりもりサンダガ＝記憶値で直接
-  const thundaDirect: string | null = !thunda ? null : `⚡ サンダガ ${fumu(thunda)}`;
+  const thundaDirect: string | null = !thunda ? null : `サンダガ ${fumu(thunda)}`;
 
   // ⑦ ひろげるブリザガ＝記憶値で直接
-  const blizzaDirect: string | null = !blizza ? null : `❄ ブリザガ ${fumu(blizza)}`;
+  const blizzaDirect: string | null = !blizza ? null : `ブリザガ ${fumu(blizza)}`;
 
   // ⑨ XNOR(記憶 × マジックアウト) 一致=本当→踏まない / 不一致=嘘→踏む。
   // マジックアウトはサンダガ・ブリザガそれぞれに真偽がある。
   const thundaFinal = magicFinal(thunda, outThunda);
   const blizzaFinal = magicFinal(blizza, outBlizza);
   // 両方が同じ（両方踏む／両方踏まない）なら1行に集約、違えば2行
-  const magicOutBars: string[] =
+  type MagicOutBar = { icons: ("zap" | "snowflake")[]; text: string };
+  const magicOutBars: MagicOutBar[] =
     thundaFinal === null || blizzaFinal === null
       ? []
       : thundaFinal === blizzaFinal
-      ? [`⚡❄ サンダガ・ブリザガ 両方${fumu(thundaFinal)}`]
-      : [`⚡ サンダガ ${fumu(thundaFinal)}`, `❄ ブリザガ ${fumu(blizzaFinal)}`];
+      ? [{ icons: ["zap", "snowflake"], text: `サンダガ・ブリザガ 両方${fumu(thundaFinal)}` }]
+      : [
+          { icons: ["zap"], text: `サンダガ ${fumu(thundaFinal)}` },
+          { icons: ["snowflake"], text: `ブリザガ ${fumu(blizzaFinal)}` },
+        ];
 
   const memLabel = (c: Choice) => (c === "shin" ? "真" : c === "gi" ? "偽" : "—");
 
@@ -173,7 +178,14 @@ export function ProcessFlow({
                 <span className="text-muted-foreground/60">生死: 判定入力で真偽を選択…</span>
               )}
             </div>
-            <ActionBar text={gc3Result} />
+            {gc3Result === null ? (
+              <ActionBar text={null} />
+            ) : (
+              <div className="mt-1 flex items-center gap-1.5 rounded-md bg-primary/15 px-2 py-1.5 text-base font-bold leading-tight text-foreground">
+                <Target className="size-3.5 shrink-0" />
+                <span>{gc3Result}</span>
+              </div>
+            )}
           </div>
         )}
       </ProcessStep>
@@ -204,17 +216,24 @@ export function ProcessFlow({
         icons={[DEBUFF_ICON.juso]}
       >
         <TruthInputRow
-          label="⚡ もりもりサンダガ（真偽）"
+          label="もりもりサンダガ（真偽）"
           value={thunda}
           onChange={(v) => set("magic_thunda", v)}
           active={activeFieldKey === "magic_thunda"}
         />
-        <ActionBar text={thundaDirect} />
+        {thundaDirect === null ? (
+          <ActionBar text={null} />
+        ) : (
+          <div className="mt-1 flex items-center gap-1.5 rounded-md bg-primary/15 px-2 py-1.5 text-base font-bold leading-tight text-foreground">
+            <Zap className="size-3.5 shrink-0" />
+            <span>{thundaDirect}</span>
+          </div>
+        )}
         {/* 見る/見ないは全員が対処（GC1真偽） */}
         <ActionBar text={juso(gc1Truth) && `${juso(gc1Truth)}（呪詛・全員）`} />
         {jusoSrcHaya && (
-          <div className="rounded-md border border-amber-400 bg-amber-400/10 px-2 py-1 text-[11px] font-bold text-amber-300">
-            🔆 あなたが呪詛の発生源（早）
+          <div className="flex items-center gap-1 rounded-md border border-amber-400 bg-amber-400/10 px-2 py-1 text-[11px] font-bold text-amber-300">
+            <Sparkles className="size-3 shrink-0" /> あなたが呪詛の発生源（早）
           </div>
         )}
       </ProcessStep>
@@ -241,12 +260,19 @@ export function ProcessFlow({
         icons={[raiMizuIcon(lateGcRole), osoActive ? DEBUFF_ICON.accel : null]}
       >
         <TruthInputRow
-          label="❄ ひろげるブリザガ（真偽）"
+          label="ひろげるブリザガ（真偽）"
           value={blizza}
           onChange={(v) => set("magic_blizza", v)}
           active={activeFieldKey === "magic_blizza"}
         />
-        <ActionBar text={blizzaDirect} />
+        {blizzaDirect === null ? (
+          <ActionBar text={null} />
+        ) : (
+          <div className="mt-1 flex items-center gap-1.5 rounded-md bg-primary/15 px-2 py-1.5 text-base font-bold leading-tight text-foreground">
+            <Snowflake className="size-3.5 shrink-0" />
+            <span>{blizzaDirect}</span>
+          </div>
+        )}
         {/* 散開/頭割り（遅側の水雷）。アイコンは自分の担当(雷/水) */}
         <ActionBar text={raiMizuAction(lateGcRole, lateGcTruth)} icon={raiMizuIcon(lateGcRole)} />
         {/* 加速度（遅）: 該当者のみ行を出す */}
@@ -258,8 +284,8 @@ export function ProcessFlow({
         {/* 見る/見ないは全員が対処（GC2真偽） */}
         <ActionBar text={juso(gc2Truth) && `${juso(gc2Truth)}（呪詛・全員）`} />
         {jusoSrcOso && (
-          <div className="rounded-md border border-amber-400 bg-amber-400/10 px-2 py-1 text-[11px] font-bold text-amber-300">
-            🔆 あなたが呪詛の発生源（遅）
+          <div className="flex items-center gap-1 rounded-md border border-amber-400 bg-amber-400/10 px-2 py-1 text-[11px] font-bold text-amber-300">
+            <Sparkles className="size-3 shrink-0" /> あなたが呪詛の発生源（遅）
           </div>
         )}
       </ProcessStep>
@@ -275,26 +301,26 @@ export function ProcessFlow({
         {/* 既定は両方「真」。偽の所だけ選ぶ（雷=サンダガ / 氷=ブリザガ / 両方） */}
         <div className="rounded-md border bg-card px-2 py-1.5">
           <div className="flex items-center justify-between gap-2">
-            <span className="min-w-0 flex-1 text-xs font-semibold">
-              🎭 マジックアウト（偽のみ選択）
+            <span className="inline-flex min-w-0 flex-1 items-center gap-1 text-xs font-semibold">
+              <Drama className="size-3.5 shrink-0" /> マジックアウト（偽のみ選択）
             </span>
             <SelectToggle
               value={magicOutFalse}
               onChange={(v) => set("magic_out_false", v)}
               active={activeFieldKey === "magic_out_false"}
               options={[
-                { value: "rai", label: "⚡雷" },
-                { value: "koori", label: "❄氷" },
+                { value: "rai", label: "雷" },
+                { value: "koori", label: "氷" },
                 { value: "both", label: "両方" },
               ]}
             />
           </div>
-          <div className="mt-1 rounded-md border border-dashed bg-muted/30 px-2 py-1 text-[10px] text-muted-foreground">
-            ⚡記憶 {memLabel(thunda)} × アウト {memLabel(outThunda)} →{" "}
+          <div className="mt-1 flex flex-wrap items-center gap-x-1 rounded-md border border-dashed bg-muted/30 px-2 py-1 text-[10px] text-muted-foreground">
+            <Zap className="size-3 shrink-0" />記憶 {memLabel(thunda)} × アウト {memLabel(outThunda)} →{" "}
             <b className="text-foreground">
               {thundaFinal === "shin" ? "本当" : thundaFinal === "gi" ? "嘘" : "—"}
             </b>
-            {"　"}❄記憶 {memLabel(blizza)} × アウト {memLabel(outBlizza)} →{" "}
+            {"　"}<Snowflake className="size-3 shrink-0" />記憶 {memLabel(blizza)} × アウト {memLabel(outBlizza)} →{" "}
             <b className="text-foreground">
               {blizzaFinal === "shin" ? "本当" : blizzaFinal === "gi" ? "嘘" : "—"}
             </b>
@@ -303,7 +329,18 @@ export function ProcessFlow({
         {magicOutBars.length === 0 ? (
           <ActionBar text={null} />
         ) : (
-          magicOutBars.map((t, i) => <ActionBar key={i} text={t} />)
+          magicOutBars.map((bar, i) => (
+            <div key={i} className="mt-1 flex items-center gap-1.5 rounded-md bg-primary/15 px-2 py-1.5 text-base font-bold leading-tight text-foreground">
+              {bar.icons.map((ic) =>
+                ic === "zap" ? (
+                  <Zap key="zap" className="size-3.5 shrink-0" />
+                ) : (
+                  <Snowflake key="snowflake" className="size-3.5 shrink-0" />
+                )
+              )}
+              <span>{bar.text}</span>
+            </div>
+          ))
         )}
         <ActionBar
           text={tsunamiHonooAction(lateWaveRole, lateWaveTruth)}
@@ -314,7 +351,7 @@ export function ProcessFlow({
       {/* 8. どきどきアルテマ（全体攻撃）（非表示可） */}
       {!hideEdge && (
         <ProcessStep index={8} name="どきどきアルテマ（全体攻撃）" last>
-          <MarkerNote text="🔥 24.9% 以下で最終フェーズ" />
+          <MarkerNote text="24.9% 以下で最終フェーズ" icon={<Flame className="size-3.5 shrink-0" />} />
         </ProcessStep>
       )}
     </div>
