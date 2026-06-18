@@ -574,11 +574,16 @@ export default function App() {
   // values=位置順の選択肢値（F1→values[0]…） / filled=入力済み / choose(idx)=values[idx]を反映。
   type Field = { id: string; values: string[]; filled: boolean; choose: (idx: number) => void };
   const fieldOrder = (g: (k: string) => string): Field[] => {
-    const fields: Field[] = [];
-    const f = (id: string, values: string[], filled: boolean, choose: (idx: number) => void) =>
-      fields.push({ id, values, filled, choose });
+    // 入力フェーズは「真偽を先（GC真偽→つなみ/ほのお真偽）」、その後に担当・早遅・種類・呪詛。
+    const truth: Field[] = [];
+    const rest: Field[] = [];
+    const mk = (
+      id: string,
+      values: string[],
+      filled: boolean,
+      choose: (idx: number) => void
+    ): Field => ({ id, values, filled, choose });
 
-    // GC1/GC2 イベント: 担当 → 早遅 → 真偽 → 呪詛(加速度時のみ)
     const gcFields = (n: "1" | "2") => {
       const roleKey = `gc${n}_role__role`;
       const role = g(roleKey);
@@ -592,86 +597,112 @@ export default function App() {
         : gc1Role === "nashi"
         ? "raimizu"
         : "nashi";
-      // 担当欄: GC2加速度固定側(nashi)は順序に入れない。GC2雷水側は[rai,mizu]、GC1は[rai,mizu,accel]。
       if (gc2Side === "wait") return; // GC1未入力なら何も列挙しない
-      // 真偽（最初に入力する欄）
-      f(`gc${n}_role`, ["shin", "gi"], g(`gc${n}_role`) !== "", (idx) =>
-        set(`gc${n}_role`, ["shin", "gi"][idx])
+      // 真偽（先頭グループ）
+      truth.push(
+        mk(`gc${n}_role`, ["shin", "gi"], g(`gc${n}_role`) !== "", (idx) =>
+          set(`gc${n}_role`, ["shin", "gi"][idx])
+        )
       );
       // 担当（GC2加速度固定側は省略）
       if (gc2Side !== "nashi") {
         const values = gc2Side === "raimizu" ? ["rai", "mizu"] : ["rai", "mizu", "accel"];
-        f(roleKey, values, role !== "", (idx) => {
-          const v = values[idx];
-          if (v === "rai" || v === "mizu") {
-            set(roleKey, v);
-            if (g(`gc${n}_accel`)) set(`gc${n}_accel`, "");
-          } else {
-            set(roleKey, "nashi");
-            if (g(`gc${n}_when`)) set(`gc${n}_when`, "");
-          }
-        });
+        rest.push(
+          mk(roleKey, values, role !== "", (idx) => {
+            const v = values[idx];
+            if (v === "rai" || v === "mizu") {
+              set(roleKey, v);
+              if (g(`gc${n}_accel`)) set(`gc${n}_accel`, "");
+            } else {
+              set(roleKey, "nashi");
+              if (g(`gc${n}_when`)) set(`gc${n}_when`, "");
+            }
+          })
+        );
       }
-      // 担当が決まったか（GC2加速度固定側は role==="nashi"）
       const isNashi = role === "nashi";
       const isRaiMizu = role === "rai" || role === "mizu";
       if (isNashi || isRaiMizu) {
-        // 早遅: 雷水→gcN_when / 加速度→gcN_accel
         const earlyKey = isNashi ? `gc${n}_accel` : `gc${n}_when`;
-        f(`gc${n}_early`, ["haya", "oso"], g(earlyKey) !== "", (idx) =>
-          set(earlyKey, ["haya", "oso"][idx])
+        rest.push(
+          mk(`gc${n}_early`, ["haya", "oso"], g(earlyKey) !== "", (idx) =>
+            set(earlyKey, ["haya", "oso"][idx])
+          )
         );
       }
-      // 呪詛（加速度担当時のみ）
       if (isNashi) {
-        f(`gc${n}_juso`, ["yes", "no"], g(`gc${n}_juso`) !== "", (idx) =>
-          set(`gc${n}_juso`, ["yes", "no"][idx])
+        rest.push(
+          mk(`gc${n}_juso`, ["yes", "no"], g(`gc${n}_juso`) !== "", (idx) =>
+            set(`gc${n}_juso`, ["yes", "no"][idx])
+          )
         );
       }
     };
 
     const waveFields = (n: "1" | "2") => {
       const typeRoleKey = `wave${n}_type__role`;
-      // 真偽（最初）→ 種類 → 早遅
-      f(`wave${n}_type`, ["shin", "gi"], g(`wave${n}_type`) !== "", (idx) =>
-        set(`wave${n}_type`, ["shin", "gi"][idx])
+      // 真偽（先頭グループ）→ 種類・早遅は後ろ
+      truth.push(
+        mk(`wave${n}_type`, ["shin", "gi"], g(`wave${n}_type`) !== "", (idx) =>
+          set(`wave${n}_type`, ["shin", "gi"][idx])
+        )
       );
-      f(typeRoleKey, ["honoo", "tsunami"], g(typeRoleKey) !== "", (idx) =>
-        set(typeRoleKey, ["honoo", "tsunami"][idx])
+      rest.push(
+        mk(typeRoleKey, ["honoo", "tsunami"], g(typeRoleKey) !== "", (idx) =>
+          set(typeRoleKey, ["honoo", "tsunami"][idx])
+        )
       );
       // wave2 の早遅は自動設定なので順序に含めない
       if (n === "1") {
-        f(`wave${n}_when`, ["haya", "oso"], g(`wave${n}_when`) !== "", (idx) =>
-          set(`wave${n}_when`, ["haya", "oso"][idx])
+        rest.push(
+          mk(`wave${n}_when`, ["haya", "oso"], g(`wave${n}_when`) !== "", (idx) =>
+            set(`wave${n}_when`, ["haya", "oso"][idx])
+          )
         );
       }
     };
 
-    if (phase === "input") {
-      for (const id of activeStepGroups[inputStep] ?? []) {
-        if (id === "gc1") gcFields("1");
-        else if (id === "gc2") gcFields("2");
-        else if (id === "wave1") waveFields("1");
-        else if (id === "wave2") waveFields("2");
-        else if (id === "gc3")
-          f("gc3_role__role", ["aragan", "shi"], g("gc3_role__role") !== "", (idx) =>
-            set("gc3_role__role", ["aragan", "shi"][idx])
-          );
-      }
-    } else if (phase === "process") {
+    if (phase === "process") {
+      const proc: Field[] = [];
       if (!hideEdgeSteps)
-        f("gc3_mu", ["shin", "gi"], g("gc3_mu") !== "", (idx) => set("gc3_mu", ["shin", "gi"][idx]));
-      f("magic_thunda", ["shin", "gi"], g("magic_thunda") !== "", (idx) =>
-        set("magic_thunda", ["shin", "gi"][idx])
+        proc.push(
+          mk("gc3_mu", ["shin", "gi"], g("gc3_mu") !== "", (idx) =>
+            set("gc3_mu", ["shin", "gi"][idx])
+          )
+        );
+      proc.push(
+        mk("magic_thunda", ["shin", "gi"], g("magic_thunda") !== "", (idx) =>
+          set("magic_thunda", ["shin", "gi"][idx])
+        )
       );
-      f("magic_blizza", ["shin", "gi"], g("magic_blizza") !== "", (idx) =>
-        set("magic_blizza", ["shin", "gi"][idx])
+      proc.push(
+        mk("magic_blizza", ["shin", "gi"], g("magic_blizza") !== "", (idx) =>
+          set("magic_blizza", ["shin", "gi"][idx])
+        )
       );
-      f("magic_out_false", ["rai", "koori", "both"], g("magic_out_false") !== "", (idx) =>
-        set("magic_out_false", ["rai", "koori", "both"][idx])
+      proc.push(
+        mk("magic_out_false", ["rai", "koori", "both"], g("magic_out_false") !== "", (idx) =>
+          set("magic_out_false", ["rai", "koori", "both"][idx])
+        )
       );
+      return proc;
     }
-    return fields;
+
+    // 入力フェーズ
+    for (const id of activeStepGroups[inputStep] ?? []) {
+      if (id === "gc1") gcFields("1");
+      else if (id === "gc2") gcFields("2");
+      else if (id === "wave1") waveFields("1");
+      else if (id === "wave2") waveFields("2");
+      else if (id === "gc3")
+        rest.push(
+          mk("gc3_role__role", ["aragan", "shi"], g("gc3_role__role") !== "", (idx) =>
+            set("gc3_role__role", ["aragan", "shi"][idx])
+          )
+        );
+    }
+    // 真偽（GC→つなみ/ほのお）を先に、その他を後ろに。
+    return [...truth, ...rest];
   };
 
   // アクティブ欄＝最初に filled=false の欄。全部埋まっていれば null。
