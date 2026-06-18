@@ -6,13 +6,15 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview",
+    "preview": "pnpm run build && wrangler dev",
     "test": "vitest run",
     "e2e": "playwright test",
     "shots": "pnpm build && node scripts/shot.mjs",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "deploy": "pnpm run build && wrangler deploy"
   },
   "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.41.0",
     "@playwright/test": "^1.61.0",
     "@tailwindcss/vite": "^4.3.1",
     "@tauri-apps/cli": "^2",
@@ -27,7 +29,8 @@
     "tailwindcss": "^4.3.1",
     "typescript": "^6.0.3",
     "vite": "^8.0.16",
-    "vitest": "^4.1.9"
+    "vitest": "^4.1.9",
+    "wrangler": "^4.101.0"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.2.9",
