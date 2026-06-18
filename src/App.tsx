@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { X, Lock, LockOpen, RotateCcw, ChevronLeft } from "lucide-react";
+import { X, Lock, LockOpen, RotateCcw, ChevronLeft, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { LogicalSize } from "@tauri-apps/api/dpi";
@@ -810,6 +810,17 @@ export default function App() {
   }, [ttsOn, hideEdgeSteps, phase, inputStep, gc3Role]);
 
   const dragProps = locked ? {} : { "data-tauri-drag-region": true };
+  // Tauri ランタイム内か（web版では閉じる×などのデスクトップ専用UIを隠す）。
+  const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+
+  // 設定メニューを開く（スマホ＝右クリック不可のため歯車アイコンから）。
+  const openSettingsMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const w = 184;
+    const x = Math.min(Math.max(8, e.clientX || window.innerWidth), window.innerWidth - w - 8);
+    const y = Math.max(8, Math.min(e.clientY || 40, window.innerHeight - 8));
+    setMenu({ x, y });
+  };
 
   return (
     <div
@@ -863,9 +874,20 @@ export default function App() {
             >
               {locked ? <Lock /> : <LockOpen />}
             </Button>
-            <Button variant="ghost" size="icon-xs" onClick={closeWindow} aria-label="閉じる">
-              <X />
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={openSettingsMenu}
+              aria-label="設定"
+              title="設定（透過度・読み上げ・キー入力など）"
+            >
+              <Settings />
             </Button>
+            {isTauri && (
+              <Button variant="ghost" size="icon-xs" onClick={closeWindow} aria-label="閉じる">
+                <X />
+              </Button>
+            )}
           </div>
         </div>
 
