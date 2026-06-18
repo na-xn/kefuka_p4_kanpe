@@ -73,60 +73,13 @@ const KEY_CHOICES = [
   "Control+Shift+Z", "Control+Shift+X", "Control+Shift+C",
 ];
 
-/**
- * キー押下イベントから Tauri アクセラレータの「メインキー」部分を返す。
- * 修飾キー単独（Control/Shift/Alt/Meta）の場合は null（記録継続用）。
- */
-function mainKeyToAccel(e: KeyboardEvent): string | null {
-  const code = e.code;
-  const key = e.key;
-  // 修飾キー単独
-  if (["Control", "Shift", "Alt", "Meta"].includes(key)) return null;
-  // F1〜F12
-  if (/^F([1-9]|1[0-2])$/.test(code)) return code;
-  // 英字 KeyA → A
-  const letter = /^Key([A-Z])$/.exec(code);
-  if (letter) return letter[1];
-  // 数字 Digit1 → 1 / Numpad1 → 1
-  const digit = /^(?:Digit|Numpad)([0-9])$/.exec(code);
-  if (digit) return digit[1];
-  // 矢印
-  const arrow: Record<string, string> = {
-    ArrowUp: "Up",
-    ArrowDown: "Down",
-    ArrowLeft: "Left",
-    ArrowRight: "Right",
-  };
-  if (arrow[code]) return arrow[code];
-  // その他よく使うキー
-  const named: Record<string, string> = {
-    Space: "Space",
-    Enter: "Enter",
-    Tab: "Tab",
-    Backspace: "Backspace",
-    Delete: "Delete",
-    Home: "Home",
-    End: "End",
-    PageUp: "PageUp",
-    PageDown: "PageDown",
-    Insert: "Insert",
-    Minus: "Minus",
-    Equal: "Equal",
-    Backquote: "Backquote",
-    Comma: "Comma",
-    Period: "Period",
-    Slash: "Slash",
-    Backslash: "Backslash",
-    Semicolon: "Semicolon",
-    Quote: "Quote",
-    BracketLeft: "BracketLeft",
-    BracketRight: "BracketRight",
-  };
-  if (named[code]) return named[code];
-  // フォールバック: 1文字の印字可能キーは大文字化
-  if (key.length === 1) return key.toUpperCase();
-  return null;
-}
+/** 読み上げ開始ホットキーの候補（修飾キー付きの単一キー。記録不可な F キーも選べる）。 */
+const TTS_KEY_CHOICES = [
+  "Control+Shift+F1", "Control+Shift+F2", "Control+Shift+F3", "Control+Shift+F4",
+  "Control+Shift+F5", "Control+Shift+F6", "Control+Shift+F7", "Control+Shift+F8",
+  "Control+Shift+F9", "Control+Shift+F10", "Control+Shift+F11", "Control+Shift+F12",
+  "Control+Shift+R", "Control+Shift+Space", "Control+Shift+Enter",
+];
 
 /** 1イベント分の関連状態キー（自動確定の監視用）。 */
 function eventKeys(id: string, state: State): string[] {
@@ -199,21 +152,18 @@ export default function App() {
   const [readSanBuri, setReadSanBuri] = useState(false); // マジックアウトで踏む/踏まないを読み上げる
   const [ttsTimings, setTtsTimings] = useState<Record<string, number>>(DEFAULT_TIMINGS);
   const [showTtsSettings, setShowTtsSettings] = useState(false);
-  const [ttsHotkey, setTtsHotkey] = useState("Control+Shift+R");
+  const [ttsHotkey, setTtsHotkey] = useState("Control+Shift+F4");
   const [ttsVolume, setTtsVolume] = useState(1); // 読み上げ音量 0〜1
   const [showSpeechLog, setShowSpeechLog] = useState(false); // 読み上げログ表示
   const [speechLog, setSpeechLog] = useState<SpeechLogEntry[]>([]);
   // キー入力（位置キー F1/F2/F3 でアクティブ入力欄の1/2/3番目の選択肢を選ぶ）
   const [keyInputOn, setKeyInputOn] = useState(false);
-  const [posKey1, setPosKey1] = useState("F1");
-  const [posKey2, setPosKey2] = useState("F2");
-  const [posKey3, setPosKey3] = useState("F3");
+  const [posKey1, setPosKey1] = useState("Control+Shift+F1");
+  const [posKey2, setPosKey2] = useState("Control+Shift+F2");
+  const [posKey3, setPosKey3] = useState("Control+Shift+F3");
   const [keyRegMsg, setKeyRegMsg] = useState(""); // キー登録の成否（診断表示）
   const [keyHit, setKeyHit] = useState(""); // 直近に受信した位置キー（発火診断）
   const keyHitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // 記録対象: null=記録停止 / "tts"=読み上げ開始 / "k1"|"k2"|"k3"=位置キー
-  const [recordingTarget, setRecordingTarget] = useState<"tts" | "k1" | "k2" | "k3" | null>(null);
-  const recordingHotkey = recordingTarget === "tts";
   const menuRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const lastHeight = useRef(0);
@@ -817,36 +767,6 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ttsOn, hideEdgeSteps, phase, inputStep, gc3Role]);
 
-  // ホットキー記録: recordingTarget の間、次の単一キー押下を捕捉してアクセラレータ文字列を生成。
-  // 記録対象は tts（読み上げ開始）/ k1|k2|k3（位置キー）を切替え。
-  useEffect(() => {
-    if (!recordingTarget) return;
-    const onKey = (e: KeyboardEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (e.key === "Escape") {
-        setRecordingTarget(null);
-        return;
-      }
-      const mods: string[] = [];
-      if (e.ctrlKey) mods.push("Control");
-      if (e.shiftKey) mods.push("Shift");
-      if (e.altKey) mods.push("Alt");
-      if (e.metaKey) mods.push("Super");
-      const main = mainKeyToAccel(e);
-      // 修飾のみ（メインキー未確定）の場合は記録を継続。
-      if (!main) return;
-      const accel = [...mods, main].join("+");
-      if (recordingTarget === "tts") setTtsHotkey(accel);
-      else if (recordingTarget === "k1") setPosKey1(accel);
-      else if (recordingTarget === "k2") setPosKey2(accel);
-      else if (recordingTarget === "k3") setPosKey3(accel);
-      setRecordingTarget(null);
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [recordingTarget]);
-
   const dragProps = locked ? {} : { "data-tauri-drag-region": true };
 
   return (
@@ -1279,31 +1199,24 @@ export default function App() {
             </div>
             {/* 開始ホットキー */}
             <div className="mt-3 border-t pt-2">
-              <div className="mb-1 text-[11px] font-medium text-muted-foreground">
-                開始ホットキー（グローバル）
-              </div>
               <div className="flex items-center justify-between gap-2">
-                <span className="min-w-0 flex-1 truncate rounded border bg-background px-2 py-1 text-[11px] tabular-nums text-foreground">
-                  {recordingHotkey ? "キーを押してください…（Escで中止）" : ttsHotkey || "(未設定)"}
+                <span className="min-w-0 flex-1 text-[11px] font-medium text-muted-foreground">
+                  開始ホットキー（グローバル）
                 </span>
-                <Button
-                  variant={recordingHotkey ? "destructive" : "secondary"}
-                  size="xs"
-                  onClick={() => setRecordingTarget((r) => (r === "tts" ? null : "tts"))}
+                <select
+                  value={ttsHotkey}
+                  onChange={(e) => setTtsHotkey(e.target.value)}
+                  className="shrink-0 rounded border bg-background px-2 py-1 text-[11px] tabular-nums text-foreground"
                 >
-                  {recordingHotkey ? "中止" : "記録"}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  onClick={() => {
-                    setRecordingTarget(null);
-                    setTtsHotkey("Control+Shift+R");
-                  }}
-                  title="既定(Ctrl+Shift+R)に戻す"
-                >
-                  既定
-                </Button>
+                  {(TTS_KEY_CHOICES.includes(ttsHotkey)
+                    ? TTS_KEY_CHOICES
+                    : [ttsHotkey, ...TTS_KEY_CHOICES]
+                  ).map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
               </div>
               <p className="mt-1 text-[10px] text-muted-foreground">
                 読み上げONのとき、このキーで処理画面へ移動し読み上げを開始します。
