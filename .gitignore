@@ -28,3 +28,7 @@ test-results/
 *.njsproj
 *.sln
 *.sw?
+
+# wrangler
+.wrangler
+.dev.vars*

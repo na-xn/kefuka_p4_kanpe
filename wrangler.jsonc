@@ -1,0 +1,13 @@
+{
+  // 静的SPAを Cloudflare Workers (Static Assets) として配信する最小設定。
+  // ビルドは通常の `pnpm build`（vite）→ dist/ を生成、そのまま assets として配信。
+  // ※ @cloudflare/vite-plugin は使わない（同じ vite.config.ts を Tauri デスクトップ
+  //    ビルドでも使うため。プラグインを入れると dist の構成が変わりアプリビルドが壊れる）。
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "kefukap4kanpe",
+  "compatibility_date": "2026-06-18",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  }
+}
