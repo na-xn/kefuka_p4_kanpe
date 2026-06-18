@@ -1,5 +1,5 @@
 import { raiMizuAction, tsunamiHonooAction, juso, accel, magicFinal } from "@/p4/logic";
-import type { Choice } from "@/p4/types";
+import type { Choice, Role } from "@/p4/types";
 
 function synth(): SpeechSynthesis | null {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return null;
@@ -26,6 +26,28 @@ function pickVoice(): void {
  * 初回の遅延（音声リスト未ロード・コールドスタート）を軽減できる。
  */
 export function primeSpeech(): void {
+  // ずんだもんクリップ再生のためのオーディオ解錠（iOS Safari 対策）。
+  // 読み上げON のユーザー操作内で呼ばれる前提なので、ここで volume 0 の
+  // 短い play()→pause() を行いオーディオコンテキストを解錠しておく。
+  try {
+    const a = new Audio(`${CLIP_BASE}${CLIP.s001}`);
+    a.volume = 0;
+    const p = a.play();
+    if (p && typeof p.then === "function") {
+      p.then(() => {
+        try {
+          a.pause();
+          a.currentTime = 0;
+        } catch {
+          /* 無視 */
+        }
+      }).catch(() => {
+        /* 自動再生ブロック等は無視 */
+      });
+    }
+  } catch {
+    /* 無視 */
+  }
   const s = synth();
   if (!s) return;
   try {
@@ -41,10 +63,114 @@ export function primeSpeech(): void {
   }
 }
 
-/** 読み上げ音量（0〜1）。スライダーから設定。 */
+/** 読み上げ音量（0〜1）。スライダーから設定。Web Speech / クリップ再生で共用。 */
 let speakVolume = 1;
 export function setSpeechVolume(v: number): void {
   speakVolume = Math.max(0, Math.min(1, v));
+}
+
+/** ずんだもん音声クリップのベースパス（public 配下、ルート絶対参照）。 */
+const CLIP_BASE = "/voice/";
+/** クリップ id → ファイル名。public/voice/sNNN.wav。 */
+const CLIP: Record<string, string> = {
+  s001: "s001.wav",
+  s002: "s002.wav",
+  s003: "s003.wav",
+  s004: "s004.wav",
+  s005: "s005.wav",
+  s006: "s006.wav",
+  s007: "s007.wav",
+  s008: "s008.wav",
+  s009: "s009.wav",
+  s010: "s010.wav",
+  s011: "s011.wav",
+  s012: "s012.wav",
+  s013: "s013.wav",
+  s014: "s014.wav",
+  s015: "s015.wav",
+  s016: "s016.wav",
+  s017: "s017.wav",
+  s018: "s018.wav",
+  s019: "s019.wav",
+  s020: "s020.wav",
+  s021: "s021.wav",
+};
+
+/** 現在再生中のクリップ Audio（停止用に保持）。 */
+let currentAudio: HTMLAudioElement | null = null;
+
+/**
+ * クリップ id 配列を逐次再生（連結読み上げ）。
+ * 現在の再生（Web Speech / クリップ）を止めてから、id 順に onended で連結。
+ * volume は現在の読み上げ音量を流用。失敗した id はログしてスキップ。
+ */
+export function playClips(ids: string[], textForLog: string): void {
+  if (typeof window === "undefined" || typeof Audio === "undefined") {
+    // クリップ再生不可ならフォールバック（Web Speech）。
+    if (textForLog) speak(textForLog);
+    return;
+  }
+  // 進行中の再生をすべて停止（クリップ・Web Speech とも）。
+  stopClips();
+  stopSpeak();
+  logSpeech("発話", textForLog);
+  let i = 0;
+  let started = false;
+  const playNext = () => {
+    if (i >= ids.length) {
+      currentAudio = null;
+      return;
+    }
+    const id = ids[i++];
+    const file = CLIP[id];
+    if (!file) {
+      logSpeech("失敗", id);
+      playNext();
+      return;
+    }
+    try {
+      const a = new Audio(`${CLIP_BASE}${file}`);
+      a.volume = speakVolume;
+      currentAudio = a;
+      a.onended = () => {
+        if (currentAudio === a) playNext();
+      };
+      a.onerror = () => {
+        logSpeech("失敗", id);
+        if (currentAudio === a) playNext();
+      };
+      if (!started) {
+        started = true;
+        logSpeech("開始", textForLog);
+      }
+      const p = a.play();
+      if (p && typeof p.then === "function") {
+        p.catch(() => {
+          logSpeech("失敗", id);
+          if (currentAudio === a) playNext();
+        });
+      }
+    } catch {
+      logSpeech("失敗", id);
+      playNext();
+    }
+  };
+  playNext();
+}
+
+/** クリップ再生を停止し、連結チェーンを中断。 */
+export function stopClips(): void {
+  const a = currentAudio;
+  currentAudio = null;
+  if (!a) return;
+  try {
+    a.onended = null;
+    a.onerror = null;
+    a.pause();
+    a.currentTime = 0;
+  } catch {
+    /* 無視 */
+  }
 }
 
 /** 読み上げログ。どの発話がいつ開始/失敗したか診断するための購読フック。 */
@@ -170,6 +296,8 @@ export type SpeechStep = {
   /** hideEdge のとき呼び出し側でスキップするステップか */
   edgeOnly?: boolean;
   text: (get: (k: string) => string) => string | null;
+  /** ずんだもんクリップ id 配列（null/空なら無し→text にフォールバック）。 */
+  clips?: (get: (k: string) => string) => string[] | null;
 };
 
 /** 各ステップの既定秒数（読み上げ時刻）。全体を 2 秒前倒し済み。 */
@@ -289,6 +417,47 @@ function waveTimings(get: (k: string) => string) {
   return { earlyWaveRole, earlyWaveTruth, lateWaveRole, lateWaveTruth };
 }
 
+/** raiMizuAction の結果テキスト → クリップ id 配列（散開→s006 / 頭割り→s007）。 */
+function raiMizuClips(role: Role, truth: Choice): string[] {
+  const a = raiMizuAction(role, truth);
+  if (a === "散開（1人）") return ["s006"];
+  if (a === "頭割り") return ["s007"];
+  return [];
+}
+/** accel の結果テキスト → クリップ（止まる→s008 / 動く→s009）。+ s010(加速度)。 */
+function accelClips(truth: Choice): string[] {
+  const a = accel(truth);
+  const head = a === "止まる" ? ["s008"] : a === "動く" ? ["s009"] : [];
+  return [...head, "s010"];
+}
+/** juso の結果テキスト → クリップ（見ない→s012 / 見る→s011）。 */
+function jusoClips(truth: Choice): string[] {
+  const j = juso(truth);
+  if (j === "見ない") return ["s012"];
+  if (j === "見る") return ["s011"];
+  return [];
+}
+/** tsunamiHonooAction の結果 → クリップ（タケノコ→s013 / ドーナツ→s014,s015）。 */
+function waveClips(role: Role, truth: Choice): string[] {
+  const w = tsunamiHonooAction(role, truth);
+  if (w === "タケノコ回避") return ["s013"];
+  if (w === "ドーナツ＝中央で動かない") return ["s014", "s015"];
+  return [];
+}
+
+/** マジックアウトのサンダガ/ブリザガが「踏む(gi)」か。記憶×アウトの XNOR で判定。 */
+function magicSteps(get: (k: string) => string) {
+  const thunda = get("magic_thunda") as Choice;
+  const blizza = get("magic_blizza") as Choice;
+  const mof = get("magic_out_false");
+  const outThunda: Choice = mof === "rai" || mof === "both" ? "gi" : "shin";
+  const outBlizza: Choice = mof === "koori" || mof === "both" ? "gi" : "shin";
+  return {
+    tStep: magicFinal(thunda, outThunda) === "gi",
+    bStep: magicFinal(blizza, outBlizza) === "gi",
+  };
+}
+
 /** タイムライン順の読み上げステップ定義。 */
 export function buildSpeechSteps(
   timings: Record<string, number>,
@@ -309,6 +478,12 @@ export function buildSpeechSteps(
         if (role === "shi") return "生者の傷。死の超越。死ぬ";
         return "生者の傷";
       },
+      clips: (get) => {
+        const role = get("gc3_role__role");
+        if (role === "aragan") return ["s001", "s002", "s003"];
+        if (role === "shi") return ["s001", "s004", "s005"];
+        return ["s001"];
+      },
     },
     {
       key: "haya",
@@ -326,6 +501,15 @@ export function buildSpeechSteps(
         }
         return parts.length ? parts.join("。") : null;
       },
+      clips: (get) => {
+        const { earlyGcRole, earlyGcTruth } = gcTimings(get);
+        const { hayaActive, hayaTruth } = accelTimings(get);
+        const ids = [
+          ...raiMizuClips(earlyGcRole, earlyGcTruth),
+          ...(hayaActive ? accelClips(hayaTruth) : []),
+        ];
+        return ids.length ? ids : null;
+      },
     },
     {
       key: "thunda",
@@ -339,6 +523,10 @@ export function buildSpeechSteps(
         parts.push("サンダガの真偽を押してください");
         return parts.length ? parts.join("。") : null;
       },
+      clips: (get) => {
+        const gc1Truth = get("gc1_role") as Choice;
+        return [...jusoClips(gc1Truth), "s017", "s016"];
+      },
     },
     {
       key: "chaosHaya",
@@ -347,6 +535,11 @@ export function buildSpeechSteps(
       text: (get) => {
         const { earlyWaveRole, earlyWaveTruth } = waveTimings(get);
         return simplify(tsunamiHonooAction(earlyWaveRole, earlyWaveTruth));
+      },
+      clips: (get) => {
+        const { earlyWaveRole, earlyWaveTruth } = waveTimings(get);
+        const ids = waveClips(earlyWaveRole, earlyWaveTruth);
+        return ids.length ? ids : null;
       },
     },
     {
@@ -366,6 +559,16 @@ export function buildSpeechSteps(
         parts.push("ブリザガの真偽を押してください");
         return parts.length ? parts.join("。") : null;
       },
+      clips: (get) => {
+        const { lateGcRole, lateGcTruth } = gcTimings(get);
+        const { osoActive, osoTruth } = accelTimings(get);
+        return [
+          ...raiMizuClips(lateGcRole, lateGcTruth),
+          ...(osoActive ? accelClips(osoTruth) : []),
+          "s018",
+          "s016",
+        ];
+      },
     },
     {
       key: "jusoOso",
@@ -374,6 +577,11 @@ export function buildSpeechSteps(
       text: (get) => {
         const gc2Truth = get("gc2_role") as Choice;
         return juso(gc2Truth);
+      },
+      clips: (get) => {
+        const gc2Truth = get("gc2_role") as Choice;
+        const ids = jusoClips(gc2Truth);
+        return ids.length ? ids : null;
       },
     },
     {
@@ -388,23 +596,26 @@ export function buildSpeechSteps(
         const w = simplify(tsunamiHonooAction(lateWaveRole, lateWaveTruth));
         if (w) parts.push(w);
         if (readSanBuri) {
-          const thunda = get("magic_thunda") as Choice;
-          const blizza = get("magic_blizza") as Choice;
-          const mof = get("magic_out_false");
-          const outThunda: Choice = mof === "rai" || mof === "both" ? "gi" : "shin";
-          const outBlizza: Choice = mof === "koori" || mof === "both" ? "gi" : "shin";
-          const tf = magicFinal(thunda, outThunda);
-          const bf = magicFinal(blizza, outBlizza);
-          const fumu = (x: "shin" | "gi") => (x === "shin" ? "踏まない" : "踏む");
-          if (tf !== null && bf !== null) {
-            parts.push(
-              tf === bf
-                ? `サンダガブリザガ両方${fumu(tf)}`
-                : `サンダガ${fumu(tf)}。ブリザガ${fumu(bf)}`
-            );
-          }
+          // 踏む（final==="gi"）だけを読み上げる。踏まない・未確定は出さない。
+          const { tStep, bStep } = magicSteps(get);
+          if (tStep && bStep) parts.push("サンダガブリザガ両方踏む");
+          else if (tStep) parts.push("サンダガ踏む");
+          else if (bStep) parts.push("ブリザガ踏む");
         }
         return parts.length ? parts.join("。") : null;
+      },
+      clips: (get) => {
+        const { lateWaveRole, lateWaveTruth } = waveTimings(get);
+        const ids = [...waveClips(lateWaveRole, lateWaveTruth)];
+        if (readSanBuri) {
+          // 踏む（gi）だけ: 両方→[s017,s018,s019,s020] / サンダガ→[s017,s020] /
+          // ブリザガ→[s018,s020] / 無し→[]
+          const { tStep, bStep } = magicSteps(get);
+          if (tStep && bStep) ids.push("s017", "s018", "s019", "s020");
+          else if (tStep) ids.push("s017", "s020");
+          else if (bStep) ids.push("s018", "s020");
+        }
+        return ids.length ? ids : null;
       },
     },
   ];

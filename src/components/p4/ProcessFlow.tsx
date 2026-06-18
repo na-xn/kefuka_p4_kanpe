@@ -123,27 +123,29 @@ export function ProcessFlow({
   // 踏む/踏まない（本当=踏まない / 嘘=踏む）
   const fumu = fumuText;
 
-  // ④ もりもりサンダガ＝記憶値で直接
-  const thundaDirect: string | null = !thunda ? null : `サンダガ ${fumu(thunda)}`;
+  // ④ もりもりサンダガ＝記憶値で直接。新ルール: 踏む(gi)のときだけ表示（踏まない・未入力は非表示）。
+  const thundaDirect: string | null = thunda === "gi" ? `サンダガ ${fumu(thunda)}` : null;
 
-  // ⑦ ひろげるブリザガ＝記憶値で直接
-  const blizzaDirect: string | null = !blizza ? null : `ブリザガ ${fumu(blizza)}`;
+  // ⑦ ひろげるブリザガ＝記憶値で直接。踏む(gi)のときだけ表示。
+  const blizzaDirect: string | null = blizza === "gi" ? `ブリザガ ${fumu(blizza)}` : null;
 
   // ⑨ XNOR(記憶 × マジックアウト) 一致=本当→踏まない / 不一致=嘘→踏む。
   // マジックアウトはサンダガ・ブリザガそれぞれに真偽がある。
   const thundaFinal = magicFinal(thunda, outThunda);
   const blizzaFinal = magicFinal(blizza, outBlizza);
-  // 両方が同じ（両方踏む／両方踏まない）なら1行に集約、違えば2行
+  // 新ルール: 踏む(gi)のものだけ集める。踏まない(shin)・未確定は出さない。
+  // 両方踏む→1行に集約 / 片方だけ踏む→その1行 / 踏むが無ければ0行。
   type MagicOutBar = { icons: ("zap" | "snowflake")[]; text: string };
+  const thundaStep = thundaFinal === "gi";
+  const blizzaStep = blizzaFinal === "gi";
   const magicOutBars: MagicOutBar[] =
-    thundaFinal === null || blizzaFinal === null
-      ? []
-      : thundaFinal === blizzaFinal
-      ? [{ icons: ["zap", "snowflake"], text: `サンダガ・ブリザガ 両方${fumu(thundaFinal)}` }]
-      : [
-          { icons: ["zap"], text: `サンダガ ${fumu(thundaFinal)}` },
-          { icons: ["snowflake"], text: `ブリザガ ${fumu(blizzaFinal)}` },
-        ];
+    thundaStep && blizzaStep
+      ? [{ icons: ["zap", "snowflake"], text: "サンダガ・ブリザガ 両方踏む" }]
+      : thundaStep
+      ? [{ icons: ["zap"], text: "サンダガ 踏む" }]
+      : blizzaStep
+      ? [{ icons: ["snowflake"], text: "ブリザガ 踏む" }]
+      : [];
 
   const memLabel = (c: Choice) => (c === "shin" ? "真" : c === "gi" ? "偽" : "—");
 

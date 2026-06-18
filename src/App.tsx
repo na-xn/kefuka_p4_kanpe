@@ -13,6 +13,8 @@ import {
   buildSpeechSteps,
   speak,
   stopSpeak,
+  playClips,
+  stopClips,
   primeSpeech,
   startKeepAlive,
   stopKeepAlive,
@@ -434,6 +436,7 @@ export default function App() {
     ttsTimers.current = [];
     stopKeepAlive();
     stopSpeak();
+    stopClips();
     setTtsStartMs(null);
     setElapsedSec(0);
   };
@@ -452,8 +455,10 @@ export default function App() {
       if (step.edgeOnly && hideEdgeSteps) continue;
       const ms = Math.max(0, step.atSec) * 1000;
       const timer = setTimeout(() => {
-        const text = step.text(getLatest);
-        if (text) speak(text);
+        const ids = step.clips?.(getLatest);
+        const t = step.text(getLatest);
+        if (ids && ids.length) playClips(ids, t ?? "");
+        else if (t) speak(t);
       }, ms);
       ttsTimers.current.push(timer);
     }
@@ -474,6 +479,9 @@ export default function App() {
   // ホットキーコールバックが古い closure を掴まないよう、最新の関数を ref で参照。
   const startTtsByTriggerRef = useRef(startTtsByTrigger);
   startTtsByTriggerRef.current = startTtsByTrigger;
+  // 開始ホットキーの実処理: 入力フェーズなら「確定」、それ以外は開始/再スタート。
+  // confirmStep は後で定義されるため、毎レンダーで ref に最新を入れる（下で代入）。
+  const onStartHotkeyRef = useRef<() => void>(() => {});
 
   // 読み上げ中は経過秒を刻む（着弾済みステップの非活性化に使う）。
   useEffect(() => {
@@ -531,7 +539,7 @@ export default function App() {
     (async () => {
       try {
         await register(ttsHotkey, (e) => {
-          if (e.state === "Pressed") startTtsByTriggerRef.current();
+          if (e.state === "Pressed") onStartHotkeyRef.current();
         });
       } catch {
         /* Tauri 外 / 重複登録 などは無視 */
@@ -782,6 +790,13 @@ export default function App() {
       setErrors([]);
       setInputStep((s) => s - 1);
     }
+  };
+
+  // 開始ホットキー: 入力フェーズなら「確定」ボタン相当（ウィザードを進める）。
+  // 最後の確定で処理画面へ入り読み上げ開始。処理/開始フェーズでは開始/再スタート。
+  onStartHotkeyRef.current = () => {
+    if (phase === "input") confirmStep();
+    else startTtsByTrigger();
   };
 
   // 自動確定: 入力フェーズ & autoConfirm ON のとき、現在ステップの関連キーに
@@ -1047,19 +1062,24 @@ export default function App() {
           }}
           onContextMenu={(e) => e.preventDefault()}
         >
-          <div className="mb-1.5 flex items-center justify-between text-[11px] font-medium text-muted-foreground">
-            <span>透過度</span>
-            <span className="tabular-nums">{Math.round(opacity * 100)}%</span>
-          </div>
-          <input
-            type="range"
-            min={0.2}
-            max={1}
-            step={0.05}
-            value={opacity}
-            onChange={(e) => setOpacity(Number(e.target.value))}
-            className="w-full accent-primary"
-          />
+          {/* 透過度（ウィンドウ専用）。web版では非表示。 */}
+          {IS_TAURI && (
+            <>
+              <div className="mb-1.5 flex items-center justify-between text-[11px] font-medium text-muted-foreground">
+                <span>透過度</span>
+                <span className="tabular-nums">{Math.round(opacity * 100)}%</span>
+              </div>
+              <input
+                type="range"
+                min={0.2}
+                max={1}
+                step={0.05}
+                value={opacity}
+                onChange={(e) => setOpacity(Number(e.target.value))}
+                className="w-full accent-primary"
+              />
+            </>
+          )}
 
           {/* 自動確定 */}
           <div className="mt-2 border-t pt-2">
@@ -1177,7 +1197,8 @@ export default function App() {
             </div>
           )}
 
-          {/* 更新確認 */}
+          {/* 更新確認（デスクトップのみ。web版は常に最新なので非表示）。 */}
+          {IS_TAURI && (
           <div className="mt-2 border-t pt-2">
             <div className="flex items-center justify-between gap-2">
               <Button
@@ -1208,6 +1229,12 @@ export default function App() {
               </button>
             )}
           </div>
+          )}
+
+          {/* コピーライト表記 */}
+          <div className="mt-2 border-t pt-2 text-[9px] leading-relaxed text-muted-foreground/80">
+            FINAL FANTASY XIV (C) SQUARE ENIX CO., LTD. All Rights Reserved.
+          </div>
         </div>
       )}
 
@@ -1233,6 +1260,7 @@ export default function App() {
                 <X />
               </Button>
             </div>
+            <p className="mb-2 text-[10px] text-muted-foreground">音声: VOICEVOX:ずんだもん</p>
             {/* 音量 */}
             <div className="mb-2 rounded-md border bg-card/40 p-2">
               <div className="mb-1 flex items-center justify-between text-[11px] font-medium text-muted-foreground">

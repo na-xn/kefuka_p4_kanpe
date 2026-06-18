@@ -87,6 +87,10 @@ Tauri v2 / React 19 / TypeScript / Vite / Tailwind CSS v4 / shadcn(radix-ui) / V
 | `wrangler.jsonc` | web 版（Cloudflare Workers Static Assets）の配信設定 |
 | `release/README.md` | 配布物に同梱するユーザー向け説明 |
 
+## クレジット
+
+- 読み上げ音声: **VOICEVOX:ずんだもん**（`public/voice/*.wav`）
+
 ## ライセンス
 
 [MIT](./LICENSE)
