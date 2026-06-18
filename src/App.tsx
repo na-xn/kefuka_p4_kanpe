@@ -794,8 +794,17 @@ export default function App() {
               判定を編集
             </Button>
           ) : (
-            <span {...dragProps} className="truncate text-xs font-bold select-none">
-              🤡 絶妖星乱舞 P4 真偽判定
+            <span
+              {...dragProps}
+              className="flex min-w-0 items-center gap-1.5 truncate text-xs font-bold select-none"
+            >
+              <img
+                src="/icon/kefuka.png"
+                alt=""
+                className="size-4 shrink-0 rounded-[3px]"
+                draggable={false}
+              />
+              絶妖星乱舞 P4 真偽判定
             </span>
           )}
           <div className="flex items-center gap-1">
