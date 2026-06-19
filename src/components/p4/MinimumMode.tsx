@@ -5,21 +5,32 @@ import type { Choice } from "@/p4/types";
 
 /** ミニマムモード（テスト機能・通常モードとは独立）。
  * 7カラム（加速度/フォークライトニング/水圧縮/ほのお/つなみ/サンダガ/ブリザガ）を
- * トグルだけで入力。真偽はカラム名クリックで反転、早/遅は該当列のトグルスイッチ。 */
+ * トグルだけで入力。真偽はカラム名クリックで反転（既定=真）、早/遅は該当列のトグル。
+ * 水圧縮とフォークライトニングは排他（どちらか一方のみ使用、他方は未使用）。 */
 
-export type MinVal = { truth: string; when: string };
+export type MinVal = { truth: string; when: string }; // truth: "shin" | "gi" | "none"
 export type MinState = Record<string, MinVal>;
-const DEFAULT: MinVal = { truth: "", when: "haya" };
+
+/** 排他ペア（雷=フォークライトニング ↔ 水=水圧縮）。 */
+const PAIR: Record<string, string> = { rai: "mizu", mizu: "rai" };
+
+/** 既定値: 真偽は真。排他ペアは雷を使用・水を未使用。早/遅は炎=早/つなみ=遅、他は早。 */
+export const INITIAL_MIN: MinState = {
+  accel: { truth: "shin", when: "haya" },
+  rai: { truth: "shin", when: "haya" },
+  mizu: { truth: "none", when: "haya" },
+  honoo: { truth: "shin", when: "haya" },
+  tsunami: { truth: "shin", when: "oso" },
+  thunda: { truth: "shin", when: "" },
+  blizza: { truth: "shin", when: "" },
+};
 
 type Col = {
   id: string;
   name: string;
-  /** デバフアイコン画像 src（無ければ lucide） */
   img?: string;
   lucide?: "zap" | "snow";
-  /** 早/遅トグルを出すか */
   when: boolean;
-  /** 真偽から行動テキストを導出（null=未確定） */
   act: (t: Choice) => string | null;
 };
 
@@ -68,27 +79,38 @@ export function MinimumMode({
   value: MinState;
   set: (id: string, patch: Partial<MinVal>) => void;
 }) {
+  // カラム名クリック: 排他ペアの未使用列は「使用中（真）」に切替え相方を未使用へ。それ以外は真偽反転。
+  const onName = (id: string, truth: string) => {
+    if (PAIR[id] && truth === "none") {
+      set(PAIR[id], { truth: "none" });
+      set(id, { truth: "shin" });
+      return;
+    }
+    set(id, { truth: truth === "shin" ? "gi" : "shin" });
+  };
+
   return (
     <div className="flex flex-col gap-1.5">
       <p className="px-0.5 text-[10px] text-muted-foreground">
-        カラム名クリックで真偽を反転。早/遅はトグル。（テスト機能）
+        カラム名クリックで真偽を反転。早/遅はトグル。雷/水は排他（未使用をタップで切替）。（テスト機能）
       </p>
       {COLS.map((c) => {
-        const v = value[c.id] ?? DEFAULT;
-        const truth = v.truth as Choice;
-        const action = c.act(truth);
+        const v = value[c.id] ?? INITIAL_MIN[c.id] ?? { truth: "shin", when: "haya" };
+        const truth = v.truth;
+        const none = truth === "none";
+        const action = none ? null : c.act(truth as Choice);
         const truthCls =
           truth === "shin"
             ? "bg-blue-600 text-white border-blue-600"
             : truth === "gi"
             ? "bg-red-600 text-white border-red-600"
-            : "bg-card text-muted-foreground";
+            : "bg-card text-muted-foreground opacity-50";
         return (
           <div key={c.id} className="flex items-center gap-2 rounded-md border bg-card/40 px-2 py-1.5">
-            {/* カラム名（クリックで真偽反転） */}
+            {/* カラム名（クリックで真偽反転 / 排他切替） */}
             <button
               type="button"
-              onClick={() => set(c.id, { truth: truth === "shin" ? "gi" : "shin" })}
+              onClick={() => onName(c.id, truth)}
               className={`flex min-w-0 flex-1 items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-bold ${truthCls}`}
             >
               {c.img ? (
@@ -100,12 +122,12 @@ export function MinimumMode({
               )}
               <span className="truncate">{c.name}</span>
               <span className="ml-auto shrink-0 tabular-nums">
-                {truth === "shin" ? "真" : truth === "gi" ? "偽" : "—"}
+                {none ? "未使用" : truth === "shin" ? "真" : "偽"}
               </span>
             </button>
 
-            {/* 早/遅トグル（該当列のみ） */}
-            {c.when ? (
+            {/* 早/遅トグル（該当列のみ。未使用列は無効） */}
+            {c.when && !none ? (
               <EarlyLate value={v.when} onChange={(w) => set(c.id, { when: w })} />
             ) : (
               <span className="w-14 shrink-0" />
@@ -113,7 +135,7 @@ export function MinimumMode({
 
             {/* 行動テキスト */}
             <span className="w-20 shrink-0 truncate text-right text-[11px] font-bold text-foreground">
-              {action ?? "—"}
+              {none ? "—" : action ?? "—"}
             </span>
           </div>
         );

@@ -7,7 +7,7 @@ import { getVersion } from "@tauri-apps/api/app";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { EventCard } from "@/components/p4/EventCard";
 import { ProcessFlow } from "@/components/p4/ProcessFlow";
-import { MinimumMode } from "@/components/p4/MinimumMode";
+import { MinimumMode, INITIAL_MIN } from "@/components/p4/MinimumMode";
 import type { MinState, MinVal } from "@/components/p4/MinimumMode";
 import { INPUT_EVENTS } from "@/p4/events";
 import type { State, Phase, MenuState } from "@/p4/types";
@@ -154,7 +154,7 @@ export default function App() {
   const [hideEdgeSteps, setHideEdgeSteps] = useState(false); // ①生者の傷・⑧アルテマを隠す
   // ミニマムモード（テスト機能・通常モードと独立）
   const [minMode, setMinMode] = useState(false);
-  const [minState, setMinState] = useState<MinState>({});
+  const [minState, setMinState] = useState<MinState>(INITIAL_MIN);
   const setMin = (id: string, patch: Partial<MinVal>) =>
     setMinState((s) => {
       const prev: MinVal = s[id] ?? { truth: "", when: "haya" };
@@ -522,7 +522,7 @@ export default function App() {
   const resetAll = () => {
     stopTts();
     setState({});
-    setMinState({});
+    setMinState(INITIAL_MIN);
     setErrors([]);
     setInputStep(0);
     setPhase("input");
