@@ -49,6 +49,28 @@ function phaseOf(id: string, when: string): number {
   }
 }
 
+/** 同時に処理するグループの番号（同じ番号＝同タイミング＝1ブロック）。 */
+function groupOf(id: string, when: string): number {
+  const oso = when === "oso";
+  if (id === "mizu" || id === "rai" || id === "accel") return oso ? 5 : 1;
+  if (id === "juso_haya") return 2;
+  if (id === "honoo") return 4;
+  if (id === "juso_oso") return 6;
+  if (id === "tsunami") return 7;
+  if (id === "thunda" || id === "blizza") return 100; // マジックアウト記憶
+  return 50;
+}
+
+/** グループのラベル（複数行のブロックにのみ表示）。 */
+function groupLabel(g: number): string {
+  switch (g) {
+    case 1: return "水雷・加速度（早）";
+    case 5: return "水雷・加速度（遅）";
+    case 100: return "マジックアウト記憶";
+    default: return "";
+  }
+}
+
 type Col = {
   id: string;
   name: string;
@@ -123,70 +145,89 @@ export function MinimumMode({
     else if (id === jusoId) set("accel", { truth: next });
   };
 
+  const whenOf = (id: string) => (value[id] ?? INITIAL_MIN[id])?.when ?? "haya";
+
   // 処理順にソート（早/遅で水雷/加速度/叫びの位置が入れ替わる。サンダガ/ブリザガは最下部固定）。
-  const sorted = [...COLS].sort((a, b) => {
-    const wa = (value[a.id] ?? INITIAL_MIN[a.id])?.when ?? "haya";
-    const wb = (value[b.id] ?? INITIAL_MIN[b.id])?.when ?? "haya";
-    return phaseOf(a.id, wa) - phaseOf(b.id, wb);
-  });
+  const sorted = [...COLS].sort((a, b) => phaseOf(a.id, whenOf(a.id)) - phaseOf(b.id, whenOf(b.id)));
+
+  // 同時処理（同じ groupOf）の連続行をブロックにまとめる。
+  const groups: { g: number; items: Col[] }[] = [];
+  for (const c of sorted) {
+    const g = groupOf(c.id, whenOf(c.id));
+    const last = groups[groups.length - 1];
+    if (last && last.g === g) last.items.push(c);
+    else groups.push({ g, items: [c] });
+  }
+
+  const renderRow = (c: Col) => {
+    const v = value[c.id] ?? INITIAL_MIN[c.id] ?? { truth: "shin", when: "haya" };
+    const truth = v.truth;
+    const none = truth === "none";
+    const action = none ? null : c.act(truth as Choice);
+    const truthCls =
+      truth === "shin"
+        ? "bg-blue-600 text-white border-blue-600"
+        : truth === "gi"
+        ? "bg-red-600 text-white border-red-600"
+        : "bg-card text-muted-foreground";
+    return (
+      <div
+        key={c.id}
+        className={`flex items-center gap-2 rounded-md border bg-card/40 px-2 py-1.5 ${
+          none ? "opacity-55" : ""
+        }`}
+      >
+        <span title={c.name} className="flex w-6 shrink-0 justify-center">
+          {c.img ? (
+            <img src={c.img} alt="" className="h-5 w-auto rounded-[2px]" draggable={false} />
+          ) : c.lucide === "zap" ? (
+            <Zap className="size-5" />
+          ) : (
+            <Snowflake className="size-5" />
+          )}
+        </span>
+        <button
+          type="button"
+          onClick={() => onName(c.id, truth)}
+          aria-label={`${c.name} 真偽`}
+          className={`w-12 shrink-0 rounded-md border px-2 py-1 text-center text-xs font-bold tabular-nums ${truthCls}`}
+        >
+          {none ? "—" : truth === "shin" ? "真" : "偽"}
+        </button>
+        <button
+          type="button"
+          onClick={() => onName(c.id, truth)}
+          aria-label={`${c.name} 真偽`}
+          className="min-w-0 flex-1 truncate text-left text-xs font-bold text-foreground"
+        >
+          {none ? "—" : action ?? "—"}
+        </button>
+        {c.when && !none ? (
+          <EarlyLate value={v.when} onChange={(w) => set(c.id, { when: w })} />
+        ) : (
+          <span className="w-14 shrink-0" />
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="flex flex-col gap-1.5">
-      {sorted.map((c) => {
-        const v = value[c.id] ?? INITIAL_MIN[c.id] ?? { truth: "shin", when: "haya" };
-        const truth = v.truth;
-        const none = truth === "none";
-        const action = none ? null : c.act(truth as Choice);
-        const truthCls =
-          truth === "shin"
-            ? "bg-blue-600 text-white border-blue-600"
-            : truth === "gi"
-            ? "bg-red-600 text-white border-red-600"
-            : "bg-card text-muted-foreground";
+      {groups.map((grp, gi) => {
+        // 1行だけのグループはブロックで囲わずそのまま表示。
+        if (grp.items.length <= 1) return renderRow(grp.items[0]);
+        const label = groupLabel(grp.g);
         return (
           <div
-            key={c.id}
-            className={`flex items-center gap-2 rounded-md border bg-card/40 px-2 py-1.5 ${
-              none ? "opacity-55" : ""
-            }`}
+            key={`g${gi}`}
+            className="rounded-lg border-2 border-primary/40 bg-primary/5 p-1.5"
           >
-            {/* デバフアイコン（中立背景・名前はツールチップ） */}
-            <span title={c.name} className="flex w-6 shrink-0 justify-center">
-              {c.img ? (
-                <img src={c.img} alt="" className="h-5 w-auto rounded-[2px]" draggable={false} />
-              ) : c.lucide === "zap" ? (
-                <Zap className="size-5" />
-              ) : (
-                <Snowflake className="size-5" />
-              )}
-            </span>
-
-            {/* 真偽トグル（クリックで真偽反転 / 排他切替） */}
-            <button
-              type="button"
-              onClick={() => onName(c.id, truth)}
-              aria-label={`${c.name} 真偽`}
-              className={`w-12 shrink-0 rounded-md border px-2 py-1 text-center text-xs font-bold tabular-nums ${truthCls}`}
-            >
-              {none ? "—" : truth === "shin" ? "真" : "偽"}
-            </button>
-
-            {/* 行動テキスト（クリックでも真偽反転 / 排他切替） */}
-            <button
-              type="button"
-              onClick={() => onName(c.id, truth)}
-              aria-label={`${c.name} 真偽`}
-              className="min-w-0 flex-1 truncate text-left text-xs font-bold text-foreground"
-            >
-              {none ? "—" : action ?? "—"}
-            </button>
-
-            {/* 早/遅トグル（一番右。該当列のみ、未使用列は無効） */}
-            {c.when && !none ? (
-              <EarlyLate value={v.when} onChange={(w) => set(c.id, { when: w })} />
-            ) : (
-              <span className="w-14 shrink-0" />
+            {label && (
+              <div className="mb-1 px-0.5 text-[10px] font-bold text-muted-foreground">
+                {label}
+              </div>
             )}
+            <div className="flex flex-col gap-1.5">{grp.items.map(renderRow)}</div>
           </div>
         );
       })}
