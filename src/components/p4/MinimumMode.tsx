@@ -34,14 +34,16 @@ type Col = {
   act: (t: Choice) => string | null;
 };
 
+// 処理順（タイムライン）: ②水属性圧縮→フォークライトニング→加速度 ③サンダガ
+// ④混沌早=ほのお ⑤ブリザガ ⑦混沌遅=つなみ。早/遅トグルは可変な 水/雷/加速度 のみ。
 const COLS: Col[] = [
-  { id: "accel", name: "加速度", img: DEBUFF_ICON.accel, when: true, act: (t) => accel(t) },
-  { id: "rai", name: "フォークライトニング", img: DEBUFF_ICON.rai, when: true, act: (t) => raiMizuAction("rai", t) },
   { id: "mizu", name: "水圧縮", img: DEBUFF_ICON.mizu, when: true, act: (t) => raiMizuAction("mizu", t) },
-  { id: "honoo", name: "ほのお", img: DEBUFF_ICON.honoo, when: true, act: (t) => tsunamiHonooAction("honoo", t) },
-  { id: "tsunami", name: "つなみ", img: DEBUFF_ICON.tsunami, when: true, act: (t) => tsunamiHonooAction("tsunami", t) },
+  { id: "rai", name: "フォークライトニング", img: DEBUFF_ICON.rai, when: true, act: (t) => raiMizuAction("rai", t) },
+  { id: "accel", name: "加速度", img: DEBUFF_ICON.accel, when: true, act: (t) => accel(t) },
   { id: "thunda", name: "サンダガ", lucide: "zap", when: false, act: (t) => fumuText(t) },
+  { id: "honoo", name: "ほのお", img: DEBUFF_ICON.honoo, when: false, act: (t) => tsunamiHonooAction("honoo", t) },
   { id: "blizza", name: "ブリザガ", lucide: "snow", when: false, act: (t) => fumuText(t) },
+  { id: "tsunami", name: "つなみ", img: DEBUFF_ICON.tsunami, when: false, act: (t) => tsunamiHonooAction("tsunami", t) },
 ];
 
 /** 早/遅のトグルスイッチ（左=早 / 右=遅）。 */
