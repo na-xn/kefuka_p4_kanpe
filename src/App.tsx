@@ -1135,7 +1135,7 @@ export default function App() {
           {/* モード切替（ミニマムモード＝テスト機能） */}
           <div className="mt-2 border-t pt-2">
             <label className="flex cursor-pointer items-center justify-between text-[11px] font-medium text-muted-foreground">
-              <span>ミニマムモード（試験）</span>
+              <span>ミニマムモード</span>
               <input
                 type="checkbox"
                 checked={minMode}

@@ -14,6 +14,9 @@ export type MinState = Record<string, MinVal>;
 /** 排他ペア（雷=フォークライトニング ↔ 水=水圧縮）。 */
 const PAIR: Record<string, string> = { rai: "mizu", mizu: "rai" };
 
+/** 真偽連動ペア（加速度 ↔ 叫び＝同じ なし担当GC 由来で真偽が共通）。 */
+const LINK: Record<string, string> = { accel: "juso", juso: "accel" };
+
 /** 既定値: 真偽は真。排他ペアは雷を使用・水を未使用。早/遅の既定は早。 */
 export const INITIAL_MIN: MinState = {
   mizu: { truth: "none", when: "haya" },
@@ -103,13 +106,16 @@ export function MinimumMode({
   set: (id: string, patch: Partial<MinVal>) => void;
 }) {
   // カラム名クリック: 排他ペアの未使用列は「使用中（真）」に切替え相方を未使用へ。それ以外は真偽反転。
+  // 加速度と叫び（呪詛）は同じ なし担当GC 由来で真偽が共通なので連動。
   const onName = (id: string, truth: string) => {
     if (PAIR[id] && truth === "none") {
       set(PAIR[id], { truth: "none" });
       set(id, { truth: "shin" });
       return;
     }
-    set(id, { truth: truth === "shin" ? "gi" : "shin" });
+    const next = truth === "shin" ? "gi" : "shin";
+    set(id, { truth: next });
+    if (LINK[id]) set(LINK[id], { truth: next });
   };
 
   // 処理順にソート（早/遅で水雷/加速度/叫びの位置が入れ替わる。サンダガ/ブリザガは最下部固定）。
