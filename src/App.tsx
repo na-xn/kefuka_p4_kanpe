@@ -7,6 +7,8 @@ import { getVersion } from "@tauri-apps/api/app";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { EventCard } from "@/components/p4/EventCard";
 import { ProcessFlow } from "@/components/p4/ProcessFlow";
+import { MinimumMode } from "@/components/p4/MinimumMode";
+import type { MinState, MinVal } from "@/components/p4/MinimumMode";
 import { INPUT_EVENTS } from "@/p4/events";
 import type { State, Phase, MenuState } from "@/p4/types";
 import {
@@ -150,6 +152,14 @@ export default function App() {
   const [autoConfirm, setAutoConfirm] = useState(false);
   const [autoConfirmSec, setAutoConfirmSec] = useState(1);
   const [hideEdgeSteps, setHideEdgeSteps] = useState(false); // ①生者の傷・⑧アルテマを隠す
+  // ミニマムモード（テスト機能・通常モードと独立）
+  const [minMode, setMinMode] = useState(false);
+  const [minState, setMinState] = useState<MinState>({});
+  const setMin = (id: string, patch: Partial<MinVal>) =>
+    setMinState((s) => {
+      const prev: MinVal = s[id] ?? { truth: "", when: "haya" };
+      return { ...s, [id]: { ...prev, ...patch } };
+    });
   const [appVersion, setAppVersion] = useState("");
   const [update, setUpdate] = useState<UpdateState>({ s: "idle" });
   // 読み上げ（TTS）
@@ -305,6 +315,8 @@ export default function App() {
       if (vol != null) setTtsVolume(Math.max(0, Math.min(1, Number(vol))));
       const sl = localStorage.getItem("showSpeechLog");
       if (sl != null) setShowSpeechLog(sl === "true");
+      const mm = localStorage.getItem("minMode");
+      if (mm != null) setMinMode(mm === "true");
       const tk = localStorage.getItem("truthKeysOn");
       if (tk != null) setKeyInputOn(tk === "true");
       const pk1 = localStorage.getItem("posKey1");
@@ -363,6 +375,13 @@ export default function App() {
       /* 無視 */
     }
   }, [showSpeechLog]);
+  useEffect(() => {
+    try {
+      localStorage.setItem("minMode", String(minMode));
+    } catch {
+      /* 無視 */
+    }
+  }, [minMode]);
   // 読み上げログの購読（speak() の各イベントを受信して蓄積、最新50件保持）。
   useEffect(() => {
     setSpeechLogger((e) => setSpeechLog((prev) => [...prev.slice(-49), e]));
@@ -503,6 +522,7 @@ export default function App() {
   const resetAll = () => {
     stopTts();
     setState({});
+    setMinState({});
     setErrors([]);
     setInputStep(0);
     setPhase("input");
@@ -847,7 +867,7 @@ export default function App() {
           {...dragProps}
           className="flex h-8 shrink-0 items-center justify-between gap-2 border-b px-2"
         >
-          {phase === "process" ? (
+          {phase === "process" && !minMode ? (
             <Button
               variant="secondary"
               size="xs"
@@ -905,7 +925,9 @@ export default function App() {
         {/* 本体（高さはウィンドウ自動可変。最大時のみスクロール） */}
         <div className="flex-1 overflow-y-auto px-2 py-2">
           <div ref={contentRef}>
-          {phase === "input" ? (
+          {minMode ? (
+            <MinimumMode value={minState} set={setMin} />
+          ) : phase === "input" ? (
             <div className="flex flex-col gap-2">
               {/* 進捗表示 */}
               <div className="flex items-center justify-between px-0.5">
@@ -1104,18 +1126,33 @@ export default function App() {
             </div>
           </div>
 
-          {/* 処理画面の表示オプション */}
+          {/* モード切替（ミニマムモード＝テスト機能） */}
           <div className="mt-2 border-t pt-2">
             <label className="flex cursor-pointer items-center justify-between text-[11px] font-medium text-muted-foreground">
-              <span>①生者の傷・⑧アルテマを隠す</span>
+              <span>ミニマムモード（試験）</span>
               <input
                 type="checkbox"
-                checked={hideEdgeSteps}
-                onChange={(e) => setHideEdgeSteps(e.target.checked)}
+                checked={minMode}
+                onChange={(e) => setMinMode(e.target.checked)}
                 className="size-3.5 accent-primary"
               />
             </label>
           </div>
+
+          {/* 処理画面の表示オプション */}
+          {!minMode && (
+            <div className="mt-2 border-t pt-2">
+              <label className="flex cursor-pointer items-center justify-between text-[11px] font-medium text-muted-foreground">
+                <span>①生者の傷・⑧アルテマを隠す</span>
+                <input
+                  type="checkbox"
+                  checked={hideEdgeSteps}
+                  onChange={(e) => setHideEdgeSteps(e.target.checked)}
+                  className="size-3.5 accent-primary"
+                />
+              </label>
+            </div>
+          )}
 
           {/* 読み上げ（TTS） */}
           <div className="mt-2 border-t pt-2">
