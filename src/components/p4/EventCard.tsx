@@ -247,26 +247,9 @@ function TsunamiInputCard({
   const role = get(roleKey);
   const truth = get(`wave${suffix}_type`) as Choice;
   const whenKey = `wave${suffix}_when`;
-  const whenVal = get(whenKey); // haya | oso（処理の早/遅）
-
-  // 2回目の早/遅は1回目と排他（1回目=早→2回目=遅、逆も）。
   const isWave2 = suffix === "2";
-  const wave1When = get("wave1_when");
-  const autoWhen = isWave2
-    ? wave1When === "haya"
-      ? "oso"
-      : wave1When === "oso"
-      ? "haya"
-      : ""
-    : "";
-  useEffect(() => {
-    if (!isWave2) return;
-    if (autoWhen && whenVal !== autoWhen) set(whenKey, autoWhen);
-    if (!autoWhen && whenVal) set(whenKey, "");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isWave2, autoWhen, whenVal]);
 
-  // 2回目の種類も1回目と排他（1回目=ほのお→2回目=つなみ、逆も）。
+  // 2回目の種類は1回目と排他（1回目=ほのお→2回目=つなみ、逆も）。
   const wave1Role = get("wave1_type__role");
   const autoType = isWave2
     ? wave1Role === "honoo"
@@ -282,8 +265,16 @@ function TsunamiInputCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isWave2, autoType, role]);
 
+  // 早/遅は種類で確定（ほのお=早 / つなみ=遅）。waveN_when を種類から自動設定し、入力欄は持たない。
+  const autoWhen = role === "honoo" ? "haya" : role === "tsunami" ? "oso" : "";
+  const whenVal = get(whenKey);
+  useEffect(() => {
+    if (autoWhen && whenVal !== autoWhen) set(whenKey, autoWhen);
+    if (!autoWhen && whenVal) set(whenKey, "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoWhen, whenVal]);
+
   return (
-    <>
     <div className="rounded-md border bg-card px-2 py-1.5">
       <div className="flex items-center justify-between gap-2">
         <span className="min-w-0 flex-1 text-xs font-semibold">種類</span>
@@ -296,7 +287,7 @@ function TsunamiInputCard({
                 className="h-5 w-auto rounded-[2px]"
                 draggable={false}
               />
-              {autoType === "honoo" ? "炎" : "水"}（自動）
+              {autoType === "honoo" ? "炎（早）" : "水（遅）"}（自動）
             </span>
           ) : (
             <span className="shrink-0 text-[10px] text-muted-foreground">
@@ -317,30 +308,6 @@ function TsunamiInputCard({
       </div>
       <ActionBar text={tsunamiHonooAction(role, truth)} icon={chaosIcon(role)} />
     </div>
-    <div className="rounded-md border bg-card px-2 py-1.5">
-      <div className="flex items-center justify-between gap-2">
-        <span className="min-w-0 flex-1 text-xs font-semibold">処理（早/遅）</span>
-        {isWave2 ? (
-          autoWhen ? (
-            <span className="shrink-0 rounded bg-slate-500 px-2 py-0.5 text-xs font-bold text-white">
-              {autoWhen === "haya" ? "早" : "遅"}（自動）
-            </span>
-          ) : (
-            <span className="shrink-0 text-[10px] text-muted-foreground">
-              1回目の早/遅を先に選択
-            </span>
-          )
-        ) : (
-          <SelectToggle
-            value={whenVal}
-            onChange={(v) => set(whenKey, v)}
-            options={WHEN_OPTIONS}
-            active={activeFieldKey === whenKey}
-          />
-        )}
-      </div>
-    </div>
-    </>
   );
 }
 

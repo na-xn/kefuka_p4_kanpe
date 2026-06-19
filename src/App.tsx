@@ -132,7 +132,7 @@ function eventMissing(id: string, get: (k: string) => string): string[] {
     const n = id === "wave1" ? "1" : "2";
     need(`wave${n}_type__role`, `つなみ/ほのお${n} 種類`);
     need(`wave${n}_type`, `つなみ/ほのお${n} 真偽`);
-    need(`wave${n}_when`, `つなみ/ほのお${n} 処理（早/遅）`);
+    // 早/遅は種類から確定（ほのお=早・つなみ=遅）するため入力不要。
   } else if (id === "gc3") {
     need("gc3_role__role", "GC3 担当（アラガン/死の超越）");
   }
@@ -669,16 +669,11 @@ export default function App() {
           set(`wave${n}_type`, ["shin", "gi"][idx])
         )
       );
-      // wave2 の種類・早遅は1回目の逆で自動設定なので順序に含めない
+      // 種類は wave1 のみ入力（wave2 は1回目の逆で自動）。早/遅は種類から確定なので欄なし。
       if (n === "1") {
         rest.push(
           mk(typeRoleKey, ["honoo", "tsunami"], g(typeRoleKey) !== "", (idx) =>
             set(typeRoleKey, ["honoo", "tsunami"][idx])
-          )
-        );
-        rest.push(
-          mk(`wave${n}_when`, ["haya", "oso"], g(`wave${n}_when`) !== "", (idx) =>
-            set(`wave${n}_when`, ["haya", "oso"][idx])
           )
         );
       }

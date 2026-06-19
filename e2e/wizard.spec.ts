@@ -16,9 +16,8 @@ test.describe("P4 判定入力ウィザード", () => {
     await radio(gc1, "真").click();
     await radio(gc1, "早").click(); // 水雷の処理（早/遅）
     const wave1 = group(page, "つなみ / ほのお 1回目");
-    await radio(wave1, "炎(ほのお)").click();
+    await radio(wave1, "炎(ほのお)").click(); // 種類（早/遅は炎=早で自動・入力欄なし）
     await radio(wave1, "真").click();
-    await radio(wave1, "早").click();
     await page.getByRole("button", { name: /確定/ }).click();
 
     // ② GC2 + つなみ/ほのお2 → 判定 2 / 3
@@ -55,7 +54,6 @@ test.describe("P4 判定入力ウィザード", () => {
     const wave1 = group(page, "つなみ / ほのお 1回目");
     await radio(wave1, "炎(ほのお)").click();
     await radio(wave1, "真").click();
-    await radio(wave1, "早").click();
     await page.getByRole("button", { name: /確定/ }).click();
     await expect(page.getByText("判定 2 / 3")).toBeVisible();
 
