@@ -61,16 +61,6 @@ function groupOf(id: string, when: string): number {
   return 50;
 }
 
-/** グループのラベル（複数行のブロックにのみ表示）。 */
-function groupLabel(g: number): string {
-  switch (g) {
-    case 1: return "水雷・加速度（早）";
-    case 5: return "水雷・加速度（遅）";
-    case 100: return "マジックアウト記憶";
-    default: return "";
-  }
-}
-
 type Col = {
   id: string;
   name: string;
@@ -216,18 +206,12 @@ export function MinimumMode({
       {groups.map((grp, gi) => {
         // 1行だけのグループはブロックで囲わずそのまま表示。
         if (grp.items.length <= 1) return renderRow(grp.items[0]);
-        const label = groupLabel(grp.g);
         return (
           <div
             key={`g${gi}`}
-            className="rounded-lg border-2 border-primary/40 bg-primary/5 p-1.5"
+            className="flex flex-col gap-1.5 rounded-lg border-2 border-primary/40 bg-primary/5 p-1.5"
           >
-            {label && (
-              <div className="mb-1 px-0.5 text-[10px] font-bold text-muted-foreground">
-                {label}
-              </div>
-            )}
-            <div className="flex flex-col gap-1.5">{grp.items.map(renderRow)}</div>
+            {grp.items.map(renderRow)}
           </div>
         );
       })}
