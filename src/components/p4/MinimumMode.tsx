@@ -157,7 +157,7 @@ export function MinimumMode({
               aria-label={`${c.name} 真偽`}
               className={`w-12 shrink-0 rounded-md border px-2 py-1 text-center text-xs font-bold tabular-nums ${truthCls}`}
             >
-              {none ? "未使用" : truth === "shin" ? "真" : "偽"}
+              {none ? "—" : truth === "shin" ? "真" : "偽"}
             </button>
 
             {/* 行動テキスト */}
