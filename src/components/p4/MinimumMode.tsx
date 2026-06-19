@@ -1,5 +1,5 @@
 import { Zap, Snowflake } from "lucide-react";
-import { accel, raiMizuAction, tsunamiHonooAction, fumuText } from "@/p4/logic";
+import { accel, raiMizuAction, tsunamiHonooAction, fumuText, juso } from "@/p4/logic";
 import { DEBUFF_ICON } from "@/p4/icons";
 import type { Choice } from "@/p4/types";
 
@@ -14,16 +14,37 @@ export type MinState = Record<string, MinVal>;
 /** 排他ペア（雷=フォークライトニング ↔ 水=水圧縮）。 */
 const PAIR: Record<string, string> = { rai: "mizu", mizu: "rai" };
 
-/** 既定値: 真偽は真。排他ペアは雷を使用・水を未使用。早/遅は炎=早/つなみ=遅、他は早。 */
+/** 既定値: 真偽は真。排他ペアは雷を使用・水を未使用。早/遅の既定は早。 */
 export const INITIAL_MIN: MinState = {
-  accel: { truth: "shin", when: "haya" },
-  rai: { truth: "shin", when: "haya" },
   mizu: { truth: "none", when: "haya" },
-  honoo: { truth: "shin", when: "haya" },
-  tsunami: { truth: "shin", when: "oso" },
+  rai: { truth: "shin", when: "haya" },
+  accel: { truth: "shin", when: "haya" },
+  juso: { truth: "shin", when: "haya" },
+  honoo: { truth: "shin", when: "" },
+  tsunami: { truth: "shin", when: "" },
   thunda: { truth: "shin", when: "" },
   blizza: { truth: "shin", when: "" },
 };
+
+/**
+ * 処理順ソート用のフェーズ値（小さいほど先）。早/遅で位置が変わる列は when を反映。
+ * ②水雷/加速度（早）→③叫び早→④ほのお→⑤水雷/加速度（遅）→⑥叫び遅→⑦つなみ。
+ * サンダガ/ブリザガは一番下固定。
+ */
+function phaseOf(id: string, when: string): number {
+  const oso = when === "oso";
+  switch (id) {
+    case "mizu": return oso ? 5.0 : 1.0;
+    case "rai": return oso ? 5.1 : 1.1;
+    case "accel": return oso ? 5.2 : 1.2;
+    case "juso": return oso ? 6.0 : 2.0;
+    case "honoo": return 4.0;
+    case "tsunami": return 7.0;
+    case "thunda": return 100;
+    case "blizza": return 101;
+    default: return 50;
+  }
+}
 
 type Col = {
   id: string;
@@ -34,16 +55,16 @@ type Col = {
   act: (t: Choice) => string | null;
 };
 
-// 処理順（タイムライン）: ②水属性圧縮→フォークライトニング→加速度 ③サンダガ
-// ④混沌早=ほのお ⑤ブリザガ ⑦混沌遅=つなみ。早/遅トグルは可変な 水/雷/加速度 のみ。
+// 早/遅トグルは処理位置が変わる 水/雷/加速度/叫び のみ。表示順は phaseOf で処理順に動的ソート。
 const COLS: Col[] = [
   { id: "mizu", name: "水圧縮", img: DEBUFF_ICON.mizu, when: true, act: (t) => raiMizuAction("mizu", t) },
   { id: "rai", name: "フォークライトニング", img: DEBUFF_ICON.rai, when: true, act: (t) => raiMizuAction("rai", t) },
   { id: "accel", name: "加速度", img: DEBUFF_ICON.accel, when: true, act: (t) => accel(t) },
-  { id: "thunda", name: "サンダガ", lucide: "zap", when: false, act: (t) => fumuText(t) },
+  { id: "juso", name: "叫び（呪詛）", img: DEBUFF_ICON.juso, when: true, act: (t) => juso(t) },
   { id: "honoo", name: "ほのお", img: DEBUFF_ICON.honoo, when: false, act: (t) => tsunamiHonooAction("honoo", t) },
-  { id: "blizza", name: "ブリザガ", lucide: "snow", when: false, act: (t) => fumuText(t) },
   { id: "tsunami", name: "つなみ", img: DEBUFF_ICON.tsunami, when: false, act: (t) => tsunamiHonooAction("tsunami", t) },
+  { id: "thunda", name: "サンダガ", lucide: "zap", when: false, act: (t) => fumuText(t) },
+  { id: "blizza", name: "ブリザガ", lucide: "snow", when: false, act: (t) => fumuText(t) },
 ];
 
 /** 早/遅のトグルスイッチ（左=早 / 右=遅）。 */
@@ -91,9 +112,16 @@ export function MinimumMode({
     set(id, { truth: truth === "shin" ? "gi" : "shin" });
   };
 
+  // 処理順にソート（早/遅で水雷/加速度/叫びの位置が入れ替わる。サンダガ/ブリザガは最下部固定）。
+  const sorted = [...COLS].sort((a, b) => {
+    const wa = (value[a.id] ?? INITIAL_MIN[a.id])?.when ?? "haya";
+    const wb = (value[b.id] ?? INITIAL_MIN[b.id])?.when ?? "haya";
+    return phaseOf(a.id, wa) - phaseOf(b.id, wb);
+  });
+
   return (
     <div className="flex flex-col gap-1.5">
-      {COLS.map((c) => {
+      {sorted.map((c) => {
         const v = value[c.id] ?? INITIAL_MIN[c.id] ?? { truth: "shin", when: "haya" };
         const truth = v.truth;
         const none = truth === "none";
