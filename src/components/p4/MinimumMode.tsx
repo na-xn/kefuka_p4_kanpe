@@ -1,5 +1,5 @@
 import { Zap, Snowflake } from "lucide-react";
-import { accel, raiMizuAction, tsunamiHonooAction } from "@/p4/logic";
+import { accel, raiMizuAction, tsunamiHonooAction, fumuText } from "@/p4/logic";
 import { DEBUFF_ICON } from "@/p4/icons";
 import type { Choice } from "@/p4/types";
 
@@ -40,8 +40,8 @@ const COLS: Col[] = [
   { id: "mizu", name: "水圧縮", img: DEBUFF_ICON.mizu, when: true, act: (t) => raiMizuAction("mizu", t) },
   { id: "honoo", name: "ほのお", img: DEBUFF_ICON.honoo, when: true, act: (t) => tsunamiHonooAction("honoo", t) },
   { id: "tsunami", name: "つなみ", img: DEBUFF_ICON.tsunami, when: true, act: (t) => tsunamiHonooAction("tsunami", t) },
-  { id: "thunda", name: "サンダガ", lucide: "zap", when: false, act: (t) => (t ? (t === "shin" ? "真" : "偽") : null) },
-  { id: "blizza", name: "ブリザガ", lucide: "snow", when: false, act: (t) => (t ? (t === "shin" ? "真" : "偽") : null) },
+  { id: "thunda", name: "サンダガ", lucide: "zap", when: false, act: (t) => fumuText(t) },
+  { id: "blizza", name: "ブリザガ", lucide: "snow", when: false, act: (t) => fumuText(t) },
 ];
 
 /** 早/遅のトグルスイッチ（左=早 / 右=遅）。 */
@@ -91,9 +91,6 @@ export function MinimumMode({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <p className="px-0.5 text-[10px] text-muted-foreground">
-        カラム名クリックで真偽を反転。早/遅はトグル。雷/水は排他（未使用をタップで切替）。（テスト機能）
-      </p>
       {COLS.map((c) => {
         const v = value[c.id] ?? INITIAL_MIN[c.id] ?? { truth: "shin", when: "haya" };
         const truth = v.truth;
@@ -107,11 +104,13 @@ export function MinimumMode({
             : "bg-card text-muted-foreground opacity-50";
         return (
           <div key={c.id} className="flex items-center gap-2 rounded-md border bg-card/40 px-2 py-1.5">
-            {/* カラム名（クリックで真偽反転 / 排他切替） */}
+            {/* デバフアイコン＋真偽（クリックで真偽反転 / 排他切替）。名前はツールチップ。 */}
             <button
               type="button"
               onClick={() => onName(c.id, truth)}
-              className={`flex min-w-0 flex-1 items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-bold ${truthCls}`}
+              title={c.name}
+              aria-label={c.name}
+              className={`flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-bold ${truthCls}`}
             >
               {c.img ? (
                 <img src={c.img} alt="" className="h-5 w-auto shrink-0 rounded-[2px]" draggable={false} />
@@ -120,23 +119,22 @@ export function MinimumMode({
               ) : (
                 <Snowflake className="size-4 shrink-0" />
               )}
-              <span className="truncate">{c.name}</span>
-              <span className="ml-auto shrink-0 tabular-nums">
+              <span className="tabular-nums">
                 {none ? "未使用" : truth === "shin" ? "真" : "偽"}
               </span>
             </button>
 
-            {/* 早/遅トグル（該当列のみ。未使用列は無効） */}
+            {/* 行動テキスト */}
+            <span className="min-w-0 flex-1 truncate text-xs font-bold text-foreground">
+              {none ? "—" : action ?? "—"}
+            </span>
+
+            {/* 早/遅トグル（一番右。該当列のみ、未使用列は無効） */}
             {c.when && !none ? (
               <EarlyLate value={v.when} onChange={(w) => set(c.id, { when: w })} />
             ) : (
               <span className="w-14 shrink-0" />
             )}
-
-            {/* 行動テキスト */}
-            <span className="w-20 shrink-0 truncate text-right text-[11px] font-bold text-foreground">
-              {none ? "—" : action ?? "—"}
-            </span>
           </div>
         );
       })}

@@ -867,7 +867,9 @@ export default function App() {
           {...dragProps}
           className="flex h-8 shrink-0 items-center justify-between gap-2 border-b px-2"
         >
-          {phase === "process" && !minMode ? (
+          {minMode ? (
+            <span {...dragProps} className="min-w-0 flex-1 select-none" />
+          ) : phase === "process" ? (
             <Button
               variant="secondary"
               size="xs"
@@ -892,10 +894,16 @@ export default function App() {
             </span>
           )}
           <div className="flex items-center gap-1">
-            <Button variant="destructive" size="xs" onClick={resetAll}>
-              <RotateCcw />
-              ALLリセット
-            </Button>
+            {minMode ? (
+              <Button variant="destructive" size="icon-xs" onClick={resetAll} aria-label="リセット" title="リセット">
+                <RotateCcw />
+              </Button>
+            ) : (
+              <Button variant="destructive" size="xs" onClick={resetAll}>
+                <RotateCcw />
+                ALLリセット
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="icon-xs"
@@ -914,7 +922,7 @@ export default function App() {
             >
               <Settings />
             </Button>
-            {IS_TAURI && (
+            {IS_TAURI && !minMode && (
               <Button variant="ghost" size="icon-xs" onClick={closeWindow} aria-label="閉じる">
                 <X />
               </Button>
