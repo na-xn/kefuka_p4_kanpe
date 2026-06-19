@@ -166,10 +166,15 @@ export function MinimumMode({
               {none ? "—" : truth === "shin" ? "真" : "偽"}
             </button>
 
-            {/* 行動テキスト */}
-            <span className="min-w-0 flex-1 truncate text-xs font-bold text-foreground">
+            {/* 行動テキスト（クリックでも真偽反転 / 排他切替） */}
+            <button
+              type="button"
+              onClick={() => onName(c.id, truth)}
+              aria-label={`${c.name} 真偽`}
+              className="min-w-0 flex-1 truncate text-left text-xs font-bold text-foreground"
+            >
               {none ? "—" : action ?? "—"}
-            </span>
+            </button>
 
             {/* 早/遅トグル（一番右。該当列のみ、未使用列は無効） */}
             {c.when && !none ? (
