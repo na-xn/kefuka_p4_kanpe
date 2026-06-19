@@ -14,15 +14,14 @@ export type MinState = Record<string, MinVal>;
 /** 排他ペア（雷=フォークライトニング ↔ 水=水圧縮）。 */
 const PAIR: Record<string, string> = { rai: "mizu", mizu: "rai" };
 
-/** 真偽連動ペア（加速度 ↔ 叫び＝同じ なし担当GC 由来で真偽が共通）。 */
-const LINK: Record<string, string> = { accel: "juso", juso: "accel" };
 
 /** 既定値: 真偽は真。排他ペアは雷を使用・水を未使用。早/遅の既定は早。 */
 export const INITIAL_MIN: MinState = {
   mizu: { truth: "none", when: "haya" },
   rai: { truth: "shin", when: "haya" },
   accel: { truth: "shin", when: "haya" },
-  juso: { truth: "shin", when: "haya" },
+  juso_haya: { truth: "shin", when: "" },
+  juso_oso: { truth: "shin", when: "" },
   honoo: { truth: "shin", when: "" },
   tsunami: { truth: "shin", when: "" },
   thunda: { truth: "shin", when: "" },
@@ -40,7 +39,8 @@ function phaseOf(id: string, when: string): number {
     case "mizu": return oso ? 5.0 : 1.0;
     case "rai": return oso ? 5.1 : 1.1;
     case "accel": return oso ? 5.2 : 1.2;
-    case "juso": return oso ? 6.0 : 2.0;
+    case "juso_haya": return 2.0;
+    case "juso_oso": return 6.0;
     case "honoo": return 4.0;
     case "tsunami": return 7.0;
     case "thunda": return 100;
@@ -63,7 +63,8 @@ const COLS: Col[] = [
   { id: "mizu", name: "水圧縮", img: DEBUFF_ICON.mizu, when: true, act: (t) => raiMizuAction("mizu", t) },
   { id: "rai", name: "フォークライトニング", img: DEBUFF_ICON.rai, when: true, act: (t) => raiMizuAction("rai", t) },
   { id: "accel", name: "加速度", img: DEBUFF_ICON.accel, when: true, act: (t) => accel(t) },
-  { id: "juso", name: "叫び（呪詛）", img: DEBUFF_ICON.juso, when: true, act: (t) => juso(t) },
+  { id: "juso_haya", name: "叫び（早）", img: DEBUFF_ICON.juso, when: false, act: (t) => juso(t) },
+  { id: "juso_oso", name: "叫び（遅）", img: DEBUFF_ICON.juso, when: false, act: (t) => juso(t) },
   { id: "honoo", name: "ほのお", img: DEBUFF_ICON.honoo, when: false, act: (t) => tsunamiHonooAction("honoo", t) },
   { id: "tsunami", name: "つなみ", img: DEBUFF_ICON.tsunami, when: false, act: (t) => tsunamiHonooAction("tsunami", t) },
   { id: "thunda", name: "サンダガ", lucide: "zap", when: false, act: (t) => fumuText(t) },
@@ -115,7 +116,11 @@ export function MinimumMode({
     }
     const next = truth === "shin" ? "gi" : "shin";
     set(id, { truth: next });
-    if (LINK[id]) set(LINK[id], { truth: next });
+    // 加速度 ↔ 叫び（加速度と同じ早/遅側＝同じ なし担当GC）を連動。
+    const accelWhen = (value["accel"] ?? INITIAL_MIN["accel"]).when;
+    const jusoId = accelWhen === "oso" ? "juso_oso" : "juso_haya";
+    if (id === "accel") set(jusoId, { truth: next });
+    else if (id === jusoId) set("accel", { truth: next });
   };
 
   // 処理順にソート（早/遅で水雷/加速度/叫びの位置が入れ替わる。サンダガ/ブリザガは最下部固定）。
