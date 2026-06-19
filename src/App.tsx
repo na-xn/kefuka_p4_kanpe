@@ -867,9 +867,7 @@ export default function App() {
           {...dragProps}
           className="flex h-8 shrink-0 items-center justify-between gap-2 border-b px-2"
         >
-          {minMode ? (
-            <span {...dragProps} className="min-w-0 flex-1 select-none" />
-          ) : phase === "process" ? (
+          {!minMode && phase === "process" ? (
             <Button
               variant="secondary"
               size="xs"

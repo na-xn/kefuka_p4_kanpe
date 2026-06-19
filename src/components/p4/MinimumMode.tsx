@@ -131,27 +131,33 @@ export function MinimumMode({
             ? "bg-blue-600 text-white border-blue-600"
             : truth === "gi"
             ? "bg-red-600 text-white border-red-600"
-            : "bg-card text-muted-foreground opacity-50";
+            : "bg-card text-muted-foreground";
         return (
-          <div key={c.id} className="flex items-center gap-2 rounded-md border bg-card/40 px-2 py-1.5">
-            {/* デバフアイコン＋真偽（クリックで真偽反転 / 排他切替）。名前はツールチップ。 */}
+          <div
+            key={c.id}
+            className={`flex items-center gap-2 rounded-md border bg-card/40 px-2 py-1.5 ${
+              none ? "opacity-55" : ""
+            }`}
+          >
+            {/* デバフアイコン（中立背景・名前はツールチップ） */}
+            <span title={c.name} className="flex w-6 shrink-0 justify-center">
+              {c.img ? (
+                <img src={c.img} alt="" className="h-5 w-auto rounded-[2px]" draggable={false} />
+              ) : c.lucide === "zap" ? (
+                <Zap className="size-5" />
+              ) : (
+                <Snowflake className="size-5" />
+              )}
+            </span>
+
+            {/* 真偽トグル（クリックで真偽反転 / 排他切替） */}
             <button
               type="button"
               onClick={() => onName(c.id, truth)}
-              title={c.name}
-              aria-label={c.name}
-              className={`flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-bold ${truthCls}`}
+              aria-label={`${c.name} 真偽`}
+              className={`w-12 shrink-0 rounded-md border px-2 py-1 text-center text-xs font-bold tabular-nums ${truthCls}`}
             >
-              {c.img ? (
-                <img src={c.img} alt="" className="h-5 w-auto shrink-0 rounded-[2px]" draggable={false} />
-              ) : c.lucide === "zap" ? (
-                <Zap className="size-4 shrink-0" />
-              ) : (
-                <Snowflake className="size-4 shrink-0" />
-              )}
-              <span className="tabular-nums">
-                {none ? "未使用" : truth === "shin" ? "真" : "偽"}
-              </span>
+              {none ? "未使用" : truth === "shin" ? "真" : "偽"}
             </button>
 
             {/* 行動テキスト */}
