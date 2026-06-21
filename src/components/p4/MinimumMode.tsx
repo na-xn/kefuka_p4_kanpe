@@ -55,8 +55,8 @@ function EarlyLate({ value, onChange }: { value: string; onChange: (v: string) =
   );
 }
 
-/** セットアップ行（ラベル＋トグルの小行）。 */
-function SetupRow({
+/** セットアップのセル（ラベル上・トグル下）。2×2グリッド用。 */
+function SetupCell({
   label,
   children,
 }: {
@@ -64,10 +64,8 @@ function SetupRow({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between gap-2">
-      <span className="min-w-0 shrink-0 text-[11px] font-semibold text-muted-foreground">
-        {label}
-      </span>
+    <div className="flex flex-col gap-1 rounded-md border bg-card/40 px-2 py-1.5">
+      <span className="text-[10px] font-semibold text-muted-foreground">{label}</span>
       {children}
     </div>
   );
@@ -256,9 +254,9 @@ export function MinimumMode({
 
   return (
     <div className="flex flex-col gap-2">
-      {/* 1) セットアップ（個別入力・役割/タイミング） */}
-      <div className="flex flex-col gap-1.5 rounded-lg border bg-card/40 p-2">
-        <SetupRow label="水雷">
+      {/* 1) セットアップ（個別入力・役割/タイミング）2×2グリッド */}
+      <div className="grid grid-cols-2 gap-1.5">
+        <SetupCell label="水雷">
           <SelectToggle
             value={waterType}
             onChange={(x) => set("waterType", x)}
@@ -267,8 +265,8 @@ export function MinimumMode({
               { value: "rai", label: "雷", icon: DEBUFF_ICON.rai },
             ]}
           />
-        </SetupRow>
-        <SetupRow label="水雷GC">
+        </SetupCell>
+        <SetupCell label="水雷GC">
           <SelectToggle
             value={waterGC}
             onChange={(x) => set("waterGC", x)}
@@ -277,11 +275,11 @@ export function MinimumMode({
               { value: "2", label: "GC2" },
             ]}
           />
-        </SetupRow>
-        <SetupRow label="水雷早遅">
+        </SetupCell>
+        <SetupCell label="水雷早遅">
           <EarlyLate value={waterWhen} onChange={(x) => set("waterWhen", x)} />
-        </SetupRow>
-        <SetupRow label="加速度系">
+        </SetupCell>
+        <SetupCell label="加速度系">
           <SelectToggle
             value={shisen}
             onChange={(x) => set("shisen", x)}
@@ -290,7 +288,7 @@ export function MinimumMode({
               { value: "no", label: "無職", icon: DEBUFF_ICON.accel },
             ]}
           />
-        </SetupRow>
+        </SetupCell>
       </div>
 
       {/* 2) 真偽（4トグル・タップで真↔偽） */}
