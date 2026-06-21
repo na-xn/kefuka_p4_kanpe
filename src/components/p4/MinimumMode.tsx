@@ -193,7 +193,19 @@ export function MinimumMode({
           {none ? "—" : action ?? "—"}
         </button>
         {c.when && !none ? (
-          <EarlyLate value={v.when} onChange={(w) => set(c.id, { when: w })} />
+          <EarlyLate
+            value={v.when}
+            onChange={(w) => {
+              // 加速度の早/遅を変えたら、連動先の叫び（早/遅）の真偽に同期し直す。
+              if (c.id === "accel") {
+                const jid = w === "oso" ? "juso_oso" : "juso_haya";
+                const jt = (value[jid] ?? INITIAL_MIN[jid]).truth;
+                set("accel", { when: w, truth: jt });
+              } else {
+                set(c.id, { when: w });
+              }
+            }}
+          />
         ) : (
           <span className="w-14 shrink-0" />
         )}
