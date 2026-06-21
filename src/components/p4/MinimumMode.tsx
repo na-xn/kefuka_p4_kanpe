@@ -211,8 +211,11 @@ export function MinimumMode({
   // 自分の水雷アクション（散開/頭割り）。
   const waterText = raiMizuAction(waterType, gcTruth(waterGC));
   const waterIcon = waterType === "rai" ? DEBUFF_ICON.rai : DEBUFF_ICON.mizu;
-  // 自分の加速度アクション（止まる/動く）。
-  const accelText = accel(gcTruth(accelGC));
+  // 自分の加速度アクション。水雷がない回なので頭割り/散会の頭数にも入る＝加速弾とセット表記。
+  // 止まる→頭割り・止まる / 動く→散会・動く。
+  const accelMove = accel(gcTruth(accelGC)); // 止まる / 動く / null
+  const accelText =
+    accelMove === "止まる" ? "頭割り・止まる" : accelMove === "動く" ? "散会・動く" : null;
 
   // --- 導出アイテムを処理順 phase / グループ group で組み立てる ---
   const items: Item[] = [];
