@@ -139,7 +139,26 @@ function GcInputCard({
 
   const isNashi = role === "nashi"; // 加速度担当
   const isRaiMizu = role === "rai" || role === "mizu"; // 水雷持ち
-  const roleDecided = isNashi || isRaiMizu; // 担当が決まったか
+
+  // 加速度の早/遅は法則で確定するので入力不要・呪詛有無から自動導出。
+  // 呪詛有(視線): GC1=早 / GC2=遅。呪詛無(無職): GC1=遅 / GC2=早。
+  useEffect(() => {
+    if (!isNashi) return;
+    const want = isGc2
+      ? jusoVal === "yes"
+        ? "oso"
+        : jusoVal === "no"
+        ? "haya"
+        : ""
+      : jusoVal === "yes"
+      ? "haya"
+      : jusoVal === "no"
+      ? "oso"
+      : "";
+    if (want && accelVal !== want) set(accelKey, want);
+    if (!want && accelVal) set(accelKey, "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isNashi, isGc2, jusoVal, accelVal]);
 
   // 担当トグル: 表示value（雷/水/加速度）。
   const roleValue = role === "rai" ? "rai" : role === "mizu" ? "mizu" : role === "nashi" ? "accel" : "";
@@ -159,10 +178,6 @@ function GcInputCard({
     isGc2 && gc2Side === "raimizu" ? [RAI_OPT, MIZU_OPT] : [RAI_OPT, MIZU_OPT, ACCEL_OPT];
   // GC2の加速度固定側は担当トグルを出さず静的ラベル表示
   const showRoleToggle = !(isGc2 && gc2Side === "nashi");
-
-  // 早/遅: 担当=雷水→gcN_when / 担当=加速度→gcN_accel
-  const earlyKey = isNashi ? accelKey : whenKey;
-  const earlyVal = isNashi ? accelVal : whenVal;
 
   return (
     <>
@@ -192,14 +207,14 @@ function GcInputCard({
         </div>
       )}
 
-      {/* 処理（早/遅）: 担当が決まったら常に表示。雷水→when / 加速度→accel */}
-      {roleDecided && (
+      {/* 水雷の処理（早/遅）: 雷/水のときだけ入力（観測）。加速度は呪詛有無から自動。 */}
+      {isRaiMizu && (
         <div className="rounded-md border bg-card px-2 py-1.5">
           <div className="flex items-center justify-between gap-2">
-            <span className="min-w-0 flex-1 text-xs font-semibold">処理（早/遅）</span>
+            <span className="min-w-0 flex-1 text-xs font-semibold">水雷の処理（早/遅）</span>
             <SelectToggle
-              value={earlyVal}
-              onChange={(v) => set(earlyKey, v)}
+              value={whenVal}
+              onChange={(v) => set(whenKey, v)}
               options={WHEN_OPTIONS}
               active={activeFieldKey === `gc${suffix}_early`}
             />

@@ -8,7 +8,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { EventCard } from "@/components/p4/EventCard";
 import { ProcessFlow } from "@/components/p4/ProcessFlow";
 import { MinimumMode, INITIAL_MIN } from "@/components/p4/MinimumMode";
-import type { MinState, MinVal } from "@/components/p4/MinimumMode";
+import type { MinState } from "@/components/p4/MinimumMode";
 import { INPUT_EVENTS } from "@/p4/events";
 import type { State, Phase, MenuState } from "@/p4/types";
 import {
@@ -124,7 +124,7 @@ function eventMissing(id: string, get: (k: string) => string): string[] {
     need(`gc${n}_role`, `GC${n} 真偽`);
     const r = get(`gc${n}_role__role`);
     if (r === "nashi") {
-      need(`gc${n}_accel`, `GC${n} 加速度（早/遅）`);
+      // 加速度の早/遅は呪詛有無から自動導出するため入力不要。
       need(`gc${n}_juso`, `GC${n} 呪詛（有/無）`);
     }
     if (r === "rai" || r === "mizu") {
@@ -155,11 +155,8 @@ export default function App() {
   // ミニマムモード（テスト機能・通常モードと独立）
   const [minMode, setMinMode] = useState(false);
   const [minState, setMinState] = useState<MinState>(INITIAL_MIN);
-  const setMin = (id: string, patch: Partial<MinVal>) =>
-    setMinState((s) => {
-      const prev: MinVal = s[id] ?? { truth: "", when: "haya" };
-      return { ...s, [id]: { ...prev, ...patch } };
-    });
+  const setMin = (id: string, value: string) =>
+    setMinState((s) => ({ ...s, [id]: value }));
   const [appVersion, setAppVersion] = useState("");
   const [update, setUpdate] = useState<UpdateState>({ s: "idle" });
   // 読み上げ（TTS）
@@ -664,11 +661,11 @@ export default function App() {
       }
       const isNashi = role === "nashi";
       const isRaiMizu = role === "rai" || role === "mizu";
-      if (isNashi || isRaiMizu) {
-        const earlyKey = isNashi ? `gc${n}_accel` : `gc${n}_when`;
+      // 早/遅は水雷(雷/水)のときだけ入力。加速度は呪詛有無から自動なので順序に含めない。
+      if (isRaiMizu) {
         rest.push(
-          mk(`gc${n}_early`, ["haya", "oso"], g(earlyKey) !== "", (idx) =>
-            set(earlyKey, ["haya", "oso"][idx])
+          mk(`gc${n}_early`, ["haya", "oso"], g(`gc${n}_when`) !== "", (idx) =>
+            set(`gc${n}_when`, ["haya", "oso"][idx])
           )
         );
       }
