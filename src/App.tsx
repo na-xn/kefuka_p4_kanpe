@@ -920,7 +920,7 @@ export default function App() {
             >
               <Settings />
             </Button>
-            {IS_TAURI && !minMode && (
+            {IS_TAURI && (
               <Button variant="ghost" size="icon-xs" onClick={closeWindow} aria-label="閉じる">
                 <X />
               </Button>
