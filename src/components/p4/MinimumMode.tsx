@@ -1,4 +1,4 @@
-import { Zap, Snowflake } from "lucide-react";
+import { Zap, Snowflake, Swords, Eye, UserX } from "lucide-react";
 import { accel, raiMizuAction, tsunamiHonooAction, juso } from "@/p4/logic";
 import { DEBUFF_ICON } from "@/p4/icons";
 import { SelectToggle } from "@/components/p4/primitives";
@@ -55,6 +55,43 @@ function EarlyLate({ value, onChange }: { value: string; onChange: (v: string) =
   );
 }
 
+/** デバフ画像アイコンの node。 */
+const imgIcon = (src: string) => (
+  <img src={src} alt="" className="h-5 w-auto rounded-[2px]" draggable={false} />
+);
+
+/** Lucide アイコン付きの2択トグル（加速度系の視線/無職など）。 */
+function IconToggle({
+  value,
+  onChange,
+  options,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string; node: React.ReactNode }[];
+}) {
+  return (
+    <div className="flex shrink-0 gap-0.5">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          onClick={() => onChange(o.value)}
+          aria-label={o.label}
+          className={`flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-bold ${
+            value === o.value
+              ? "border-primary bg-primary text-primary-foreground"
+              : "opacity-40"
+          }`}
+        >
+          {o.node}
+          <span>{o.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /** セットアップのセル（ラベル上・トグル下）。2×2グリッド用。 */
 function SetupCell({
   label,
@@ -76,14 +113,12 @@ function TruthChip({
   label,
   value,
   onToggle,
-  icon,
-  lucide,
+  iconNode,
 }: {
   label: string;
   value: string;
   onToggle: () => void;
-  icon?: string;
-  lucide?: "zap" | "snow";
+  iconNode?: React.ReactNode;
 }) {
   const shin = value === "shin";
   return (
@@ -93,15 +128,7 @@ function TruthChip({
       aria-label={`${label} 真偽`}
       className="flex items-center gap-1.5 rounded-md border bg-card/40 px-2 py-1.5"
     >
-      <span className="flex w-6 shrink-0 justify-center">
-        {icon ? (
-          <img src={icon} alt="" className="h-5 w-auto rounded-[2px]" draggable={false} />
-        ) : lucide === "zap" ? (
-          <Zap className="size-5" />
-        ) : lucide === "snow" ? (
-          <Snowflake className="size-5" />
-        ) : null}
-      </span>
+      <span className="flex w-6 shrink-0 justify-center">{iconNode}</span>
       <span className="min-w-0 flex-1 truncate text-left text-[11px] font-bold text-foreground">
         {label}
       </span>
@@ -254,7 +281,17 @@ export function MinimumMode({
 
   return (
     <div className="flex flex-col gap-2">
-      {/* 1) セットアップ（個別入力・役割/タイミング）2×2グリッド */}
+      {/* 1) 真偽判定（4トグル・タップで真↔偽） */}
+      <div className="grid grid-cols-2 gap-1.5">
+        <TruthChip label="GC1" value={gc1} onToggle={() => toggleTruth("gc1")} iconNode={<Swords className="size-5" />} />
+        <TruthChip label="GC2" value={gc2} onToggle={() => toggleTruth("gc2")} iconNode={<Swords className="size-5" />} />
+        <TruthChip label="ほのお" value={honoo} onToggle={() => toggleTruth("honoo")} iconNode={imgIcon(DEBUFF_ICON.honoo)} />
+        <TruthChip label="つなみ" value={tsunami} onToggle={() => toggleTruth("tsunami")} iconNode={imgIcon(DEBUFF_ICON.tsunami)} />
+      </div>
+
+      <div className="border-t" />
+
+      {/* 2) 役割判定（個別入力・役割/タイミング）2×2グリッド */}
       <div className="grid grid-cols-2 gap-1.5">
         <SetupCell label="水雷">
           <SelectToggle
@@ -280,24 +317,18 @@ export function MinimumMode({
           <EarlyLate value={waterWhen} onChange={(x) => set("waterWhen", x)} />
         </SetupCell>
         <SetupCell label="加速度系">
-          <SelectToggle
+          <IconToggle
             value={shisen}
             onChange={(x) => set("shisen", x)}
             options={[
-              { value: "yes", label: "視線", icon: DEBUFF_ICON.juso },
-              { value: "no", label: "無職", icon: DEBUFF_ICON.accel },
+              { value: "yes", label: "視線", node: <Eye className="size-4" /> },
+              { value: "no", label: "無職", node: <UserX className="size-4" /> },
             ]}
           />
         </SetupCell>
       </div>
 
-      {/* 2) 真偽（4トグル・タップで真↔偽） */}
-      <div className="grid grid-cols-2 gap-1.5">
-        <TruthChip label="GC1" value={gc1} onToggle={() => toggleTruth("gc1")} />
-        <TruthChip label="GC2" value={gc2} onToggle={() => toggleTruth("gc2")} />
-        <TruthChip label="ほのお" value={honoo} onToggle={() => toggleTruth("honoo")} icon={DEBUFF_ICON.honoo} />
-        <TruthChip label="つなみ" value={tsunami} onToggle={() => toggleTruth("tsunami")} icon={DEBUFF_ICON.tsunami} />
-      </div>
+      <div className="border-t" />
 
       {/* 3) 導出タイムライン（処理順ソート＋ブロック） */}
       <div className="flex flex-col gap-1.5">
@@ -320,8 +351,8 @@ export function MinimumMode({
 
       {/* 4) マジックアウト記憶（最下部・ブロック） */}
       <div className="flex flex-col gap-1.5 rounded-lg border-2 border-primary/40 bg-primary/5 p-1.5">
-        <TruthChip label="サンダガ" value={v("thunda")} onToggle={() => toggleTruth("thunda")} lucide="zap" />
-        <TruthChip label="ブリザガ" value={v("blizza")} onToggle={() => toggleTruth("blizza")} lucide="snow" />
+        <TruthChip label="サンダガ" value={v("thunda")} onToggle={() => toggleTruth("thunda")} iconNode={<Zap className="size-5" />} />
+        <TruthChip label="ブリザガ" value={v("blizza")} onToggle={() => toggleTruth("blizza")} iconNode={<Snowflake className="size-5" />} />
       </div>
     </div>
   );
