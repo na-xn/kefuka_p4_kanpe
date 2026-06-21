@@ -152,6 +152,8 @@ type Item = {
   group: number;
   icon?: string;
   lucide?: "zap" | "snow";
+  /** 2つ目のデバフアイコン（水雷＋加速度を1行に統合したとき用） */
+  extraIcon?: string;
   /** 行動テキスト（null/空なら「—」） */
   text: string | null;
 };
@@ -160,13 +162,16 @@ type Item = {
 function TimelineRow({ item }: { item: Item }) {
   return (
     <div className="flex items-center gap-2 rounded-md border bg-card/40 px-2 py-1.5">
-      <span className="flex w-6 shrink-0 justify-center">
+      <span className="flex min-w-6 shrink-0 items-center justify-center gap-0.5">
         {item.icon ? (
           <img src={item.icon} alt="" className="h-5 w-auto rounded-[2px]" draggable={false} />
         ) : item.lucide === "zap" ? (
           <Zap className="size-5" />
         ) : (
           <Snowflake className="size-5" />
+        )}
+        {item.extraIcon && (
+          <img src={item.extraIcon} alt="" className="h-5 w-auto rounded-[2px]" draggable={false} />
         )}
       </span>
       <span className="min-w-0 flex-1 truncate text-left text-xs font-bold text-foreground">
@@ -220,22 +225,37 @@ export function MinimumMode({
   // --- 導出アイテムを処理順 phase / グループ group で組み立てる ---
   const items: Item[] = [];
 
-  // ② 自分の水雷（早/遅は waterWhen）。group: 早=1 / 遅=4。
-  items.push({
-    key: "water",
-    phase: waterWhen === "oso" ? 4.0 : 1.0,
-    group: waterWhen === "oso" ? 4 : 1,
-    icon: waterIcon,
-    text: waterText,
-  });
-  // ② 自分の加速度（早/遅は accelWhen）。group: 早=1 / 遅=4。
-  items.push({
-    key: "accel",
-    phase: accelWhen === "oso" ? 4.1 : 1.1,
-    group: accelWhen === "oso" ? 4 : 1,
-    icon: DEBUFF_ICON.accel,
-    text: accelText,
-  });
+  // 自分の水雷と加速度が同じタイミング(早/遅)で、どちらも頭割りなら1行に統合
+  // （頭割り＋頭割り・止まる の二重表記をやめ、アイコン2つ＋「頭割り・止まる」に）。
+  const sameBlock = (waterWhen === "oso") === (accelWhen === "oso");
+  const mergeHead = sameBlock && waterText === "頭割り" && accelMove === "止まる";
+  if (mergeHead) {
+    items.push({
+      key: "water_accel",
+      phase: waterWhen === "oso" ? 4.0 : 1.0,
+      group: waterWhen === "oso" ? 4 : 1,
+      icon: waterIcon,
+      extraIcon: DEBUFF_ICON.accel,
+      text: "頭割り・止まる",
+    });
+  } else {
+    // ② 自分の水雷（早/遅は waterWhen）。group: 早=1 / 遅=4。
+    items.push({
+      key: "water",
+      phase: waterWhen === "oso" ? 4.0 : 1.0,
+      group: waterWhen === "oso" ? 4 : 1,
+      icon: waterIcon,
+      text: waterText,
+    });
+    // ② 自分の加速度（早/遅は accelWhen）。group: 早=1 / 遅=4。
+    items.push({
+      key: "accel",
+      phase: accelWhen === "oso" ? 4.1 : 1.1,
+      group: accelWhen === "oso" ? 4 : 1,
+      icon: DEBUFF_ICON.accel,
+      text: accelText,
+    });
+  }
   // ③ 視線（早 = GC1視線）: juso(gc1)。単独行。
   items.push({
     key: "juso_haya",
