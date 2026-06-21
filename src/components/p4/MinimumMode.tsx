@@ -1,4 +1,4 @@
-import { Zap, Snowflake, Swords, UserX } from "lucide-react";
+import { Zap, Snowflake, Swords, UserX, Users } from "lucide-react";
 import { accel, raiMizuAction, tsunamiHonooAction, juso } from "@/p4/logic";
 import { DEBUFF_ICON } from "@/p4/icons";
 import { SelectToggle } from "@/components/p4/primitives";
@@ -151,7 +151,7 @@ type Item = {
   /** ブロック化するグループ（1=早水雷加速度, 4=遅水雷加速度, 100=記憶, それ以外=単独） */
   group: number;
   icon?: string;
-  lucide?: "zap" | "snow";
+  lucide?: "zap" | "snow" | "users";
   /** 2つ目のデバフアイコン（水雷＋加速度を1行に統合したとき用） */
   extraIcon?: string;
   /** 行動テキスト（null/空なら「—」） */
@@ -167,9 +167,11 @@ function TimelineRow({ item }: { item: Item }) {
           <img src={item.icon} alt="" className="h-5 w-auto rounded-[2px]" draggable={false} />
         ) : item.lucide === "zap" ? (
           <Zap className="size-5" />
-        ) : (
+        ) : item.lucide === "snow" ? (
           <Snowflake className="size-5" />
-        )}
+        ) : item.lucide === "users" ? (
+          <Users className="size-5" />
+        ) : null}
         {item.extraIcon && (
           <img src={item.extraIcon} alt="" className="h-5 w-auto rounded-[2px]" draggable={false} />
         )}
@@ -238,6 +240,14 @@ export function MinimumMode({
       icon: waterIcon,
       extraIcon: DEBUFF_ICON.accel,
       text: `${head ? "頭割り" : "散会"}・${accelMove}`,
+    });
+    // 自分の水雷も加速度も無い側のGC(逆タイミング)では、頭割りの頭数に入る。
+    items.push({
+      key: "join",
+      phase: waterWhen === "oso" ? 1.0 : 4.0,
+      group: waterWhen === "oso" ? 1 : 4,
+      lucide: "users",
+      text: "頭割り",
     });
   } else {
     // ② 自分の水雷（早/遅は waterWhen）。group: 早=1 / 遅=4。
