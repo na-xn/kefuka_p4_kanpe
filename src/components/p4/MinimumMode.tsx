@@ -119,20 +119,13 @@ export function MinimumMode({
   set: (id: string, patch: Partial<MinVal>) => void;
 }) {
   // カラム名クリック: 排他ペアの未使用列は「使用中（真）」に切替え相方を未使用へ。それ以外は真偽反転。
-  // 加速度と叫び（呪詛）は同じ なし担当GC 由来で真偽が共通なので連動。
   const onName = (id: string, truth: string) => {
     if (PAIR[id] && truth === "none") {
       set(PAIR[id], { truth: "none" });
       set(id, { truth: "shin" });
       return;
     }
-    const next = truth === "shin" ? "gi" : "shin";
-    set(id, { truth: next });
-    // 加速度 ↔ 叫び（加速度と同じ早/遅側＝同じ なし担当GC）を連動。
-    const accelWhen = (value["accel"] ?? INITIAL_MIN["accel"]).when;
-    const jusoId = accelWhen === "oso" ? "juso_oso" : "juso_haya";
-    if (id === "accel") set(jusoId, { truth: next });
-    else if (id === jusoId) set("accel", { truth: next });
+    set(id, { truth: truth === "shin" ? "gi" : "shin" });
   };
 
   const whenOf = (id: string) => (value[id] ?? INITIAL_MIN[id])?.when ?? "haya";
@@ -193,19 +186,7 @@ export function MinimumMode({
           {none ? "—" : action ?? "—"}
         </button>
         {c.when && !none ? (
-          <EarlyLate
-            value={v.when}
-            onChange={(w) => {
-              // 加速度の早/遅を変えたら、連動先の叫び（早/遅）の真偽に同期し直す。
-              if (c.id === "accel") {
-                const jid = w === "oso" ? "juso_oso" : "juso_haya";
-                const jt = (value[jid] ?? INITIAL_MIN[jid]).truth;
-                set("accel", { when: w, truth: jt });
-              } else {
-                set(c.id, { when: w });
-              }
-            }}
-          />
+          <EarlyLate value={v.when} onChange={(w) => set(c.id, { when: w })} />
         ) : (
           <span className="w-14 shrink-0" />
         )}
