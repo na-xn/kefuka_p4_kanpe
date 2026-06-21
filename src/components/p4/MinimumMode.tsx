@@ -100,9 +100,9 @@ function TruthChip({
           <img src={icon} alt="" className="h-5 w-auto rounded-[2px]" draggable={false} />
         ) : lucide === "zap" ? (
           <Zap className="size-5" />
-        ) : (
+        ) : lucide === "snow" ? (
           <Snowflake className="size-5" />
-        )}
+        ) : null}
       </span>
       <span className="min-w-0 flex-1 truncate text-left text-[11px] font-bold text-foreground">
         {label}
@@ -295,8 +295,8 @@ export function MinimumMode({
 
       {/* 2) 真偽（4トグル・タップで真↔偽） */}
       <div className="grid grid-cols-2 gap-1.5">
-        <TruthChip label="GC1色" value={gc1} onToggle={() => toggleTruth("gc1")} icon={DEBUFF_ICON.accel} />
-        <TruthChip label="GC2色" value={gc2} onToggle={() => toggleTruth("gc2")} icon={DEBUFF_ICON.accel} />
+        <TruthChip label="GC1" value={gc1} onToggle={() => toggleTruth("gc1")} />
+        <TruthChip label="GC2" value={gc2} onToggle={() => toggleTruth("gc2")} />
         <TruthChip label="ほのお" value={honoo} onToggle={() => toggleTruth("honoo")} icon={DEBUFF_ICON.honoo} />
         <TruthChip label="つなみ" value={tsunami} onToggle={() => toggleTruth("tsunami")} icon={DEBUFF_ICON.tsunami} />
       </div>
