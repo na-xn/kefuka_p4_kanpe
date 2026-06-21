@@ -197,8 +197,10 @@ export function MinimumMode({
   return (
     <div className="flex flex-col gap-1.5">
       {groups.map((grp, gi) => {
-        // 1行だけのグループはブロックで囲わずそのまま表示。
-        if (grp.items.length <= 1) return renderRow(grp.items[0]);
+        // 水雷・加速度（早/遅）とマジックアウト記憶は中身が1つでも常にブロックで区切る。
+        // 単独処理の叫び・ほのお・つなみは枠なし。
+        const block = grp.g === 1 || grp.g === 5 || grp.g === 100;
+        if (!block) return renderRow(grp.items[0]);
         return (
           <div
             key={`g${gi}`}
