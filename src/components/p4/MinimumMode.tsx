@@ -225,18 +225,19 @@ export function MinimumMode({
   // --- 導出アイテムを処理順 phase / グループ group で組み立てる ---
   const items: Item[] = [];
 
-  // 自分の水雷と加速度が同じタイミング(早/遅)で、加速度=止まるのとき1行に統合。
-  // 水雷の結果で頭割り/散会を出し分け（頭割り・止まる / 散会・止まる）、アイコン2つ。
+  // 自分の水雷と加速度が同じタイミング(早/遅)なら1行に統合（アイコン2つ）。
+  // 頭割り/散会(水雷)＋止まる/動く(加速度) を合体: 頭割り・止まる / 散会・止まる / 頭割り・動く / 散会・動く。
   const sameBlock = (waterWhen === "oso") === (accelWhen === "oso");
-  const mergeStop = sameBlock && accelMove === "止まる" && !!waterText;
-  if (mergeStop) {
+  const merge = sameBlock && !!waterText && !!accelMove;
+  if (merge) {
+    const head = waterText === "頭割り";
     items.push({
       key: "water_accel",
       phase: waterWhen === "oso" ? 4.0 : 1.0,
       group: waterWhen === "oso" ? 4 : 1,
       icon: waterIcon,
       extraIcon: DEBUFF_ICON.accel,
-      text: waterText === "頭割り" ? "頭割り・止まる" : "散会・止まる",
+      text: `${head ? "頭割り" : "散会"}・${accelMove}`,
     });
   } else {
     // ② 自分の水雷（早/遅は waterWhen）。group: 早=1 / 遅=4。
