@@ -221,8 +221,8 @@ export function MinimumMode({
   // 自分の加速度アクション。水雷がない回なので頭割り/散会の頭数にも入る＝加速弾とセット表記。
   // 止まる→頭割り・止まる / 動く→散会・動く。
   const accelMove = accel(gcTruth(accelGC)); // 止まる / 動く / null
-  const accelText =
-    accelMove === "止まる" ? "頭割り・止まる" : accelMove === "動く" ? "散会・動く" : null;
+  // 加速度側(=自分が水雷を処理しない側)は頭数に入る＝止/動に関係なく必ず頭割り。
+  const accelText = accelMove ? `頭割り・${accelMove}` : null;
 
   // --- 導出アイテムを処理順 phase / グループ group で組み立てる ---
   const items: Item[] = [];
