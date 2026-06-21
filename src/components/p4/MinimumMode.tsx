@@ -1,4 +1,4 @@
-import { Zap, Snowflake, Swords, Eye, UserX } from "lucide-react";
+import { Zap, Snowflake, Swords, UserX } from "lucide-react";
 import { accel, raiMizuAction, tsunamiHonooAction, juso } from "@/p4/logic";
 import { DEBUFF_ICON } from "@/p4/icons";
 import { SelectToggle } from "@/components/p4/primitives";
@@ -47,7 +47,7 @@ function EarlyLate({ value, onChange }: { value: string; onChange: (v: string) =
         {oso ? "遅" : "早"}
       </span>
       <span
-        className={`absolute top-0.5 size-5 rounded-full bg-white shadow transition-all ${
+        className={`absolute top-1/2 size-5 -translate-y-1/2 rounded-full bg-white shadow transition-all ${
           oso ? "right-0.5" : "left-0.5"
         }`}
       />
@@ -324,7 +324,18 @@ export function MinimumMode({
             value={shisen}
             onChange={(x) => set("shisen", x)}
             options={[
-              { value: "yes", label: "視線", node: <Eye className="size-4" /> },
+              {
+                value: "yes",
+                label: "視線",
+                node: (
+                  <img
+                    src={DEBUFF_ICON.juso}
+                    alt=""
+                    className="h-4 w-auto rounded-[2px]"
+                    draggable={false}
+                  />
+                ),
+              },
               { value: "no", label: "無職", node: <UserX className="size-4" /> },
             ]}
           />
