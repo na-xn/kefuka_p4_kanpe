@@ -21,9 +21,6 @@ import {
   END_SEC,
   mechanicResolveSec,
   exdeathZones,
-  roleCardinalPoint,
-  roleCardinalLabel,
-  ZONE_RADIUS,
   type MechanicKey,
   type Point,
   type RequiredAction,
@@ -757,16 +754,9 @@ function draw(
   // 視線はその足元から全方向に発射される。視線担当でなければ中央ボスが源。
   const isGazeSource = toMinState(setup, seat).shisen === "yes";
   const gazeSource: Point = isGazeSource ? { x: pl.x, y: pl.y } : CENTER;
-  // 席のロール（TH/DPS）。頭割り/散開の正解カーディナルハイライトに使う。
-  const playerRole = setup.players.find((p) => p.seat === seat)?.role ?? "TH";
 
-  // ターゲット予告は2パスで描く。位置ハイライト（頭割り/散開の正解カーディナル）は
-  // 必ず「後から（最後に）」描き、エクスデス分断(gc3)の半面塗りつぶしや AoE 予告に
-  // 覆われて見えなくなる事故を防ぐ。
-  //   パス1: 非位置テレグラフ（gc3 分断面 / つなみ・ほのお AoE / 視線）。
-  //   パス2: 位置ハイライト（stack/filler/spread の単一カーディナル）— 常に最前面。
-  // これにより 1回目（早 t=51）のエクスデス北フレームでの正解位置が、分断面が
-  // まだ残っている場合でも確実に視認できる。
+  // ターゲット予告は「読むべき危険」（gc3 分断面 / つなみ・ほのお AoE / 視線）のみ描く。
+  // 頭割り/散開の正解の立ち位置は表示しない（答えを出さない）。
   const isPosKind = (k: RequiredAction["kind"]) =>
     k === "stack" || k === "filler" || k === "spread";
 
@@ -781,22 +771,11 @@ function draw(
     return elapsed >= sec - LEAD_IN && elapsed <= sec + 1.5;
   };
 
-  // パス1: 非位置テレグラフ（分断面・AoE・視線）を先に描く。
   for (const key of MECH_ORDER) {
     const req = requiredAction(setup, seat, key);
-    if (isPosKind(req.kind)) continue;
+    if (isPosKind(req.kind)) continue; // 位置は答えなので描かない
     if (!inDrawWindow(key, req)) continue;
-    const zones = key === "early" ? exdeathZones(setup.gc3BossAngle) : ZONES;
-    drawTarget(ctx, req, key, setup, origins, gazeSource, playerRole, zones);
-  }
-  // パス2: 位置ハイライトを最後に（最前面で）描く。分断面に覆われない。
-  for (const key of MECH_ORDER) {
-    const req = requiredAction(setup, seat, key);
-    if (!isPosKind(req.kind)) continue;
-    if (!inDrawWindow(key, req)) continue;
-    // 1回目（早 t=51）の水雷/フィラーはエクスデス北フレーム、2回目（遅 t=74）は固定 ZONES。
-    const zones = key === "early" ? exdeathZones(setup.gc3BossAngle) : ZONES;
-    drawTarget(ctx, req, key, setup, origins, gazeSource, playerRole, zones);
+    drawTarget(ctx, req, key, setup, origins, gazeSource);
   }
 
   // --- ボス（中央 + 外周2体）+ キャストバー + 真偽インジケータ ---
@@ -1125,52 +1104,17 @@ function drawTarget(
   origins: Partial<Record<MechanicKey, Point>>,
   /** 視線（魔眼）の発射源。視線担当席なら席本人の足元、そうでなければ中央ボス。 */
   gazeSource: Point = CENTER,
-  /** 席のロール（TH/DPS）。頭割り/散開の正解カーディナルハイライトに使う。 */
-  playerRole: "TH" | "DPS" = "TH",
-  /** 位置ゾーン中心（早=exdeathZones / 遅=ZONES）。正解カーディナル算出に使う。 */
-  zones: Record<keyof typeof ZONES, Point> = ZONES,
 ) {
   const danger = "rgba(255,69,0,0.30)";
   const dangerEdge = "#ff4500";
 
   switch (req.kind) {
-    // 頭割り(stack/filler)/散開(spread) の「正解の安全ゾーン」を一時的に表示する。
-    // （位置確認のため再有効化: 席ロールの単一カーディナル TH=A/D・DPS=C/B をハイライト。）
-    // 早(t=51)は exdeathZones、遅(t=74)は固定 ZONES に基づく正解点に円を描く。
+    // 頭割り(stack/filler)/散開(spread) の「正解の立ち位置」は表示しない（答えを出さない）。
+    // プレイヤーが真偽バッジ・役割・ギミックから自分で位置を判断する。
     case "stack":
     case "filler":
-    case "spread": {
-      const isStack = req.kind !== "spread";
-      const target = roleCardinalPoint(playerRole, isStack, zones);
-      ctx.save();
-      // 不透明寄りの塗り + 太い実線リングで、分断面が残っていても確実に視認できる。
-      ctx.beginPath();
-      ctx.arc(target.x, target.y, ZONE_RADIUS, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(0,224,192,0.22)";
-      ctx.fill();
-      ctx.lineWidth = 4;
-      ctx.setLineDash([12, 7]);
-      ctx.strokeStyle = "rgba(0,224,192,0.95)";
-      ctx.stroke();
-      ctx.setLineDash([]);
-      // 中心マーカー。
-      ctx.beginPath();
-      ctx.arc(target.x, target.y, 7, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(0,224,192,1)";
-      ctx.fill();
-      // ロールの正解カーディナル（A/B/C/D + 方角）を明示。回転後の正解位置が
-      // どの論理カーディナルかを曖昧さなく示す（エクスデス北フレームでも明確）。
-      const label = `${playerRole} ${roleCardinalLabel(playerRole, isStack)}`;
-      ctx.font = "bold 18px sans-serif";
-      ctx.textAlign = "center";
-      ctx.lineWidth = 4;
-      ctx.strokeStyle = "rgba(0,0,0,0.7)";
-      ctx.strokeText(label, target.x, target.y - ZONE_RADIUS - 8);
-      ctx.fillStyle = "#00e0c0";
-      ctx.fillText(label, target.x, target.y - ZONE_RADIUS - 8);
-      ctx.restore();
+    case "spread":
       break;
-    }
     case "aoe": {
       const o = origins[key] ?? CENTER;
       ctx.save();
