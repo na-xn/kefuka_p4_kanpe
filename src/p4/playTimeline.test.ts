@@ -8,7 +8,10 @@ import {
   FINAL_MEMORY_SEC,
   MECHANIC_SEC,
   MECH_ORDER,
+  CAST_EVENTS,
+  APPLY_SEC,
   activeCenterCast,
+  activeOuterCast,
   castProgress,
   centerResolutions,
   centerTruths,
@@ -74,6 +77,71 @@ describe("playTimeline schedule constants (参照 sim.html 抽出)", () => {
       "juso2",
       "tsunami",
     ]);
+  });
+});
+
+describe("CAST_EVENTS（単一の真実：3ボスのキャスト窓）", () => {
+  const byBoss = (b: string) => CAST_EVENTS.filter((e) => e.boss === b);
+
+  it("boss0 中央は サンダガ／ブリザガ を [0–4],[12–16],[24–28] で詠唱", () => {
+    const c = byBoss("center");
+    expect(c.map((e) => [e.start, e.end])).toEqual([
+      [0, 4],
+      [12, 16],
+      [24, 28],
+    ]);
+    expect(c.every((e) => e.name === "サンダガ／ブリザガ" && e.kind === "centerGC")).toBe(true);
+    expect(c.map((e) => e.instance)).toEqual(["gc1", "gc2", "gc3"]);
+  });
+
+  it("boss1 8時 outer は つなみ/ほのお を [4–12],[16–24] で詠唱（←欠落していたキャスト）", () => {
+    const w = byBoss("outer8");
+    expect(w.map((e) => [e.start, e.end])).toEqual([
+      [4, 12],
+      [16, 24],
+    ]);
+    expect(w.every((e) => e.kind === "wave" && e.name === "WAVE")).toBe(true);
+    expect(w.map((e) => e.instance)).toEqual(["wave1", "wave2"]);
+  });
+
+  it("boss2 4時 outer は グランドクロス を [0–8],[12–20],[24–32] で詠唱", () => {
+    const g = byBoss("outer4");
+    expect(g.map((e) => [e.start, e.end])).toEqual([
+      [0, 8],
+      [12, 20],
+      [24, 32],
+    ]);
+    expect(g.every((e) => e.kind === "grandCross" && e.name === "グランドクロス")).toBe(true);
+  });
+
+  it("付与時刻 APPLY_SEC は所有 cast の end に一致（役割=8/20/32, 波=12/24）", () => {
+    expect(APPLY_SEC).toEqual({ gc1Role: 8, gc2Role: 20, gc3Role: 32, wave1: 12, wave2: 24 });
+    // boss2 グランドクロスの end = 役割付与秒。
+    const g = byBoss("outer4").map((e) => e.end);
+    expect(g).toEqual([APPLY_SEC.gc1Role, APPLY_SEC.gc2Role, APPLY_SEC.gc3Role]);
+    // boss1 波の end = 波付与秒。
+    const w = byBoss("outer8").map((e) => e.end);
+    expect(w).toEqual([APPLY_SEC.wave1, APPLY_SEC.wave2]);
+  });
+});
+
+describe("activeOuterCast", () => {
+  it("8時 outer は [4–12]/[16–24] でアクティブ、窓外は null", () => {
+    expect(activeOuterCast("outer8", 4)?.instance).toBe("wave1");
+    expect(activeOuterCast("outer8", 8)?.instance).toBe("wave1");
+    expect(activeOuterCast("outer8", 20)?.instance).toBe("wave2");
+    // 窓間（13.5～16 前）は null。
+    expect(activeOuterCast("outer8", 14)).toBeNull();
+    // 全 wave 完了後（25.5 以降）は null。
+    expect(activeOuterCast("outer8", 30)).toBeNull();
+  });
+  it("4時 outer は グランドクロス窓でアクティブ", () => {
+    expect(activeOuterCast("outer4", 0)?.kind).toBe("grandCross");
+    expect(activeOuterCast("outer4", 16)?.instance).toBe("gc2");
+    expect(activeOuterCast("outer4", 30)?.instance).toBe("gc3");
+  });
+  it("8時 outer のキャストは wave kind（属性は描画側で解決）", () => {
+    expect(activeOuterCast("outer8", 6)?.kind).toBe("wave");
   });
 });
 

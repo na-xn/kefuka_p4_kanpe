@@ -65,6 +65,92 @@
  * ============================================================================
  */
 
+/* ============================================================
+ * 単一の真実：キャストイベント表（CAST_EVENTS）
+ *
+ * 参照 sim.html の update() ループ（bosses.forEach 詠唱完了ハンドラ）から抽出した、
+ * 3体のボスの「キャスト窓 [start,end]・表示名・完了時のデバフ付与」を1つのデータ表に集約。
+ *
+ * ── ボス所有（owner）──
+ *   boss0 = CENTER（中央, #9b5de5）  : サンダガ／ブリザガ（cross+quadrant 回避）。
+ *   boss1 = 8時 outer              : つなみ or ほのお（wave1Type→wave2Type）。← 旧実装で欠落。
+ *   boss2 = 4時 outer              : グランドクロス（役割デバフ割当）。
+ *
+ * ── キャスト窓（絶対秒。バーが [start,end] で満ち、end で完了＝デバフ付与）──
+ *   boss0 サンダガ／ブリザガ : [0–4], [12–16], [24–28]
+ *   boss1 つなみ/ほのお      : [4–12], [16–24]            ← バーに「つなみ」/「ほのお」を表示
+ *   boss2 グランドクロス     : [0–8], [12–20], [24–32]
+ *
+ * ── 付与時刻（owning cast の end）──
+ *   役割デバフ（水雷/加速度[+魔眼]）: t=8(GC1) / t=20(GC2) / t=32(GC3) = boss2 完了。
+ *   つなみ/ほのお                  : t=12(wave1) / t=24(wave2) = boss1 完了。
+ * ========================================================== */
+
+/** キャストの所有ボス（render の配置に対応）。 */
+export type CastBoss = "center" | "outer8" | "outer4";
+
+/** キャストイベント1件（窓・表示名・所有ボス・インスタンス・付与種別）。 */
+export type CastEvent = {
+  /** 所有ボス。 */
+  boss: CastBoss;
+  /** 詠唱開始秒。 */
+  start: number;
+  /** 詠唱完了秒（バー満ち＝デバフ付与）。 */
+  end: number;
+  /** バーに表示する名前。"WAVE" は wave1/wave2 の属性名に解決（描画側）。 */
+  name: string;
+  /** AoE/機構の種別。 */
+  kind: "centerGC" | "wave" | "grandCross";
+  /** インスタンス識別子。 */
+  instance: "gc1" | "gc2" | "gc3" | "wave1" | "wave2";
+};
+
+/**
+ * 参照タイムラインの全キャスト窓（単一の真実）。
+ * 注意: これは「序盤フェーズ」（t=0..32）の3ボス同時進行スケジュール。
+ *       mid-fight サンダガ/ブリザガ・分断・最終記憶は別の定数群（下記）で扱う。
+ */
+export const CAST_EVENTS: readonly CastEvent[] = [
+  // boss0 中央: サンダガ／ブリザガ（cross）。
+  { boss: "center", start: 0, end: 4, name: "サンダガ／ブリザガ", kind: "centerGC", instance: "gc1" },
+  { boss: "center", start: 12, end: 16, name: "サンダガ／ブリザガ", kind: "centerGC", instance: "gc2" },
+  { boss: "center", start: 24, end: 28, name: "サンダガ／ブリザガ", kind: "centerGC", instance: "gc3" },
+  // boss1 8時 outer: つなみ/ほのお（属性は描画側で wave1Type/wave2Type に解決）。
+  { boss: "outer8", start: 4, end: 12, name: "WAVE", kind: "wave", instance: "wave1" },
+  { boss: "outer8", start: 16, end: 24, name: "WAVE", kind: "wave", instance: "wave2" },
+  // boss2 4時 outer: グランドクロス（役割デバフ割当）。
+  { boss: "outer4", start: 0, end: 8, name: "グランドクロス", kind: "grandCross", instance: "gc1" },
+  { boss: "outer4", start: 12, end: 20, name: "グランドクロス", kind: "grandCross", instance: "gc2" },
+  { boss: "outer4", start: 24, end: 32, name: "グランドクロス", kind: "grandCross", instance: "gc3" },
+] as const;
+
+/**
+ * デバフ付与時刻（= 所有 cast の end）。buildDebuffs はこの表から付与秒を引く。
+ *   役割（水雷/加速度[+魔眼]）: GC1=8 / GC2=20 / GC3=32（boss2 グランドクロス完了）。
+ *   つなみ/ほのお            : wave1=12 / wave2=24（boss1 完了）。
+ */
+export const APPLY_SEC = {
+  /** 役割デバフ（boss2 グランドクロス完了）。 */
+  gc1Role: 8,
+  gc2Role: 20,
+  gc3Role: 32,
+  /** つなみ/ほのお（boss1 完了）。 */
+  wave1: 12,
+  wave2: 24,
+} as const;
+
+/**
+ * 指定ボスの、経過秒 elapsed におけるアクティブな序盤キャストを返す（無ければ null）。
+ * end+1.5s までは「完了表示」を許す。
+ */
+export function activeOuterCast(boss: "outer8" | "outer4", elapsed: number): CastEvent | null {
+  for (const ev of CAST_EVENTS) {
+    if (ev.boss !== boss) continue;
+    if (elapsed >= ev.start && elapsed < ev.end + 1.5) return ev;
+  }
+  return null;
+}
+
 /** タイムライン上のキャスト/解決イベント種別。 */
 export type PlayEventKind =
   | "centerGC" // 中央グランドクロス（cross+quadrant）解決
@@ -163,11 +249,16 @@ export function activeCenterCast(elapsed: number): CenterCast | null {
   // 序盤の中央ボス magic charge（サンダガ十字 + ブリザガ象限）。
   // 参照 bosses[0]（中央）は サンダガ/ブリザガ を詠唱する（グランドクロスではない）。
   // グランドクロスは 4時のサブボス（bosses[2]）の役割デバフ詠唱（フィールド AoE なし）。
-  for (const key of ["gc1", "gc2", "gc3"] as CenterGcKey[]) {
-    const resolveSec = CENTER_GC_SEC[key];
-    const castStart = resolveSec - CENTER_CAST_LEN;
-    if (elapsed >= castStart && elapsed < resolveSec + 1.5) {
-      return { name: "サンダガ／ブリザガ", castStart, resolveSec, instance: key, geometry: "cross" };
+  for (const ev of CAST_EVENTS) {
+    if (ev.boss !== "center" || ev.kind !== "centerGC") continue;
+    if (elapsed >= ev.start && elapsed < ev.end + 1.5) {
+      return {
+        name: ev.name,
+        castStart: ev.start,
+        resolveSec: ev.end,
+        instance: ev.instance as CenterGcKey,
+        geometry: "cross",
+      };
     }
   }
   // mid-fight サンダガ。

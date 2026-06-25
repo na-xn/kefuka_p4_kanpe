@@ -25,8 +25,9 @@ import {
 } from "@/p4/arena";
 import {
   MECH_ORDER,
-  CENTER_GC_SEC,
+  APPLY_SEC,
   activeCenterCast,
+  activeOuterCast,
   castProgress,
   centerResolutions,
   centerTruths,
@@ -162,34 +163,34 @@ function buildDebuffs(setup: SimSetup, seat: number): DebuffEntry[] {
   //   GC1 役割 @8（assignGimmickDebuffs(1)）, wave1 @12（assign11BossDebuff(1)）,
   //   GC2 役割 @20（assignGimmickDebuffs(2)）, wave2 @24（assign11BossDebuff(2)）,
   //   GC3 役割+傷 @32（assignGimmickDebuffs(3) wave3 分岐）。
-  // GC1 役割 @8。
-  pushRole(p.gc1Role, 8, gc1Sec);
-  // wave1 @12（honoo/tsunami）。
+  // GC1 役割 @8（boss2 グランドクロス完了）。
+  pushRole(p.gc1Role, APPLY_SEC.gc1Role, gc1Sec);
+  // wave1 @12（boss1 つなみ/ほのお完了）。
   out.push({
     iconKey: setup.wave1Type as IconKey,
-    applySec: 12,
+    applySec: APPLY_SEC.wave1,
     resolveSec: setup.wave1Type === "honoo" ? MECHANIC_SEC.honoo : MECHANIC_SEC.tsunami,
     color: setup.wave1Type === "honoo" ? "#ff4500" : "#00b4d8",
   });
   // GC2 役割 @20。
-  pushRole(p.gc2Role, 20, gc2Sec);
+  pushRole(p.gc2Role, APPLY_SEC.gc2Role, gc2Sec);
   // wave2 @24。
   out.push({
     iconKey: setup.wave2Type as IconKey,
-    applySec: 24,
+    applySec: APPLY_SEC.wave2,
     resolveSec: setup.wave2Type === "honoo" ? MECHANIC_SEC.honoo : MECHANIC_SEC.tsunami,
     color: setup.wave2Type === "honoo" ? "#ff4500" : "#00b4d8",
   });
   // GC3 役割 + 傷 @32。
   out.push({
     iconKey: p.gc3Role as IconKey,
-    applySec: 32,
+    applySec: APPLY_SEC.gc3Role,
     resolveSec: MECHANIC_SEC.gc3,
     color: p.gc3Role === "aragan" ? "#00f5d4" : "#ff4444",
   });
   out.push({
     iconKey: p.gc3Scar as IconKey,
-    applySec: 32,
+    applySec: APPLY_SEC.gc3Role,
     resolveSec: MECHANIC_SEC.gc3,
     color: p.gc3Scar === "seija" ? "#ff69b4" : "#00b4d8",
   });
@@ -667,7 +668,7 @@ function draw(
   }
 
   // --- ボス（中央 + 外周2体）+ キャストバー + 真偽インジケータ ---
-  drawBosses(ctx, setup, seat, elapsed, center);
+  drawBosses(ctx, setup, elapsed, center);
 
   // --- プレイヤードット ---
   if (!pl.dead) {
@@ -822,52 +823,34 @@ function drawCastBar(
 }
 
 /**
- * 外周サブボスの「次のキャスト」（名前・進捗）を返す。
- * 参照 bosses[1] は castName=つなみ/ほのお を表示する。役割（水雷/加速度）系は
- * 名前が明示されないので、解決へ向けたキャスト進捗のみ（名前は空）でバーを動かす。
+ * 外周サブボスの「次のキャスト」（名前・進捗）を CAST_EVENTS（単一の真実）から返す。
+ *
+ * which=1（8時 outer / boss1）: つなみ/ほのお を [4–12]・[16–24] で詠唱。
+ *   名前は instance(wave1/wave2) に対応する属性（setup.wave1Type/wave2Type）に解決。
+ * which=2（4時 outer / boss2）: グランドクロス を [0–8]・[12–20]・[24–32] で詠唱。
  */
 function subBossCast(
   setup: SimSetup,
-  seat: number,
   elapsed: number,
   which: 1 | 2,
 ): { name: string; prog: number } | null {
-  // 左下(=1): 波（つなみ/ほのお）担当。右下(=2): 役割（水雷/加速度/魔眼）担当。
-  const candidates: { name: string; sec: number; len: number }[] = [];
-  if (which === 1) {
-    // 波の解決（ほのお=62 / つなみ=84）。属性 → 名前。
-    const honooSec = MECHANIC_SEC.honoo;
-    const tsunamiSec = MECHANIC_SEC.tsunami;
-    candidates.push({ name: "ほのお", sec: honooSec, len: 8 });
-    candidates.push({ name: "つなみ", sec: tsunamiSec, len: 8 });
-  } else {
-    // 4時サブボス: グランドクロス（役割デバフ assignGimmickDebuffs）を gc1/gc2/gc3 で詠唱。
-    // 参照 bosses[2] が役割デバフ（水圧縮/雷/加速度爆弾/魔眼）を割り当てる詠唱を行う。
-    for (const k of ["gc1", "gc2", "gc3"] as const) {
-      candidates.push({ name: "グランドクロス", sec: CENTER_GC_SEC[k], len: 8 });
-    }
-    // 役割/魔眼の解決（早=51 / 遅=74 / 魔眼=57,79）。名前は出さず進捗のみ。
-    for (const k of ["early", "juso1", "late", "juso2"] as MechanicKey[]) {
-      const req = requiredAction(setup, seat, k);
-      if (req.kind === "none") continue;
-      candidates.push({ name: "", sec: MECHANIC_SEC[k], len: 8 });
-    }
+  const boss: "outer8" | "outer4" = which === 1 ? "outer8" : "outer4";
+  const ev = activeOuterCast(boss, elapsed);
+  if (!ev) return null;
+  const prog = Math.min(1, Math.max(0, (elapsed - ev.start) / (ev.end - ev.start)));
+  let name = ev.name;
+  if (ev.kind === "wave") {
+    // "WAVE" を属性名（つなみ/ほのお）に解決。
+    const waveType = ev.instance === "wave1" ? setup.wave1Type : setup.wave2Type;
+    name = waveType === "honoo" ? "ほのお" : "つなみ";
   }
-  // 現在キャスト窓内のもの（sec-len .. sec+1.5）で最も近いものを返す。
-  let best: { name: string; prog: number; sec: number } | null = null;
-  for (const c of candidates) {
-    if (elapsed < c.sec - c.len || elapsed > c.sec + 1.5) continue;
-    const prog = Math.min(1, Math.max(0, (elapsed - (c.sec - c.len)) / c.len));
-    if (!best || c.sec < best.sec) best = { name: c.name, prog, sec: c.sec };
-  }
-  return best ? { name: best.name, prog: best.prog } : null;
+  return { name, prog };
 }
 
 /** 3体のボス + キャストバー + 真偽インジケータ。 */
 function drawBosses(
   ctx: CanvasRenderingContext2D,
   setup: SimSetup,
-  seat: number,
   elapsed: number,
   center: CenterCast | null,
 ) {
@@ -901,7 +884,7 @@ function drawBosses(
         drawCastBar(ctx, boss.x, boss.y, castProgress(elapsed, center), "#bf55ec", center.name);
       }
     } else {
-      const sc = subBossCast(setup, seat, elapsed, index as 1 | 2);
+      const sc = subBossCast(setup, elapsed, index as 1 | 2);
       if (sc) drawCastBar(ctx, boss.x, boss.y, sc.prog, "#ffaa00", sc.name);
     }
   });
