@@ -4,8 +4,35 @@ import {
   hostSeat,
   isHostSeat,
   buildRoster,
+  parsePos,
   MAX_SEATS,
 } from "./room-logic";
+
+describe("parsePos", () => {
+  it("accepts finite numeric x/y/fx/fy", () => {
+    expect(parsePos({ x: 1, y: 2, fx: 0, fy: -1 })).toEqual({ x: 1, y: 2, fx: 0, fy: -1 });
+  });
+
+  it("rejects missing fields", () => {
+    expect(parsePos({ x: 1, y: 2, fx: 0 })).toBeNull();
+    expect(parsePos({})).toBeNull();
+  });
+
+  it("rejects non-number / non-finite values", () => {
+    expect(parsePos({ x: "1", y: 2, fx: 0, fy: -1 })).toBeNull();
+    expect(parsePos({ x: NaN, y: 2, fx: 0, fy: -1 })).toBeNull();
+    expect(parsePos({ x: Infinity, y: 2, fx: 0, fy: -1 })).toBeNull();
+  });
+
+  it("ignores extra fields and returns only x/y/fx/fy", () => {
+    expect(parsePos({ t: "pos", seat: 3, x: 5, y: 6, fx: 1, fy: 0 })).toEqual({
+      x: 5,
+      y: 6,
+      fx: 1,
+      fy: 0,
+    });
+  });
+});
 
 describe("lowestFreeSeat", () => {
   it("assigns 0,1,2… in order as seats fill", () => {

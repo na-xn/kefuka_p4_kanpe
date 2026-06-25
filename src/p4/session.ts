@@ -75,12 +75,22 @@ export type SessionApi = {
   sendStart: (setup: SimSetup, startInMs: number) => void;
   /** ホスト専用: ロビーへ戻すリセットを全員へ送る。 */
   sendReset: () => void;
+  /**
+   * 自席の現在位置 + 向きを他クライアントへ中継してもらう。
+   * スロットルは呼び出し側の責務（DO/本フックは throttle しない）。
+   */
+  sendPos: (x: number, y: number, fx: number, fy: number) => void;
 };
 
-/** start / reset を受け取るためのコールバック。 */
+/** 他席の位置更新ペイロード（pos 中継受信）。 */
+export type PosUpdate = { seat: number; x: number; y: number; fx: number; fy: number };
+
+/** start / reset / pos を受け取るためのコールバック。 */
 export type SessionCallbacks = {
   onStart?: (p: StartPayload) => void;
   onReset?: () => void;
+  /** 他の人間席の位置更新（自席は中継されない）。 */
+  onPos?: (p: PosUpdate) => void;
 };
 
 /** 占有ロスター（最大8）から 8 スロット配列（NPC 補完）を作る。 */
@@ -216,6 +226,19 @@ export function useSession(callbacks: SessionCallbacks = {}): SessionApi {
           cbRef.current.onReset?.();
           break;
         }
+        case "pos": {
+          const seatN = msg.seat as number;
+          const x = msg.x as number;
+          const y = msg.y as number;
+          const fx = msg.fx as number;
+          const fy = msg.fy as number;
+          if (
+            [seatN, x, y, fx, fy].every((n) => typeof n === "number" && Number.isFinite(n))
+          ) {
+            cbRef.current.onPos?.({ seat: seatN, x, y, fx, fy });
+          }
+          break;
+        }
       }
     };
 
@@ -244,6 +267,13 @@ export function useSession(callbacks: SessionCallbacks = {}): SessionApi {
     }
   }, []);
 
+  const sendPos = useCallback((x: number, y: number, fx: number, fy: number) => {
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ t: "pos", x, y, fx, fy }));
+    }
+  }, []);
+
   // アンマウントで必ず切断。
   useEffect(() => {
     return () => {
@@ -268,5 +298,6 @@ export function useSession(callbacks: SessionCallbacks = {}): SessionApi {
     disconnect,
     sendStart,
     sendReset,
+    sendPos,
   };
 }

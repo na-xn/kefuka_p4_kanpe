@@ -25,6 +25,7 @@ import {
   type Point,
   type RequiredAction,
 } from "@/p4/arena";
+import { npcState } from "@/p4/npc";
 import {
   MECH_ORDER,
   APPLY_SEC,
@@ -62,7 +63,47 @@ type Props = {
   onResult?: (r: PlayResult) => void;
   /** タイムライン終了（elapsed >= END_SEC）で「新しいお題」を押した時のコールバック。 */
   onNewTopic?: () => void;
+  /**
+   * （任意・セッション用）他の人間プレイヤーが操作している席の実位置。
+   * seat → {x,y,fx,fy}（位置 + 向き単位ベクトル）。指定された席は npcState ではなく
+   * この実位置で描画する。まだ届いていない席は npcState にフォールバックする。
+   * ソロ（PlayRunner）では未指定で、従来どおり全 7 席が npcState で描かれる。
+   */
+  remotePositions?: Map<number, { x: number; y: number; fx: number; fy: number }>;
+  /**
+   * （任意・セッション用）人間が占有している席の集合（自席を含む）。
+   * ここに含まれる他席は「npcState の NPC として描かない」。remotePositions に
+   * 実位置があればそれで、無ければ（未着なら）暫定的に npcState で描く。
+   */
+  occupiedSeats?: Set<number>;
+  /**
+   * （任意・セッション用）自席の現在位置 + 向きを ~12Hz で親へ通知する。
+   * 親はこれを throttle 済みの session.sendPos へ橋渡しして他クライアントへ配る。
+   * ソロでは未指定（no-op）。
+   */
+  onLocalPos?: (x: number, y: number, fx: number, fy: number) => void;
 };
+
+/** セッション位置同期の自席ブロードキャスト間隔（~12Hz）。 */
+const LOCAL_POS_INTERVAL_MS = 1000 / 12;
+
+/* ============================================================
+ * NPC（非操作の他席）ドットの色（ロール別・人間ドットより従属的）
+ * ========================================================== */
+
+/** NPC ドット半径（人間ドットより小さく＝従属的に見せる）。 */
+const NPC_RADIUS = PLAYER_RADIUS * 0.7;
+/** NPC ドットの不透明度（人間ドットより薄く）。 */
+const NPC_ALPHA = 0.8;
+/** TH 席（0..3）の冷色フィル。 */
+const NPC_FILL_TH = "#5aa9e6";
+/** DPS 席（4..7）の暖色フィル。 */
+const NPC_FILL_DPS = "#e6705a";
+
+/** 席のロール（0..3=TH / 4..7=DPS）に応じた NPC フィル色を返す。 */
+function npcFill(role: "TH" | "DPS"): string {
+  return role === "TH" ? NPC_FILL_TH : NPC_FILL_DPS;
+}
 
 /** 機構の表示名。 */
 const MECH_NAME: Record<MechanicKey, string> = {
@@ -276,7 +317,23 @@ const SUB_BOSSES = [
   },
 ];
 
-export function PlayArena({ setup, seat = 0, startAt, onResult, onNewTopic }: Props) {
+export function PlayArena({
+  setup,
+  seat = 0,
+  startAt,
+  onResult,
+  onNewTopic,
+  remotePositions,
+  occupiedSeats,
+  onLocalPos,
+}: Props) {
+  // セッション用 props は最新値を ref で参照（ループの依存を増やさず再購読を防ぐ）。
+  const remotePositionsRef = useRef(remotePositions);
+  remotePositionsRef.current = remotePositions;
+  const occupiedSeatsRef = useRef(occupiedSeats);
+  occupiedSeatsRef.current = occupiedSeats;
+  const onLocalPosRef = useRef(onLocalPos);
+  onLocalPosRef.current = onLocalPos;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
 
@@ -431,6 +488,8 @@ export function PlayArena({ setup, seat = 0, startAt, onResult, onNewTopic }: Pr
     // 席のロール（TH/DPS）。水雷/フィラーのロール別カーディナル判定に使う。
     const playerRole = setup.players.find((p) => p.seat === seat)?.role ?? "TH";
     let raf = 0;
+    // 自席位置の最終ブロードキャスト時刻（~12Hz スロットル）。
+    let lastLocalPosAt = 0;
 
     const loop = () => {
       const pl = player.current;
@@ -567,8 +626,29 @@ export function PlayArena({ setup, seat = 0, startAt, onResult, onNewTopic }: Pr
         }
       }
 
+      // --- 自席位置の通知（セッション用・~12Hz スロットル / ソロでは no-op） ---
+      const cb = onLocalPosRef.current;
+      if (cb) {
+        const now = Date.now();
+        if (now - lastLocalPosAt >= LOCAL_POS_INTERVAL_MS) {
+          lastLocalPosAt = now;
+          const dl = Math.hypot(pl.lastDx, pl.lastDy) || 1;
+          cb(pl.x, pl.y, pl.lastDx / dl, pl.lastDy / dl);
+        }
+      }
+
       // --- 描画 ---
-      draw(ctx, setup, seat, elapsed, pl, aoeOrigin.current, debuffs.current);
+      draw(
+        ctx,
+        setup,
+        seat,
+        elapsed,
+        pl,
+        aoeOrigin.current,
+        debuffs.current,
+        remotePositionsRef.current,
+        occupiedSeatsRef.current,
+      );
 
       // HUD クロックを粗く反映（END_SEC で凍結済みの elapsed を使う）。
       setClock((c0) => (Math.abs(c0 - elapsed) > 0.25 ? elapsed : c0));
@@ -708,6 +788,10 @@ function draw(
   pl: { x: number; y: number; lastDx: number; lastDy: number; dead: boolean },
   origins: Partial<Record<MechanicKey, Point>>,
   debuffs: DebuffEntry[],
+  /** （任意・セッション用）他の人間席の実位置 seat→{x,y,fx,fy}。 */
+  remotePositions?: Map<number, { x: number; y: number; fx: number; fy: number }>,
+  /** （任意・セッション用）人間が占有している席集合（自席含む）。 */
+  occupiedSeats?: Set<number>,
 ) {
   ctx.clearRect(0, 0, ARENA_SIZE, ARENA_SIZE);
 
@@ -781,6 +865,10 @@ function draw(
   // --- ボス（中央 + 外周2体）+ キャストバー + 真偽インジケータ ---
   drawBosses(ctx, setup, elapsed, center);
 
+  // --- 他席の 7 ドット（NPC or 他の人間）---
+  // 人間ドットより「前」のこの位置で描き、操作中の自席ドットが必ず最前面に来るようにする。
+  drawOtherSeats(ctx, setup, seat, elapsed, remotePositions, occupiedSeats);
+
   // --- プレイヤードット ---
   if (!pl.dead) {
     ctx.beginPath();
@@ -816,6 +904,89 @@ function draw(
   ctx.font = "bold 20px sans-serif";
   ctx.textAlign = "left";
   ctx.fillText(`戦闘経過時間: ${Math.floor(elapsed)}秒`, 24, 44);
+}
+
+/**
+ * 操作席以外の 7 席ドットを描く（NPC または他の人間プレイヤー）。
+ *
+ * - remotePositions に実位置がある席（= 他の人間が操作中）はその位置/向きで描く。
+ * - occupiedSeats に含まれるが実位置未着の席は、暫定的に npcState で描く（決定的）。
+ * - それ以外（真の空席）は npcState（elapsed から決定的）で描く。
+ *
+ * 見た目は人間ドットに「従属」させる: 小さめ半径(NPC_RADIUS)・ロール色フィル
+ * (TH=冷色 / DPS=暖色)・低アルファ(NPC_ALPHA)・細い白枠・席番号(seat+1)の小ラベル・
+ * 短く細い視線ライン。これにより満員感と「誰がどこを向いているか」を出しつつ、
+ * 自席ドット(teal #00e0c0・大きめ・赤い視線)が明確に主役のまま保たれる。
+ *
+ * ソロ（remotePositions/occupiedSeats 未指定）では全 7 席が npcState で描かれる。
+ */
+function drawOtherSeats(
+  ctx: CanvasRenderingContext2D,
+  setup: SimSetup,
+  seat: number,
+  elapsed: number,
+  remotePositions?: Map<number, { x: number; y: number; fx: number; fy: number }>,
+  occupiedSeats?: Set<number>,
+) {
+  for (let s = 0; s < 8; s++) {
+    if (s === seat) continue; // 自席は人間ドットで別途描く。
+    const role: "TH" | "DPS" = s < 4 ? "TH" : "DPS";
+
+    // 位置・向きの解決: 他人間の実位置 > （未着 or 空席なら）npcState。
+    let x: number;
+    let y: number;
+    let fx: number;
+    let fy: number;
+    const remote = remotePositions?.get(s);
+    if (remote) {
+      x = remote.x;
+      y = remote.y;
+      fx = remote.fx;
+      fy = remote.fy;
+    } else {
+      const st = npcState(setup, s, elapsed);
+      x = st.pos.x;
+      y = st.pos.y;
+      fx = st.facing.x;
+      fy = st.facing.y;
+    }
+    // occupiedSeats に居て実位置未着の席も、暫定的に npcState で描く（上で解決済み）。
+    void occupiedSeats;
+
+    ctx.save();
+    ctx.globalAlpha = NPC_ALPHA;
+    // 視線ライン（人間より短く細く）。
+    const fl = Math.hypot(fx, fy) || 1;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + (fx / fl) * 16, y + (fy / fl) * 16);
+    ctx.strokeStyle = "rgba(255,255,255,0.85)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    // ドット本体（ロール色フィル + 細い白枠）。
+    ctx.beginPath();
+    ctx.arc(x, y, NPC_RADIUS, 0, Math.PI * 2);
+    ctx.fillStyle = npcFill(role);
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = "rgba(255,255,255,0.9)";
+    ctx.stroke();
+    ctx.restore();
+
+    // 席番号ラベル（seat+1）をドット中央に小さく。
+    ctx.save();
+    ctx.globalAlpha = NPC_ALPHA;
+    ctx.font = "bold 11px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "rgba(0,0,0,0.6)";
+    ctx.strokeText(String(s + 1), x, y + 0.5);
+    ctx.fillStyle = "#fff";
+    ctx.fillText(String(s + 1), x, y + 0.5);
+    ctx.restore();
+    ctx.textBaseline = "alphabetic";
+  }
 }
 
 /**

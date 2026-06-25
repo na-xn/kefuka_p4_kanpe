@@ -53,6 +53,25 @@ export function isHostSeat(seat: number, taken: Iterable<number>): boolean {
   return hostSeat(taken) === seat;
 }
 
+/** 位置中継（pos）の正規化済みペイロード。 */
+export type PosPayload = { x: number; y: number; fx: number; fy: number };
+
+/**
+ * 受信 pos メッセージから有限数値の {x,y,fx,fy} を取り出す（純バリデーション）。
+ * 数値でない/非有限な値が一つでもあれば null（= 中継しない）。
+ * DO は本関数で検証してから他接続へ中継する（自席エコーはしない）。
+ */
+export function parsePos(msg: { [k: string]: unknown }): PosPayload | null {
+  const x = msg.x;
+  const y = msg.y;
+  const fx = msg.fx;
+  const fy = msg.fy;
+  for (const n of [x, y, fx, fy]) {
+    if (typeof n !== "number" || !Number.isFinite(n)) return null;
+  }
+  return { x: x as number, y: y as number, fx: fx as number, fy: fy as number };
+}
+
 /**
  * 占有席リストからクライアント配布用ロスター（席昇順）を組み立てる。
  * 最小席が isHost=true になる。

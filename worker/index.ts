@@ -14,7 +14,7 @@
  */
 
 import { DurableObject } from "cloudflare:workers";
-import { lowestFreeSeat, hostSeat, buildRoster } from "./room-logic";
+import { lowestFreeSeat, hostSeat, buildRoster, parsePos } from "./room-logic";
 import type { Seat } from "./room-logic";
 
 export interface Env {
@@ -78,6 +78,19 @@ export class SessionRoom extends DurableObject<Env> {
     }
   }
 
+  /** sender を除く全 WS へ JSON を送る（エコーしない中継用）。 */
+  private broadcastToOthers(sender: WebSocket, msg: unknown): void {
+    const json = JSON.stringify(msg);
+    for (const ws of this.ctx.getWebSockets()) {
+      if (ws === sender) continue;
+      try {
+        ws.send(json);
+      } catch {
+        /* 送れない接続は無視（close で掃除される） */
+      }
+    }
+  }
+
   /** 現在のロスターを全員へブロードキャスト。 */
   private broadcastRoster(): void {
     this.broadcast({ t: "roster", seats: buildRoster(this.takenSeats()) });
@@ -130,6 +143,22 @@ export class SessionRoom extends DurableObject<Env> {
     if (msg.t === "reset") {
       if (hostSeat(this.takenSeats().map((s) => s.seat)) !== att.seat) return;
       this.broadcast({ t: "reset" });
+      return;
+    }
+
+    if (msg.t === "pos") {
+      // 自席の位置を他の接続へ中継（エコーしない・永続化しない・ホスト判定不要）。
+      // 不正な数値は parsePos が弾く。
+      const pos = parsePos(msg);
+      if (!pos) return;
+      this.broadcastToOthers(ws, {
+        t: "pos",
+        seat: att.seat,
+        x: pos.x,
+        y: pos.y,
+        fx: pos.fx,
+        fy: pos.fy,
+      });
       return;
     }
   }
