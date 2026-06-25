@@ -65,6 +65,9 @@ const MECH_ORDER: MechanicKey[] = ["gc3", "early", "juso1", "honoo", "late", "ju
 /** 機構の解決前リードイン秒（事前にターゲットを描画して予告する）。 */
 const LEAD_IN = 8;
 
+/** キャストバーの長さ（秒）。解決の約7秒前にキャスト開始し、解決秒で満タン。 */
+const CAST_LEN = 7;
+
 /**
  * 中央ボス AoE の解決秒。
  * GC1 中央サンダガ/ブリザガ @53s、GC2 中央 @76s（参照フローに沿わせた値）。
@@ -756,15 +759,19 @@ function drawBosses(
   elapsed: number,
   center: CenterKey | null,
 ) {
-  // キャストバーの進捗: 次に来る機構解決へ向けて満ちる（常時テレグラフ）。
-  // 中央ボスは中央 AoE の進捗、外周ボスは波/水雷の進捗で代用。
+  // キャストバーの進捗: 次に来る機構解決へ向け、解決の CAST_LEN 秒前から 0→1 で満ちる。
+  // キャストウィンドウ外（解決の CAST_LEN 秒より前）はキャストなし（null）＝ボスは待機。
+  // 中央ボスは中央 AoE の進捗、外周ボスは波/水雷など機構解決の進捗で代用。
   const allSecs = [...Object.values(MECHANIC_SEC), CENTER_GC1_SEC, CENTER_GC2_SEC].sort(
     (a, b) => a - b,
   );
-  const prevSec = allSecs.filter((s) => s <= elapsed).pop() ?? 0;
-  const nextSec = allSecs.find((s) => s > elapsed) ?? prevSec + 1;
-  const span = Math.max(1, nextSec - prevSec);
-  const genericProgress = Math.min(1, Math.max(0, (elapsed - prevSec) / span));
+  // 次に来る解決秒（elapsed より大きい最小の秒）。無ければ null（待機）。
+  const nextSec = allSecs.find((s) => s > elapsed) ?? null;
+  // 次の解決に対するキャスト進捗（ウィンドウ前は null）。
+  const genericProg: number | null =
+    nextSec == null || elapsed < nextSec - CAST_LEN
+      ? null
+      : Math.min(1, Math.max(0, (elapsed - (nextSec - CAST_LEN)) / CAST_LEN));
 
   const bossList = [CENTER_BOSS, ...SUB_BOSSES];
   bossList.forEach((boss, index) => {
@@ -787,25 +794,32 @@ function drawBosses(
     }
 
     // キャストバー（参照: barW=100, barH=10, y=boss.y-bossRadius-25）。
+    // キャストウィンドウ外（prog == null）はバーを描かない＝ボスは待機。
     const barW = 100;
     const barH = 10;
     const barX = boss.x - barW / 2;
     const barY = boss.y - BOSS_RADIUS - 25;
-    ctx.fillStyle = "#000";
-    ctx.fillRect(barX, barY, barW, barH);
     let progColor = "#ffaa00";
-    let prog = genericProgress;
+    let prog: number | null = genericProg;
     if (index === 0 && center) {
+      // 中央ボスは中央 AoE 進行中のみ、その解決へ向けたキャストを表示。
       const sec = center === "centerGc1" ? CENTER_GC1_SEC : CENTER_GC2_SEC;
-      prog = Math.min(1, Math.max(0, (elapsed - (sec - CENTER_LEAD)) / CENTER_LEAD));
+      prog =
+        elapsed < sec - CAST_LEN
+          ? null
+          : Math.min(1, Math.max(0, (elapsed - (sec - CAST_LEN)) / CAST_LEN));
       progColor = "#bf55ec";
     }
-    if (prog >= 1) progColor = "#ff3333";
-    ctx.fillStyle = progColor;
-    ctx.fillRect(barX, barY, barW * prog, barH);
-    ctx.strokeStyle = "#888";
-    ctx.lineWidth = 1;
-    ctx.strokeRect(barX, barY, barW, barH);
+    if (prog != null) {
+      ctx.fillStyle = "#000";
+      ctx.fillRect(barX, barY, barW, barH);
+      if (prog >= 1) progColor = "#ff3333";
+      ctx.fillStyle = progColor;
+      ctx.fillRect(barX, barY, barW * prog, barH);
+      ctx.strokeStyle = "#888";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(barX, barY, barW, barH);
+    }
   });
 }
 

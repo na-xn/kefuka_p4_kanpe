@@ -391,6 +391,14 @@ export default function App() {
       /* 無視 */
     }
   }, [simMode]);
+  // 練習モード中はオーバーレイをパッシブ（クリック透過しない＝フォーカス可能）にし、
+  // それ以外はパッシブ（ゲームへ入力を通す）に戻す。Tauri 外では無視。
+  useEffect(() => {
+    if (!IS_TAURI) return;
+    import("@tauri-apps/api/core").then(({ invoke }) =>
+      invoke("set_overlay_passive", { passive: !simMode }).catch(() => {})
+    );
+  }, [simMode]);
   // 読み上げログの購読（speak() の各イベントを受信して蓄積、最新50件保持）。
   useEffect(() => {
     setSpeechLogger((e) => setSpeechLog((prev) => [...prev.slice(-49), e]));

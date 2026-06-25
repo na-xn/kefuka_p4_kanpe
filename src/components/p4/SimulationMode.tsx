@@ -163,6 +163,13 @@ function SoloKindPicker({
 function PlayRunner() {
   const [setup, setSetup] = useState<SimSetup | null>(null);
   const [startAt, setStartAt] = useState<number | null>(null);
+  // プレイヤーが自分で書き込むカンペ（解答データから自動補完しない）。
+  const [minState, setMinState] = useState<MinState>({ ...INITIAL_MIN });
+
+  // 新しいお題（setup 変化）でカンペ入力をリセット。
+  useEffect(() => {
+    setMinState({ ...INITIAL_MIN });
+  }, [setup]);
 
   const start = () => {
     setSetup(generateSim());
@@ -195,6 +202,16 @@ function PlayRunner() {
         </Button>
       </div>
       <PlayArena setup={setup} seat={0} startAt={startAt} />
+      {/* アリーナの下にカンペ入力（自分で書き込む。アリーナのキー/ポインタ操作とは独立）。 */}
+      <div className="border-t pt-2">
+        <p className="px-0.5 pb-1 text-[10px] font-semibold text-muted-foreground">
+          カンペ入力（デバフが付いたら入力）
+        </p>
+        <MinimumMode
+          value={minState}
+          set={(id, v) => setMinState((s) => ({ ...s, [id]: v }))}
+        />
+      </div>
     </div>
   );
 }
