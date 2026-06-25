@@ -157,12 +157,21 @@ export function roleCardinal(role: "TH" | "DPS", isStack: boolean): ZoneKey {
 }
 
 /** ゾーンキー → カーディナル表示（文字 + 方角）。 */
-const CARDINAL_LABEL: Record<ZoneKey, string> = {
+export const CARDINAL_LABEL: Record<ZoneKey, string> = {
   h12: "A(北)",
   h3: "B(東)",
   h6: "C(南)",
   h9: "D(西)",
 };
+
+/**
+ * ロール + 頭割りか → 立つべきカーディナルの表示ラベル（"A(北)" 等）。
+ * 早(エクスデス北フレーム)/遅(固定)いずれも「論理カーディナル」は同じ
+ * （TH 頭割り=A/散開=D・DPS 頭割り=C/散開=B）。回転は座標にのみ効く。
+ */
+export function roleCardinalLabel(role: "TH" | "DPS", isStack: boolean): string {
+  return CARDINAL_LABEL[roleCardinal(role, isStack)];
+}
 
 /** ロール + 頭割りか + （回転済み）ゾーンマップ → 立つべき点。 */
 export function roleCardinalPoint(

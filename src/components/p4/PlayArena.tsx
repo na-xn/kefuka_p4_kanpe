@@ -22,6 +22,7 @@ import {
   mechanicResolveSec,
   exdeathZones,
   roleCardinalPoint,
+  roleCardinalLabel,
   ZONE_RADIUS,
   type MechanicKey,
   type Point,
@@ -758,19 +759,41 @@ function draw(
   const gazeSource: Point = isGazeSource ? { x: pl.x, y: pl.y } : CENTER;
   // 席のロール（TH/DPS）。頭割り/散開の正解カーディナルハイライトに使う。
   const playerRole = setup.players.find((p) => p.seat === seat)?.role ?? "TH";
-  for (const key of MECH_ORDER) {
-    const sec = MECHANIC_SEC[key];
-    const req = requiredAction(setup, seat, key);
+
+  // ターゲット予告は2パスで描く。位置ハイライト（頭割り/散開の正解カーディナル）は
+  // 必ず「後から（最後に）」描き、エクスデス分断(gc3)の半面塗りつぶしや AoE 予告に
+  // 覆われて見えなくなる事故を防ぐ。
+  //   パス1: 非位置テレグラフ（gc3 分断面 / つなみ・ほのお AoE / 視線）。
+  //   パス2: 位置ハイライト（stack/filler/spread の単一カーディナル）— 常に最前面。
+  // これにより 1回目（早 t=51）のエクスデス北フレームでの正解位置が、分断面が
+  // まだ残っている場合でも確実に視認できる。
+  const isPosKind = (k: RequiredAction["kind"]) =>
+    k === "stack" || k === "filler" || k === "spread";
+
+  // 各機構が「この瞬間に描くべきか」を表示ウィンドウで判定する共通ヘルパ。
+  const inDrawWindow = (key: MechanicKey, req: RequiredAction): boolean => {
     if (req.kind === "aoe") {
-      // つなみ/ほのお: テレグラフはしない（設置→起爆の間は AoE 形状を描かない）。
-      // 着弾（起爆）の瞬間だけ短くフラッシュ表示する。
-      // 起爆・死亡判定は mechanicResolveSec(key)=設置秒+WAVE_DETONATE_DELAY。
-      // 描画ウィンドウ = [resolveSec, resolveSec + AOE_FLASH_DURATION]。
+      // つなみ/ほのお: 着弾（起爆）の瞬間だけ短くフラッシュ表示する。
       const resolveSec = mechanicResolveSec(key);
-      if (elapsed < resolveSec || elapsed > resolveSec + AOE_FLASH_DURATION) continue;
-    } else {
-      if (elapsed < sec - LEAD_IN || elapsed > sec + 1.5) continue;
+      return elapsed >= resolveSec && elapsed <= resolveSec + AOE_FLASH_DURATION;
     }
+    const sec = MECHANIC_SEC[key];
+    return elapsed >= sec - LEAD_IN && elapsed <= sec + 1.5;
+  };
+
+  // パス1: 非位置テレグラフ（分断面・AoE・視線）を先に描く。
+  for (const key of MECH_ORDER) {
+    const req = requiredAction(setup, seat, key);
+    if (isPosKind(req.kind)) continue;
+    if (!inDrawWindow(key, req)) continue;
+    const zones = key === "early" ? exdeathZones(setup.gc3BossAngle) : ZONES;
+    drawTarget(ctx, req, key, setup, origins, gazeSource, playerRole, zones);
+  }
+  // パス2: 位置ハイライトを最後に（最前面で）描く。分断面に覆われない。
+  for (const key of MECH_ORDER) {
+    const req = requiredAction(setup, seat, key);
+    if (!isPosKind(req.kind)) continue;
+    if (!inDrawWindow(key, req)) continue;
     // 1回目（早 t=51）の水雷/フィラーはエクスデス北フレーム、2回目（遅 t=74）は固定 ZONES。
     const zones = key === "early" ? exdeathZones(setup.gc3BossAngle) : ZONES;
     drawTarget(ctx, req, key, setup, origins, gazeSource, playerRole, zones);
@@ -1120,20 +1143,31 @@ function drawTarget(
       const isStack = req.kind !== "spread";
       const target = roleCardinalPoint(playerRole, isStack, zones);
       ctx.save();
+      // 不透明寄りの塗り + 太い実線リングで、分断面が残っていても確実に視認できる。
       ctx.beginPath();
       ctx.arc(target.x, target.y, ZONE_RADIUS, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(0,224,192,0.18)";
+      ctx.fillStyle = "rgba(0,224,192,0.22)";
       ctx.fill();
-      ctx.lineWidth = 3;
-      ctx.setLineDash([10, 6]);
-      ctx.strokeStyle = "rgba(0,224,192,0.85)";
+      ctx.lineWidth = 4;
+      ctx.setLineDash([12, 7]);
+      ctx.strokeStyle = "rgba(0,224,192,0.95)";
       ctx.stroke();
       ctx.setLineDash([]);
       // 中心マーカー。
       ctx.beginPath();
-      ctx.arc(target.x, target.y, 6, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(0,224,192,0.95)";
+      ctx.arc(target.x, target.y, 7, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(0,224,192,1)";
       ctx.fill();
+      // ロールの正解カーディナル（A/B/C/D + 方角）を明示。回転後の正解位置が
+      // どの論理カーディナルかを曖昧さなく示す（エクスデス北フレームでも明確）。
+      const label = `${playerRole} ${roleCardinalLabel(playerRole, isStack)}`;
+      ctx.font = "bold 18px sans-serif";
+      ctx.textAlign = "center";
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = "rgba(0,0,0,0.7)";
+      ctx.strokeText(label, target.x, target.y - ZONE_RADIUS - 8);
+      ctx.fillStyle = "#00e0c0";
+      ctx.fillText(label, target.x, target.y - ZONE_RADIUS - 8);
       ctx.restore();
       break;
     }
