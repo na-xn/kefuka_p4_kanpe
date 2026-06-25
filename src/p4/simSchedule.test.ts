@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { generateSim } from "@/p4/simulation";
+import type { SimSetup } from "@/p4/simulation";
 import {
   buildRevealSchedule,
   gcRoleLabel,
@@ -53,5 +54,182 @@ describe("simSchedule", () => {
     expect(truthLabel("shin")).toBe("ほんと");
     expect(truthLabel("gi")).toBe("うそ");
     expect(PROCESS_AT_SEC).toBe(50);
+  });
+
+  it("GC3 row resolveSec is null", () => {
+    const setup = generateSim(seeded(42));
+    const rows = buildRevealSchedule(setup);
+    const byKey = Object.fromEntries(rows.map((r) => [r.key, r]));
+    expect(byKey.gc3.resolveSec).toBeNull();
+  });
+
+  it("wave rows: honoo=62, tsunami=84", () => {
+    // Build a setup with known wave types via fixed seed, or use overrides.
+    // Seed 1: check wave types and confirm resolveSec.
+    const setupA = generateSim(seeded(1));
+    const rowsA = buildRevealSchedule(setupA);
+    const byKeyA = Object.fromEntries(rowsA.map((r) => [r.key, r]));
+    expect(byKeyA.wave1.resolveSec).toBe(setupA.wave1Type === "honoo" ? 62 : 84);
+    expect(byKeyA.wave2.resolveSec).toBe(setupA.wave2Type === "honoo" ? 62 : 84);
+  });
+
+  it("wave rows resolveSec: honoo=62, tsunami=84 via forced setups", () => {
+    // Construct minimal setups to force honoo/tsunami wave types.
+    const base: SimSetup = {
+      gc1Truth: "shin",
+      gc2Truth: "shin",
+      wave1Type: "honoo",
+      wave1Truth: "shin",
+      wave2Type: "tsunami",
+      wave2Truth: "shin",
+      gc1WaterEarly: true,
+      thundaTruth: "shin",
+      blizzaTruth: "shin",
+      players: [
+        { seat: 0, gc1Role: "mizu", gc2Role: "shisen", gc3Role: "aragan" },
+        { seat: 1, gc1Role: "rai", gc2Role: "mushoku", gc3Role: "aragan" },
+        { seat: 2, gc1Role: "shisen", gc2Role: "mizu", gc3Role: "aragan" },
+        { seat: 3, gc1Role: "mushoku", gc2Role: "rai", gc3Role: "aragan" },
+        { seat: 4, gc1Role: "mizu", gc2Role: "shisen", gc3Role: "shi" },
+        { seat: 5, gc1Role: "rai", gc2Role: "mushoku", gc3Role: "shi" },
+        { seat: 6, gc1Role: "shisen", gc2Role: "mizu", gc3Role: "shi" },
+        { seat: 7, gc1Role: "mushoku", gc2Role: "rai", gc3Role: "shi" },
+      ],
+    };
+    const rows = buildRevealSchedule(base);
+    const byKey = Object.fromEntries(rows.map((r) => [r.key, r]));
+    expect(byKey.wave1.resolveSec).toBe(62); // honoo
+    expect(byKey.wave2.resolveSec).toBe(84); // tsunami
+  });
+
+  it("GC role resolveSec: 水雷 early/late by gc1WaterEarly", () => {
+    // seat 0 = gc1Role:mizu (水雷 at GC1), gc2Role:shisen (加速度 at GC2)
+    const baseEarly: SimSetup = {
+      gc1Truth: "shin",
+      gc2Truth: "shin",
+      wave1Type: "honoo",
+      wave1Truth: "shin",
+      wave2Type: "tsunami",
+      wave2Truth: "shin",
+      gc1WaterEarly: true, // GC1 水雷 = 早
+      thundaTruth: "shin",
+      blizzaTruth: "shin",
+      players: [
+        { seat: 0, gc1Role: "mizu", gc2Role: "shisen", gc3Role: "aragan" },
+        { seat: 1, gc1Role: "rai", gc2Role: "mushoku", gc3Role: "aragan" },
+        { seat: 2, gc1Role: "shisen", gc2Role: "mizu", gc3Role: "aragan" },
+        { seat: 3, gc1Role: "mushoku", gc2Role: "rai", gc3Role: "aragan" },
+        { seat: 4, gc1Role: "mizu", gc2Role: "shisen", gc3Role: "shi" },
+        { seat: 5, gc1Role: "rai", gc2Role: "mushoku", gc3Role: "shi" },
+        { seat: 6, gc1Role: "shisen", gc2Role: "mizu", gc3Role: "shi" },
+        { seat: 7, gc1Role: "mushoku", gc2Role: "rai", gc3Role: "shi" },
+      ],
+    };
+    const rowsEarly = buildRevealSchedule(baseEarly);
+    const byKeyEarly = Object.fromEntries(rowsEarly.map((r) => [r.key, r]));
+    // GC1 mizu, gc1WaterEarly=true → early → 51
+    expect(byKeyEarly.gc1.resolveSec).toBe(51);
+    // GC2 shisen, gc===2 → early=true → 51... but wait: shisen at GC2: early=(gc===1) = false → 74
+    expect(byKeyEarly.gc2.resolveSec).toBe(74);
+
+    const baseLate: SimSetup = { ...baseEarly, gc1WaterEarly: false };
+    const rowsLate = buildRevealSchedule(baseLate);
+    const byKeyLate = Object.fromEntries(rowsLate.map((r) => [r.key, r]));
+    // GC1 mizu, gc1WaterEarly=false → late → 74
+    expect(byKeyLate.gc1.resolveSec).toBe(74);
+    // GC2 shisen still → 74
+    expect(byKeyLate.gc2.resolveSec).toBe(74);
+  });
+
+  it("GC role resolveSec: 視線 GC1=51, 視線 GC2=74", () => {
+    // seat 0 with shisen at GC1
+    const setupShisenGC1: SimSetup = {
+      gc1Truth: "shin",
+      gc2Truth: "shin",
+      wave1Type: "honoo",
+      wave1Truth: "shin",
+      wave2Type: "tsunami",
+      wave2Truth: "shin",
+      gc1WaterEarly: true,
+      thundaTruth: "shin",
+      blizzaTruth: "shin",
+      players: [
+        { seat: 0, gc1Role: "shisen", gc2Role: "mizu", gc3Role: "aragan" },
+        { seat: 1, gc1Role: "mushoku", gc2Role: "rai", gc3Role: "aragan" },
+        { seat: 2, gc1Role: "mizu", gc2Role: "shisen", gc3Role: "aragan" },
+        { seat: 3, gc1Role: "rai", gc2Role: "mushoku", gc3Role: "aragan" },
+        { seat: 4, gc1Role: "shisen", gc2Role: "mizu", gc3Role: "shi" },
+        { seat: 5, gc1Role: "mushoku", gc2Role: "rai", gc3Role: "shi" },
+        { seat: 6, gc1Role: "mizu", gc2Role: "shisen", gc3Role: "shi" },
+        { seat: 7, gc1Role: "rai", gc2Role: "mushoku", gc3Role: "shi" },
+      ],
+    };
+    const rows1 = buildRevealSchedule(setupShisenGC1);
+    const by1 = Object.fromEntries(rows1.map((r) => [r.key, r]));
+    expect(by1.gc1.resolveSec).toBe(51); // shisen at GC1 → early
+
+    // seat 0 with shisen at GC2
+    const setupShisenGC2: SimSetup = {
+      ...setupShisenGC1,
+      players: [
+        { seat: 0, gc1Role: "mizu", gc2Role: "shisen", gc3Role: "aragan" },
+        { seat: 1, gc1Role: "rai", gc2Role: "mushoku", gc3Role: "aragan" },
+        { seat: 2, gc1Role: "shisen", gc2Role: "mizu", gc3Role: "aragan" },
+        { seat: 3, gc1Role: "mushoku", gc2Role: "rai", gc3Role: "aragan" },
+        { seat: 4, gc1Role: "mizu", gc2Role: "shisen", gc3Role: "shi" },
+        { seat: 5, gc1Role: "rai", gc2Role: "mushoku", gc3Role: "shi" },
+        { seat: 6, gc1Role: "shisen", gc2Role: "mizu", gc3Role: "shi" },
+        { seat: 7, gc1Role: "mushoku", gc2Role: "rai", gc3Role: "shi" },
+      ],
+    };
+    const rows2 = buildRevealSchedule(setupShisenGC2);
+    const by2 = Object.fromEntries(rows2.map((r) => [r.key, r]));
+    expect(by2.gc2.resolveSec).toBe(74); // shisen at GC2 → late
+  });
+
+  it("GC role resolveSec: 無職 GC1=74, 無職 GC2=51", () => {
+    // seat 0 with mushoku at GC1
+    const setupMushokuGC1: SimSetup = {
+      gc1Truth: "shin",
+      gc2Truth: "shin",
+      wave1Type: "honoo",
+      wave1Truth: "shin",
+      wave2Type: "tsunami",
+      wave2Truth: "shin",
+      gc1WaterEarly: true,
+      thundaTruth: "shin",
+      blizzaTruth: "shin",
+      players: [
+        { seat: 0, gc1Role: "mushoku", gc2Role: "mizu", gc3Role: "aragan" },
+        { seat: 1, gc1Role: "shisen", gc2Role: "rai", gc3Role: "aragan" },
+        { seat: 2, gc1Role: "mizu", gc2Role: "shisen", gc3Role: "aragan" },
+        { seat: 3, gc1Role: "rai", gc2Role: "mushoku", gc3Role: "aragan" },
+        { seat: 4, gc1Role: "mushoku", gc2Role: "mizu", gc3Role: "shi" },
+        { seat: 5, gc1Role: "shisen", gc2Role: "rai", gc3Role: "shi" },
+        { seat: 6, gc1Role: "mizu", gc2Role: "shisen", gc3Role: "shi" },
+        { seat: 7, gc1Role: "rai", gc2Role: "mushoku", gc3Role: "shi" },
+      ],
+    };
+    const rows1 = buildRevealSchedule(setupMushokuGC1);
+    const by1 = Object.fromEntries(rows1.map((r) => [r.key, r]));
+    expect(by1.gc1.resolveSec).toBe(74); // mushoku at GC1 → late
+
+    // seat 0 with mushoku at GC2
+    const setupMushokuGC2: SimSetup = {
+      ...setupMushokuGC1,
+      players: [
+        { seat: 0, gc1Role: "mizu", gc2Role: "mushoku", gc3Role: "aragan" },
+        { seat: 1, gc1Role: "rai", gc2Role: "shisen", gc3Role: "aragan" },
+        { seat: 2, gc1Role: "shisen", gc2Role: "mizu", gc3Role: "aragan" },
+        { seat: 3, gc1Role: "mushoku", gc2Role: "rai", gc3Role: "aragan" },
+        { seat: 4, gc1Role: "mizu", gc2Role: "mushoku", gc3Role: "shi" },
+        { seat: 5, gc1Role: "rai", gc2Role: "shisen", gc3Role: "shi" },
+        { seat: 6, gc1Role: "shisen", gc2Role: "mizu", gc3Role: "shi" },
+        { seat: 7, gc1Role: "mushoku", gc2Role: "rai", gc3Role: "shi" },
+      ],
+    };
+    const rows2 = buildRevealSchedule(setupMushokuGC2);
+    const by2 = Object.fromEntries(rows2.map((r) => [r.key, r]));
+    expect(by2.gc2.resolveSec).toBe(51); // mushoku at GC2 → early
   });
 });

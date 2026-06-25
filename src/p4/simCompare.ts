@@ -18,7 +18,7 @@ export type FieldCompare = {
   ok: boolean;
 };
 
-/** toMinState が返す 10 キーを表示順で定義。 */
+/** 答え合わせ対象の 8 キーを表示順で定義（thunda/blizza は除外）。 */
 const FIELD_DEFS: { key: string; label: string }[] = [
   { key: "waterType", label: "水雷" },
   { key: "waterGC", label: "水雷GC" },
@@ -28,8 +28,6 @@ const FIELD_DEFS: { key: string; label: string }[] = [
   { key: "gc2", label: "GC2" },
   { key: "honoo", label: "ほのお" },
   { key: "tsunami", label: "つなみ" },
-  { key: "thunda", label: "サンダガ" },
-  { key: "blizza", label: "ブリザガ" },
 ];
 
 /** 生の MinState 値を人間可読ラベルへ変換する。 */

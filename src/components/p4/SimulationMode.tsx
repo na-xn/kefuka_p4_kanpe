@@ -315,7 +315,7 @@ export function SimulationMode() {
             実戦タイム開始… デバフが付くのを待っています。
           </p>
         ) : (
-          revealed.map((r) => <RevealCard key={r.key} row={r} />)
+          revealed.map((r) => <RevealCard key={r.key} row={r} elapsed={elapsed} />)
         )}
       </div>
 
@@ -486,8 +486,12 @@ function ResolvedRow({ item }: { item: Item }) {
   );
 }
 
-/** リビール1行（アイコン＋見出し＋ラベル＋真偽）。 */
-function RevealCard({ row }: { row: RevealRow }) {
+/** リビール1行（アイコン＋見出し＋ラベル＋真偽＋カウントダウン）。 */
+function RevealCard({ row, elapsed }: { row: RevealRow; elapsed: number }) {
+  const remaining =
+    row.resolveSec != null
+      ? Math.max(0, Math.ceil(row.resolveSec - elapsed))
+      : null;
   return (
     <div className="flex items-center gap-2 rounded-md border bg-card/40 px-2 py-1.5">
       <img src={row.icon} alt="" className="h-6 w-auto shrink-0 rounded-[2px]" draggable={false} />
@@ -495,6 +499,11 @@ function RevealCard({ row }: { row: RevealRow }) {
         <span className="text-[10px] font-semibold text-muted-foreground">{row.caption}</span>
         <span className="truncate text-xs font-bold text-foreground">{row.label}</span>
       </div>
+      {remaining != null && (
+        <span className="shrink-0 tabular-nums text-[10px] text-muted-foreground">
+          ⏱ {remaining}s
+        </span>
+      )}
       {row.truth && (
         <span
           className={`shrink-0 rounded-md px-2 py-0.5 text-center text-xs font-bold ${

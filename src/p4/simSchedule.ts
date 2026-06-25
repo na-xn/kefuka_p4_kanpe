@@ -29,6 +29,13 @@ export type RevealRow = {
   label: string;
   /** 真偽（ある行のみ。GC3 役割など真偽を持たない行は undefined）。 */
   truth?: Truth;
+  /**
+   * このデバフが処理される実戦経過秒（カウントダウン表示用）。
+   * GC1/GC2 行: 51(早) または 74(遅)。
+   * 波行: 62(ほのお) または 84(つなみ)。
+   * GC3 行: null（カウントダウン不要）。
+   */
+  resolveSec: number | null;
 };
 
 /** GcRole → アイコン src。 */
@@ -88,6 +95,30 @@ export function truthLabel(t: Truth): string {
 export const PROCESS_AT_SEC = 50;
 
 /**
+ * GC1/GC2 行の resolveSec を計算する。
+ *
+ * - mizu/rai (水雷): early = (gc===1 ? gc1WaterEarly : !gc1WaterEarly)。→ 51(早) / 74(遅)。
+ * - shisen (視線):   early = (gc===1)。→ 51(早) / 74(遅)。
+ * - mushoku (無職):  early = (gc===2)。→ 51(早) / 74(遅)。
+ */
+function gcResolveSec(
+  role: GcRole,
+  gc: 1 | 2,
+  gc1WaterEarly: boolean,
+): number {
+  let early: boolean;
+  if (role === "mizu" || role === "rai") {
+    early = gc === 1 ? gc1WaterEarly : !gc1WaterEarly;
+  } else if (role === "shisen") {
+    early = gc === 1;
+  } else {
+    // mushoku
+    early = gc === 2;
+  }
+  return early ? 51 : 74;
+}
+
+/**
  * 席 0 視点のリビールスケジュール（1x 基準）を組み立てる。
  *
  * - t=8  → GC1 役割 + GC1 真偽
@@ -107,6 +138,7 @@ export function buildRevealSchedule(setup: SimSetup): RevealRow[] {
       icon: gcRoleIcon(me.gc1Role),
       label: gcRoleLabel(me.gc1Role),
       truth: setup.gc1Truth,
+      resolveSec: gcResolveSec(me.gc1Role, 1, setup.gc1WaterEarly),
     },
     {
       key: "wave1",
@@ -115,6 +147,7 @@ export function buildRevealSchedule(setup: SimSetup): RevealRow[] {
       icon: waveIcon(setup.wave1Type),
       label: waveLabel(setup.wave1Type),
       truth: setup.wave1Truth,
+      resolveSec: setup.wave1Type === "honoo" ? 62 : 84,
     },
     {
       key: "gc2",
@@ -123,6 +156,7 @@ export function buildRevealSchedule(setup: SimSetup): RevealRow[] {
       icon: gcRoleIcon(me.gc2Role),
       label: gcRoleLabel(me.gc2Role),
       truth: setup.gc2Truth,
+      resolveSec: gcResolveSec(me.gc2Role, 2, setup.gc1WaterEarly),
     },
     {
       key: "wave2",
@@ -131,6 +165,7 @@ export function buildRevealSchedule(setup: SimSetup): RevealRow[] {
       icon: waveIcon(setup.wave2Type),
       label: waveLabel(setup.wave2Type),
       truth: setup.wave2Truth,
+      resolveSec: setup.wave2Type === "honoo" ? 62 : 84,
     },
     {
       key: "gc3",
@@ -138,6 +173,7 @@ export function buildRevealSchedule(setup: SimSetup): RevealRow[] {
       caption: "GC3 役割",
       icon: gc3RoleIcon(me.gc3Role),
       label: gc3RoleLabel(me.gc3Role),
+      resolveSec: null,
     },
   ];
 }

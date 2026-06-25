@@ -12,7 +12,7 @@ function seeded(seed: number): () => number {
   };
 }
 
-/** toMinState が返す 10 キーの集合。 */
+/** compareMinState が返す 8 キーの集合（thunda/blizza は除外）。 */
 const EXPECTED_KEYS = new Set([
   "waterType",
   "waterGC",
@@ -22,16 +22,14 @@ const EXPECTED_KEYS = new Set([
   "gc2",
   "honoo",
   "tsunami",
-  "thunda",
-  "blizza",
 ]);
 
 describe("compareMinState", () => {
-  it("returns 10 results matching the toMinState key set", () => {
+  it("returns 8 results (thunda/blizza excluded)", () => {
     const setup = generateSim(seeded(1));
     const correct = toMinState(setup, 0);
     const results = compareMinState(correct, correct);
-    expect(results).toHaveLength(10);
+    expect(results).toHaveLength(8);
     const keys = new Set(results.map((r) => r.key));
     expect(keys).toEqual(EXPECTED_KEYS);
   });
@@ -71,11 +69,11 @@ describe("compareMinState", () => {
     expect(byKey.gc2.ok).toBe(true);
   });
 
-  it("all-wrong input yields ok=false for every field and length still 10", () => {
+  it("all-wrong input yields ok=false for every field and length still 8", () => {
     const setup = generateSim(seeded(99));
     const correct = toMinState(setup, 0);
 
-    // Invert every field.
+    // Invert every field (thunda/blizza excluded from compare, but still in correct).
     const invertMap: Record<string, Record<string, string>> = {
       waterType: { mizu: "rai", rai: "mizu" },
       waterGC: { "1": "2", "2": "1" },
@@ -85,8 +83,6 @@ describe("compareMinState", () => {
       gc2: { shin: "gi", gi: "shin" },
       honoo: { shin: "gi", gi: "shin" },
       tsunami: { shin: "gi", gi: "shin" },
-      thunda: { shin: "gi", gi: "shin" },
-      blizza: { shin: "gi", gi: "shin" },
     };
     const wrong: Record<string, string> = {};
     for (const key of Object.keys(correct)) {
@@ -94,7 +90,7 @@ describe("compareMinState", () => {
     }
 
     const results = compareMinState(wrong, correct);
-    expect(results).toHaveLength(10);
+    expect(results).toHaveLength(8);
     expect(results.every((r) => !r.ok)).toBe(true);
   });
 
@@ -112,8 +108,8 @@ describe("compareMinState", () => {
     expect(["早", "遅"]).toContain(byKey.waterWhen.correct);
     // shisen label
     expect(["視線", "無職"]).toContain(byKey.shisen.correct);
-    // truth labels
-    for (const key of ["gc1", "gc2", "honoo", "tsunami", "thunda", "blizza"]) {
+    // truth labels (thunda/blizza no longer compared)
+    for (const key of ["gc1", "gc2", "honoo", "tsunami"]) {
       expect(["ほんと", "うそ"]).toContain(byKey[key].correct);
     }
   });
@@ -132,8 +128,6 @@ describe("compareMinState", () => {
       "gc2",
       "honoo",
       "tsunami",
-      "thunda",
-      "blizza",
     ]);
   });
 });
