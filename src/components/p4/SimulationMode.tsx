@@ -214,7 +214,7 @@ function PlayRunner() {
           <RotateCcw /> 新しいお題
         </Button>
       </div>
-      <PlayArena setup={setup} seat={0} startAt={startAt} />
+      <PlayArena setup={setup} seat={0} startAt={startAt} onNewTopic={start} />
       {/* アリーナの下にカンペ入力（自分で書き込む。アリーナのキー/ポインタ操作とは独立）。 */}
       <div className="border-t pt-2">
         <p className="px-0.5 pb-1 text-[10px] font-semibold text-muted-foreground">

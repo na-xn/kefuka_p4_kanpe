@@ -19,7 +19,9 @@ import {
   centerAoeSafeGeometry,
   MECHANIC_SEC,
   WAVE_DETONATE_DELAY,
+  END_SEC,
   mechanicResolveSec,
+  exdeathZones,
   type MechanicKey,
   type Point,
   type RequiredAction,
@@ -59,6 +61,8 @@ type Props = {
   seat?: number;
   startAt?: number;
   onResult?: (r: PlayResult) => void;
+  /** タイムライン終了（elapsed >= END_SEC）で「新しいお題」を押した時のコールバック。 */
+  onNewTopic?: () => void;
 };
 
 /** 機構の表示名。 */
@@ -247,7 +251,7 @@ const SUB_BOSSES = [
   },
 ];
 
-export function PlayArena({ setup, seat = 0, startAt, onResult }: Props) {
+export function PlayArena({ setup, seat = 0, startAt, onResult, onNewTopic }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
 
@@ -291,6 +295,8 @@ export function PlayArena({ setup, seat = 0, startAt, onResult }: Props) {
   // HUD 用クロック（粗いティック）。
   const [clock, setClock] = useState(0);
   const [dead, setDead] = useState(false);
+  // タイムライン終了（elapsed >= END_SEC）。クロック凍結 + 終了状態表示。
+  const [finished, setFinished] = useState(false);
 
   // setup が変わったらリセット。
   useEffect(() => {
@@ -299,6 +305,7 @@ export function PlayArena({ setup, seat = 0, startAt, onResult }: Props) {
     centerJudged.current = {};
     setResults({});
     setDead(false);
+    setFinished(false);
   }, [setup, seat]);
 
   const restart = useCallback(() => {
@@ -308,6 +315,7 @@ export function PlayArena({ setup, seat = 0, startAt, onResult }: Props) {
     centerJudged.current = {};
     setResults({});
     setDead(false);
+    setFinished(false);
   }, []);
 
   // --- キーボード入力 ---
@@ -447,7 +455,13 @@ export function PlayArena({ setup, seat = 0, startAt, onResult }: Props) {
       }
 
       // --- タイムライン評価 ---
-      const elapsed = (Date.now() - startRef.current) / 1000;
+      // 実経過。END_SEC を超えたらクロックを END_SEC に凍結し、採点を止める。
+      const rawElapsed = (Date.now() - startRef.current) / 1000;
+      const timelineEnded = rawElapsed >= END_SEC;
+      const elapsed = timelineEnded ? END_SEC : rawElapsed;
+      if (timelineEnded) {
+        setFinished((f) => (f ? f : true));
+      }
       const moving =
         !!keys.current["w"] ||
         !!keys.current["s"] ||
@@ -472,6 +486,9 @@ export function PlayArena({ setup, seat = 0, startAt, onResult }: Props) {
         const resolveSec = mechanicResolveSec(key);
         if (elapsed >= resolveSec && !resultsRef.current[key] && req.kind !== "none") {
           const boss = gc3BossPos(setup.gc3BossAngle);
+          // 1回目（早 t=51）の水雷/フィラー処理はエクスデス方向を北として散会基準を回す。
+          // 2回目（遅 t=74）は固定マーカー（標準 ZONES）。
+          const zones = key === "early" ? exdeathZones(setup.gc3BossAngle) : ZONES;
           const r = evaluate(
             req,
             { x: pl.x, y: pl.y },
@@ -479,6 +496,7 @@ export function PlayArena({ setup, seat = 0, startAt, onResult }: Props) {
             moving,
             aoeOrigin.current[key],
             boss,
+            zones,
           );
           const res: PlayResult = { key, ok: r.ok, reason: r.reason, label: req.label };
           setResults((prev) => ({ ...prev, [key]: res }));
@@ -515,7 +533,7 @@ export function PlayArena({ setup, seat = 0, startAt, onResult }: Props) {
       // --- 描画 ---
       draw(ctx, setup, seat, elapsed, pl, aoeOrigin.current, debuffs.current);
 
-      // HUD クロックを粗く反映。
+      // HUD クロックを粗く反映（END_SEC で凍結済みの elapsed を使う）。
       setClock((c0) => (Math.abs(c0 - elapsed) > 0.25 ? elapsed : c0));
 
       raf = requestAnimationFrame(loop);
@@ -563,7 +581,7 @@ export function PlayArena({ setup, seat = 0, startAt, onResult }: Props) {
           height={ARENA_SIZE}
           className="block h-auto w-full rounded-lg border"
         />
-        {dead && (
+        {dead && !finished && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-lg bg-black/55 text-center">
             <p className="text-sm font-bold text-red-400">死亡</p>
             <p className="max-w-[80%] text-xs text-white">{player.current.deadReason}</p>
@@ -574,6 +592,31 @@ export function PlayArena({ setup, seat = 0, startAt, onResult }: Props) {
             >
               もう一度
             </button>
+          </div>
+        )}
+        {finished && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-lg bg-black/65 text-center">
+            <p className="text-sm font-bold text-foreground text-white">タイムライン終了</p>
+            <p className="text-xs text-white">
+              <span className="text-green-400 font-bold">✓{passCount}</span>{" "}
+              <span className="text-red-400 font-bold">✗{failCount}</span>
+            </p>
+            <div className="mt-1 flex gap-2">
+              <button
+                type="button"
+                onClick={onNewTopic ?? restart}
+                className="rounded-md bg-primary px-4 py-1.5 text-xs font-bold text-primary-foreground"
+              >
+                新しいお題
+              </button>
+              <button
+                type="button"
+                onClick={restart}
+                className="rounded-md border border-white/40 px-4 py-1.5 text-xs font-bold text-white"
+              >
+                もう一度
+              </button>
+            </div>
           </div>
         )}
       </div>

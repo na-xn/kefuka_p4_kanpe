@@ -86,6 +86,59 @@ export function inSpreadZone(p: Point): boolean {
 }
 
 /* ============================================================
+ * エクスデス（外周分断ボス）を北とする回転ゾーン
+ *
+ * 1回目（早 t=51）の水雷処理は「エクスデスが出現した方向を北」として
+ * 散会基準を回す。標準ゾーン（h12=北 …）を CENTER まわりに回転させ、
+ * エクスデス方向が北（h12）に一致するようにする。
+ * 2回目（遅 t=74）は標準の固定ゾーン（h12/h3/h6/h9）をそのまま使う。
+ * ========================================================== */
+
+/** 標準「北」(h12 方向) のキャンバス角度。h12=(CENTER, CENTER-180) なので -PI/2。 */
+export const NORTH_ANGLE = -Math.PI / 2;
+
+/**
+ * gc3BossAngle(0..7) から「エクスデス北」への回転量（ラジアン）。
+ * エクスデス方向角 = gc3BossAngle*PI/4（gc3BossPos と同じ atan2 規約）。
+ * 回転量 = エクスデス方向 − 標準北。これを標準ゾーンに足すと北がエクスデスへ向く。
+ */
+export function exdeathNorthRotation(gc3BossAngle: number): number {
+  const exdeathAngle = (gc3BossAngle * Math.PI) / 4;
+  return exdeathAngle - NORTH_ANGLE;
+}
+
+/** 点 p を CENTER まわりに angle ラジアン回転する。 */
+export function rotateAround(p: Point, angle: number, center: Point = CENTER): Point {
+  const dx = p.x - center.x;
+  const dy = p.y - center.y;
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
+  return {
+    x: center.x + dx * c - dy * s,
+    y: center.y + dx * s + dy * c,
+  };
+}
+
+/**
+ * エクスデス北フレームでの各ゾーン中心。
+ * 標準 ZONES を exdeathNorthRotation(gc3BossAngle) だけ CENTER まわりに回す。
+ */
+export function exdeathZones(gc3BossAngle: number): Record<ZoneKey, Point> {
+  const rot = exdeathNorthRotation(gc3BossAngle);
+  return {
+    h12: rotateAround(ZONES.h12, rot),
+    h3: rotateAround(ZONES.h3, rot),
+    h6: rotateAround(ZONES.h6, rot),
+    h9: rotateAround(ZONES.h9, rot),
+  };
+}
+
+/** 点 p が、指定された（回転済み）ゾーン中心の判定円内か（< ZONE_RADIUS）。 */
+export function inZoneAt(p: Point, zoneCenter: Point): boolean {
+  return dist(p, zoneCenter) < ZONE_RADIUS;
+}
+
+/* ============================================================
  * 視線（魔眼）
  * ========================================================== */
 
@@ -290,6 +343,12 @@ export type MechanicKey =
   | "juso2" // 79s 視線 wave2
   | "tsunami"; // 84s つなみ
 
+/**
+ * タイムライン終了秒。最終記憶 AoE の解決（≈87s）後にクロックを停止する基準。
+ * elapsed >= END_SEC でクロックを END_SEC に凍結し、採点ループを止める。
+ */
+export const END_SEC = 90;
+
 /** 各機構の解決秒（sim クロック・1x 基準）。 */
 export const MECHANIC_SEC: Record<MechanicKey, number> = {
   gc3: 41,
@@ -454,19 +513,24 @@ export function evaluate(
   moving: boolean,
   aoeOrigin?: Point,
   boss?: Point,
+  /**
+   * 位置ゾーン中心（頭割り/散開判定用）。未指定なら標準 ZONES（固定 h12/h3/h6/h9）。
+   * 1回目（早 t=51）の水雷処理では exdeathZones(gc3BossAngle) を渡してエクスデス北で判定する。
+   */
+  zones: Record<ZoneKey, Point> = ZONES,
 ): { ok: boolean; reason: string } {
   switch (req.kind) {
     case "none":
       return { ok: true, reason: "" };
     case "stack":
     case "filler":
-      if (!inZone(p, "h12") && !inZone(p, "h6"))
+      if (!inZoneAt(p, zones.h12) && !inZoneAt(p, zones.h6))
         return { ok: false, reason: "頭割り位置（12時/6時）から外れています" };
-      if (inZone(p, "h3") || inZone(p, "h9"))
+      if (inZoneAt(p, zones.h3) || inZoneAt(p, zones.h9))
         return { ok: false, reason: "頭割りタイミングで 3時/9時 に入っています" };
       return { ok: true, reason: "" };
     case "spread":
-      if (!inZone(p, "h3") && !inZone(p, "h9"))
+      if (!inZoneAt(p, zones.h3) && !inZoneAt(p, zones.h9))
         return { ok: false, reason: "散開位置（3時/9時）から外れています" };
       return { ok: true, reason: "" };
     case "stop":

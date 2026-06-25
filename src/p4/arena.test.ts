@@ -25,6 +25,13 @@ import {
   WAVE_DETONATE_DELAY,
   mechanicPlaceSec,
   mechanicResolveSec,
+  END_SEC,
+  NORTH_ANGLE,
+  exdeathNorthRotation,
+  rotateAround,
+  exdeathZones,
+  inZoneAt,
+  ZONE_RADIUS,
   type Point,
 } from "@/p4/arena";
 import { generateSim, type SimSetup } from "@/p4/simulation";
@@ -412,5 +419,84 @@ describe("つなみ/ほのお 設置→起爆タイミング（参照 processDeb
       expect(mechanicPlaceSec(k)).toBe(MECHANIC_SEC[k]);
       expect(mechanicResolveSec(k)).toBe(MECHANIC_SEC[k]);
     }
+  });
+});
+
+describe("END_SEC（タイムライン終了クロック凍結）", () => {
+  it("END_SEC は最終記憶解決(≈87s)より後の 90s", () => {
+    expect(END_SEC).toBe(90);
+    expect(END_SEC).toBeGreaterThan(mechanicResolveSec("tsunami")); // 87
+    expect(END_SEC).toBeGreaterThan(MECHANIC_SEC.tsunami);
+  });
+});
+
+describe("エクスデス北フレーム（1回目 水雷処理の回転ゾーン）", () => {
+  it("NORTH_ANGLE は h12 方向（-PI/2）", () => {
+    expect(NORTH_ANGLE).toBeCloseTo(-Math.PI / 2, 9);
+  });
+
+  it("回転量はエクスデス方向 − 標準北", () => {
+    for (let a = 0; a < 8; a++) {
+      const exdeathAngle = (a * Math.PI) / 4;
+      expect(exdeathNorthRotation(a)).toBeCloseTo(exdeathAngle - NORTH_ANGLE, 9);
+    }
+  });
+
+  it("回転後の h12（北）はエクスデス方向に一致する", () => {
+    for (let a = 0; a < 8; a++) {
+      const zones = exdeathZones(a);
+      const boss = gc3BossPos(a);
+      // h12 方向角（CENTER から）= エクスデス方向角（CENTER から）。
+      const zoneAngle = Math.atan2(zones.h12.y - CENTER.y, zones.h12.x - CENTER.x);
+      const bossAngle = Math.atan2(boss.y - CENTER.y, boss.x - CENTER.x);
+      const norm = (t: number) => Math.atan2(Math.sin(t), Math.cos(t));
+      expect(norm(zoneAngle - bossAngle)).toBeCloseTo(0, 6);
+    }
+  });
+
+  it("回転後のゾーンは CENTER から 180 の距離を保つ（合同変換）", () => {
+    const zones = exdeathZones(3);
+    for (const z of [zones.h12, zones.h3, zones.h6, zones.h9]) {
+      expect(Math.hypot(z.x - CENTER.x, z.y - CENTER.y)).toBeCloseTo(180, 6);
+    }
+  });
+
+  it("rotateAround(angle=0) は恒等", () => {
+    const p: Point = { x: 123, y: 456 };
+    const r = rotateAround(p, 0);
+    expect(r.x).toBeCloseTo(p.x, 9);
+    expect(r.y).toBeCloseTo(p.y, 9);
+  });
+
+  it("angle=0（エクスデス東）: 北は東(h3 標準位置)へ回り、散開ゾーンは縦(h12/h6)へ移る", () => {
+    // gc3BossAngle=0 → exdeathAngle=0(東)。回転量 = 0 - (-PI/2) = +PI/2。
+    // h12(北)→東、h3(東)→南、h6(南)→西、h9(西)→北。
+    const zones = exdeathZones(0);
+    // 散開(spread)= 回転後 h3/h9。回転後 h3 は標準 h6 位置、h9 は標準 h12 位置（縦）。
+    expect(zones.h3.x).toBeCloseTo(ZONES.h6.x, 5);
+    expect(zones.h3.y).toBeCloseTo(ZONES.h6.y, 5);
+    expect(zones.h9.x).toBeCloseTo(ZONES.h12.x, 5);
+    expect(zones.h9.y).toBeCloseTo(ZONES.h12.y, 5);
+  });
+
+  it("evaluate(spread, zones=exdeathZones): 回転後の散開ゾーンで合否が決まる", () => {
+    const req = { kind: "spread", label: "散開" } as const;
+    const zones = exdeathZones(0); // 散開は縦(標準 h12/h6 位置)に回る。
+    const dir: Point = { x: 0, y: -1 };
+    // 回転後 h9（= 標準 h12 位置）に立てば spread OK。
+    const okP = ZONES.h12;
+    expect(evaluate(req, okP, dir, false, undefined, undefined, zones).ok).toBe(true);
+    // 標準 h3（東）は回転後の散開ゾーンではない → NG。
+    const ngP = ZONES.h3;
+    expect(evaluate(req, ngP, dir, false, undefined, undefined, zones).ok).toBe(false);
+    // 固定ゾーン（2回目相当）なら標準 h3 で OK。
+    expect(evaluate(req, ngP, dir, false).ok).toBe(true);
+  });
+
+  it("inZoneAt は中心一致で真、ZONE_RADIUS 超で偽", () => {
+    const c: Point = { x: 200, y: 200 };
+    expect(inZoneAt(c, c)).toBe(true);
+    expect(inZoneAt({ x: c.x + ZONE_RADIUS - 1, y: c.y }, c)).toBe(true);
+    expect(inZoneAt({ x: c.x + ZONE_RADIUS + 1, y: c.y }, c)).toBe(false);
   });
 });
