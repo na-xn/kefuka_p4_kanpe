@@ -35,7 +35,7 @@ import {
   MECHANIC_SEC,
   type MechanicKey,
 } from "@/p4/arena";
-import { MECH_ORDER, centerResolutions } from "@/p4/playTimeline";
+import { MECH_ORDER, centerResolutions, FINAL_MEMORY_SEC } from "@/p4/playTimeline";
 
 /** NPC 1枚の描画状態（位置・向き・移動中フラグ）。 */
 export type NpcState = {
@@ -151,6 +151,25 @@ export function centerSafeNear(
     if (best) return best;
   }
   return pref;
+}
+
+/**
+ * マジックアウト（最終記憶 AoE, t=87）の判定パラメータ。
+ *
+ * centerResolutions には含まれないため setup から直接合成する。発火面は
+ * 「過去（mid-fight サンダガ/ブリザガの真偽）×未来（thundaTruth/blizzaTruth）」の
+ * XNOR（一致＝ほんと＝表示面が発火）。形(pattern)は描画と同じく gc1 の十字/象限を流用。
+ * geometry は cross（雷十字＋象限の両面）。
+ */
+export function finalMemoryParams(setup: SimSetup): CenterAoeParams {
+  const c = setup.centerAoE;
+  return {
+    thunderPattern: c.gc1.thunderPattern,
+    blizzardPattern: c.gc1.blizzardPattern,
+    // XNOR: 過去と未来が一致 → shin（表示面が発火＝避ける）。
+    sandagaShin: c.sandaga.truth === setup.thundaTruth,
+    blizzagaShin: c.blizzaga.truth === setup.blizzaTruth,
+  };
 }
 
 /** 中央 AoE インスタンス → {params, geometry} の決定的な索引を作る。 */
@@ -329,8 +348,9 @@ function gazeFillSpot(setup: SimSetup, seat: number, key: "juso1" | "juso2"): Po
  * ブリザガ象限を避けて待機）と、視線無し席の南北陣形(57/79) も加える。
  * 時刻昇順にソートして返す。
  *
- * 波(ほのお@62 / つなみ@84) には waypoint を置かない：各席が自分の位置に AoE を
- * 落とすだけで NPC には描画/採点されないため、意図的に回避しない（補間で保持）。
+ * 波(ほのお@62 / つなみ@84) は npcTarget の "aoe" が CENTER を返すので、中央集合の
+ * waypoint として MECH_ORDER ループで追加される（必ず中心で設置）。
+ * 最後にマジックアウト（最終記憶 AoE, t=87）の退避点も加える。
  */
 function buildWaypoints(setup: SimSetup, seat: number): Waypoint[] {
   const wps: Waypoint[] = [{ time: 0, target: seatHome(seat) }];
@@ -357,6 +377,10 @@ function buildWaypoints(setup: SimSetup, seat: number): Waypoint[] {
     if (req.kind === "look" || req.kind === "hide") continue; // 視線持ちは npcTarget 側で追加済み。
     wps.push({ time: MECHANIC_SEC[jk], target: gazeFillSpot(setup, seat, jk) });
   }
+
+  // --- マジックアウト（最終記憶 AoE, t=87）退避：過去×未来 XNOR の十字＋象限を避ける ---
+  const fm = finalMemoryParams(setup);
+  wps.push({ time: FINAL_MEMORY_SEC, target: centerSafeNear(seatHome(seat), fm, "cross", SCAN_BIG) });
 
   // 時刻昇順に安定ソート。
   wps.sort((a, b) => a.time - b.time);

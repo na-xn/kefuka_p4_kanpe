@@ -82,6 +82,12 @@ type Props = {
    * ソロでは未指定（no-op）。
    */
   onLocalPos?: (x: number, y: number, fx: number, fy: number) => void;
+  /**
+   * （任意・ソロ用）他席（NPC）ドットを一切描画しない。1人だけで動きの確認をしたい時に。
+   * 視線(魔眼)の採点は元々中央ボス基準（isFacingCenter）なので、NPC 非表示でも
+   * 「中央を見る/見ない」で従来どおり判定できる。既定 false。
+   */
+  hideNpc?: boolean;
 };
 
 /** セッション位置同期の自席ブロードキャスト間隔（~12Hz）。 */
@@ -351,6 +357,7 @@ export function PlayArena({
   remotePositions,
   occupiedSeats,
   onLocalPos,
+  hideNpc = false,
 }: Props) {
   // セッション用 props は最新値を ref で参照（ループの依存を増やさず再購読を防ぐ）。
   const remotePositionsRef = useRef(remotePositions);
@@ -359,6 +366,8 @@ export function PlayArena({
   occupiedSeatsRef.current = occupiedSeats;
   const onLocalPosRef = useRef(onLocalPos);
   onLocalPosRef.current = onLocalPos;
+  const hideNpcRef = useRef(hideNpc);
+  hideNpcRef.current = hideNpc;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
 
@@ -674,6 +683,7 @@ export function PlayArena({
         debuffs.current,
         remotePositionsRef.current,
         occupiedSeatsRef.current,
+        hideNpcRef.current,
       );
 
       // HUD クロックを粗く反映（END_SEC で凍結済みの elapsed を使う）。
@@ -818,6 +828,8 @@ function draw(
   remotePositions?: Map<number, { x: number; y: number; fx: number; fy: number }>,
   /** （任意・セッション用）人間が占有している席集合（自席含む）。 */
   occupiedSeats?: Set<number>,
+  /** （任意・ソロ用）他席ドットを描かない。 */
+  hideNpc = false,
 ) {
   ctx.clearRect(0, 0, ARENA_SIZE, ARENA_SIZE);
 
@@ -893,7 +905,8 @@ function draw(
 
   // --- 他席の 7 ドット（NPC or 他の人間）---
   // 人間ドットより「前」のこの位置で描き、操作中の自席ドットが必ず最前面に来るようにする。
-  drawOtherSeats(ctx, setup, seat, elapsed, remotePositions, occupiedSeats);
+  // ソロの hideNpc 時は一切描かない（自席のみで動き確認）。
+  if (!hideNpc) drawOtherSeats(ctx, setup, seat, elapsed, remotePositions, occupiedSeats);
 
   // --- プレイヤードット ---
   if (!pl.dead) {

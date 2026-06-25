@@ -8,6 +8,7 @@ import {
   XCircle,
   Zap,
   Snowflake,
+  EyeOff,
   Users,
   Eye,
   Wifi,
@@ -244,6 +245,25 @@ function PlayRunner({ seat }: { seat: number }) {
     setStartAt(Date.now());
   };
 
+  // ソロ用: NPC（他席ドット）の表示/非表示。1人で動きを確認したい時に隠せる（永続化）。
+  const [hideNpc, setHideNpc] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("playHideNpc") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const toggleHideNpc = () =>
+    setHideNpc((v) => {
+      const next = !v;
+      try {
+        localStorage.setItem("playHideNpc", next ? "1" : "0");
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+
   // PC: アリーナとカンペ入力の比率（アリーナ %）をドラッグ仕切りで調整。
   const isWide = useIsWide();
   const rowRef = useRef<HTMLDivElement | null>(null);
@@ -298,7 +318,11 @@ function PlayRunner({ seat }: { seat: number }) {
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <Button variant={hideNpc ? "default" : "secondary"} size="xs" onClick={toggleHideNpc}>
+          {hideNpc ? <EyeOff className="size-3.5" /> : <Users className="size-3.5" />}
+          NPC{hideNpc ? "表示" : "非表示"}
+        </Button>
         <Button variant="default" size="xs" onClick={start}>
           <RotateCcw /> 新しいお題
         </Button>
@@ -308,7 +332,7 @@ function PlayRunner({ seat }: { seat: number }) {
           {/* PC: アリーナ｜ドラッグ仕切り｜カンペ入力（比率可変）。導出タイムラインは下部全幅。 */}
           <div ref={rowRef} className="flex items-stretch">
             <div className="min-w-0" style={{ width: `${arenaPct}%` }}>
-              <PlayArena setup={setup} seat={seat} startAt={startAt} onNewTopic={start} />
+              <PlayArena setup={setup} seat={seat} startAt={startAt} onNewTopic={start} hideNpc={hideNpc} />
             </div>
             <div
               onPointerDown={onSplitDown}
