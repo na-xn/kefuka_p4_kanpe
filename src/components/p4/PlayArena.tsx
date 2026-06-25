@@ -615,7 +615,7 @@ export function PlayArena({ setup, seat = 0, startAt, onResult, onNewTopic }: Pr
 
       <div
         ref={wrapRef}
-        className="relative mx-auto w-full max-w-[480px] select-none"
+        className="relative w-full select-none"
         style={{ touchAction: "none" }}
       >
         <canvas
