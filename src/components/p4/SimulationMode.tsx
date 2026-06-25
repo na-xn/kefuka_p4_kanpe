@@ -33,6 +33,7 @@ import { buildAnswerTimeline } from "@/p4/timeline";
 import type { AnswerRow } from "@/p4/timeline";
 import { useSession } from "@/p4/session";
 import type { SessionApi, SeatSlot } from "@/p4/session";
+import { PlayArena } from "@/components/p4/PlayArena";
 
 /**
  * 練習モード（シミュレーション）。
@@ -115,7 +116,91 @@ function ModePicker({
  * ソロ（従来動作・1バイトも挙動を変えない）
  * ========================================================== */
 
+type SoloKind = "kanpe" | "play";
+
 function SoloRunner() {
+  const [soloKind, setSoloKind] = useState<SoloKind>("kanpe");
+
+  return (
+    <div className="flex flex-col gap-2">
+      <SoloKindPicker kind={soloKind} onChange={setSoloKind} />
+      {soloKind === "kanpe" ? <KanpeRunner /> : <PlayRunner />}
+    </div>
+  );
+}
+
+/** ソロ内: カンペ練習 / 操作プレイ の切替セグメント。 */
+function SoloKindPicker({
+  kind,
+  onChange,
+}: {
+  kind: SoloKind;
+  onChange: (k: SoloKind) => void;
+}) {
+  return (
+    <div className="flex justify-center">
+      <div className="flex rounded-lg border overflow-hidden">
+        {(["kanpe", "play"] as SoloKind[]).map((k) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => onChange(k)}
+            className={`px-4 py-1.5 text-xs font-bold transition-colors ${
+              kind === k
+                ? "bg-primary text-primary-foreground"
+                : "bg-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {k === "kanpe" ? "カンペ練習" : "操作プレイ"}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** ソロ・操作プレイ: 円形アリーナでドットを動かして機構を処理する。 */
+function PlayRunner() {
+  const [setup, setSetup] = useState<SimSetup | null>(null);
+  const [startAt, setStartAt] = useState<number | null>(null);
+
+  const start = () => {
+    setSetup(generateSim());
+    setStartAt(Date.now());
+  };
+
+  if (!setup || startAt == null) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-6">
+        <div className="px-2 text-center text-xs text-muted-foreground">
+          <p className="font-bold text-foreground">操作プレイ（ソロ）</p>
+          <p className="mt-1">
+            円形アリーナでドット（あなた＝席1相当）を動かし、実戦タイムラインの
+            各機構の解決時刻に「正しい位置・移動・視線・色」に入れるか練習します。
+            中央サンダガ/ブリザガ十字とセッション相乗りは後日対応。
+          </p>
+        </div>
+        <Button variant="default" className="h-14 w-44 text-base font-bold" onClick={start}>
+          <Play className="size-5" /> お題開始
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex justify-end">
+        <Button variant="default" size="xs" onClick={start}>
+          <RotateCcw /> 新しいお題
+        </Button>
+      </div>
+      <PlayArena setup={setup} seat={0} startAt={startAt} />
+    </div>
+  );
+}
+
+/** ソロ・カンペ練習（従来動作・1バイトも挙動を変えない）。 */
+function KanpeRunner() {
   const [setup, setSetup] = useState<SimSetup | null>(null);
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [phase, setPhase] = useState<"idle" | "playing" | "process">("idle");

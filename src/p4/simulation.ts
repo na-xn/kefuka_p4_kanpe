@@ -49,6 +49,12 @@ export type SimSetup = {
   thundaTruth: Truth;
   /** ブリザガ（マジックアウト記憶）の真偽。 */
   blizzaTruth: Truth;
+  /**
+   * GC3 分断ボスが出現する外周の角度インデックス（0..7）。
+   * 実角度 = index * 45°（0°=3時方向 / 時計回り、canvas 座標系）。
+   * セッションで全クライアントが同じ分断面を共有できるよう決定的に生成する。
+   */
+  gc3BossAngle: number;
   /** 8人分の割当（seat 0..7）。 */
   players: PlayerAssignment[];
 };
@@ -167,6 +173,7 @@ export function generateSim(rng: () => number = Math.random): SimSetup {
     gc1WaterEarly: rng() < 0.5,
     thundaTruth: randTruth(rng),
     blizzaTruth: randTruth(rng),
+    gc3BossAngle: Math.floor(rng() * 8) % 8,
     players,
   };
 }

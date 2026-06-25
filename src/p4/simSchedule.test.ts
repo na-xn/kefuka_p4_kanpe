@@ -106,6 +106,7 @@ describe("simSchedule", () => {
       gc1WaterEarly: true,
       thundaTruth: "shin",
       blizzaTruth: "shin",
+      gc3BossAngle: 0,
       players: [
         { seat: 0, gc1Role: "mizu", gc2Role: "shisen", gc3Role: "aragan", gc3Scar: "seija" },
         { seat: 1, gc1Role: "rai", gc2Role: "mushoku", gc3Role: "aragan", gc3Scar: "seija" },
@@ -135,6 +136,7 @@ describe("simSchedule", () => {
       gc1WaterEarly: true, // GC1 水雷 = 早
       thundaTruth: "shin",
       blizzaTruth: "shin",
+      gc3BossAngle: 0,
       players: [
         { seat: 0, gc1Role: "mizu", gc2Role: "shisen", gc3Role: "aragan", gc3Scar: "seija" },
         { seat: 1, gc1Role: "rai", gc2Role: "mushoku", gc3Role: "aragan", gc3Scar: "seija" },
@@ -174,6 +176,7 @@ describe("simSchedule", () => {
       gc1WaterEarly: true,
       thundaTruth: "shin",
       blizzaTruth: "shin",
+      gc3BossAngle: 0,
       players: [
         { seat: 0, gc1Role: "shisen", gc2Role: "mizu", gc3Role: "aragan", gc3Scar: "seija" },
         { seat: 1, gc1Role: "mushoku", gc2Role: "rai", gc3Role: "aragan", gc3Scar: "seija" },
@@ -220,6 +223,7 @@ describe("simSchedule", () => {
       gc1WaterEarly: true,
       thundaTruth: "shin",
       blizzaTruth: "shin",
+      gc3BossAngle: 0,
       players: [
         { seat: 0, gc1Role: "mushoku", gc2Role: "mizu", gc3Role: "aragan", gc3Scar: "seija" },
         { seat: 1, gc1Role: "shisen", gc2Role: "rai", gc3Role: "aragan", gc3Scar: "seija" },

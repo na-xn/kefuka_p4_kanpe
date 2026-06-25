@@ -79,6 +79,18 @@ describe("generateSim composition", () => {
       );
     }
   });
+
+  it("gc3BossAngle is a deterministic integer index 0..7", () => {
+    for (const seed of SEEDS) {
+      const setup = generateSim(mulberry32(seed));
+      expect(Number.isInteger(setup.gc3BossAngle)).toBe(true);
+      expect(setup.gc3BossAngle).toBeGreaterThanOrEqual(0);
+      expect(setup.gc3BossAngle).toBeLessThanOrEqual(7);
+      // 同一シードで再現的。
+      const again = generateSim(mulberry32(seed));
+      expect(again.gc3BossAngle).toBe(setup.gc3BossAngle);
+    }
+  });
 });
 
 describe("toMinState", () => {
