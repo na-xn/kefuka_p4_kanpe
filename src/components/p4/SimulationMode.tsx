@@ -96,24 +96,21 @@ function saveInputMode(m: InputMode) {
   }
 }
 
-/** プレイするロール（TH=席0相当 / DPS=席4相当）。ソロ/セッション共通で永続化。 */
-type PlayRole = "TH" | "DPS";
+const PLAY_JOB_KEY = "playJob";
 
-const PLAY_ROLE_KEY = "playRole";
-
-function loadPlayRole(): PlayRole {
+function loadPlayJob(): Job {
   try {
-    const v = localStorage.getItem(PLAY_ROLE_KEY);
-    if (v === "TH" || v === "DPS") return v;
+    const v = localStorage.getItem(PLAY_JOB_KEY);
+    if (v === "tank" || v === "healer" || v === "dps") return v;
   } catch {
     // ignore
   }
-  return "TH";
+  return "tank";
 }
 
-function savePlayRole(r: PlayRole) {
+function savePlayJob(j: Job) {
   try {
-    localStorage.setItem(PLAY_ROLE_KEY, r);
+    localStorage.setItem(PLAY_JOB_KEY, j);
   } catch {
     // ignore
   }
@@ -124,53 +121,21 @@ type SimMode = "solo" | "session";
 /** 練習モードのトップ。ソロ/セッションの選択と画面切替を行う。 */
 export function SimulationMode() {
   const [mode, setMode] = useState<SimMode>("solo");
-  // プレイロール（TH/DPS）はソロ・セッション両方で共有・永続化する。
-  const [playRole, setPlayRole] = useState<PlayRole>(loadPlayRole);
+  const [playJob, setPlayJob] = useState<Job>(loadPlayJob);
 
-  const changePlayRole = (r: PlayRole) => {
-    setPlayRole(r);
-    savePlayRole(r);
+  const changePlayJob = (j: Job) => {
+    setPlayJob(j);
+    savePlayJob(j);
   };
 
   return (
     <div className="flex flex-col gap-2">
       <ModePicker mode={mode} onChange={setMode} />
-      <PlayRolePicker role={playRole} onChange={changePlayRole} />
       {mode === "solo" ? (
-        <SoloRunner playRole={playRole} />
+        <SoloRunner playJob={playJob} onChangePlayJob={changePlayJob} />
       ) : (
-        <SessionRunner playRole={playRole} />
+        <SessionRunner />
       )}
-    </div>
-  );
-}
-
-/** TH/DPS のロール切替セグメント（ModePicker と同じ見た目）。 */
-function PlayRolePicker({
-  role,
-  onChange,
-}: {
-  role: PlayRole;
-  onChange: (r: PlayRole) => void;
-}) {
-  return (
-    <div className="flex justify-center">
-      <div className="flex rounded-lg border overflow-hidden">
-        {(["TH", "DPS"] as PlayRole[]).map((r) => (
-          <button
-            key={r}
-            type="button"
-            onClick={() => onChange(r)}
-            className={`px-4 py-1.5 text-xs font-bold transition-colors ${
-              role === r
-                ? "bg-primary text-primary-foreground"
-                : "bg-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {r}
-          </button>
-        ))}
-      </div>
     </div>
   );
 }
@@ -211,13 +176,21 @@ function ModePicker({
 
 type SoloKind = "kanpe" | "play";
 
-function SoloRunner({ playRole }: { playRole: PlayRole }) {
+function SoloRunner({
+  playJob,
+  onChangePlayJob,
+}: {
+  playJob: Job;
+  onChangePlayJob: (j: Job) => void;
+}) {
   const [soloKind, setSoloKind] = useState<SoloKind>("kanpe");
+  const seat = ({ tank: 0, healer: 2, dps: 4 } as Record<Job, number>)[playJob];
 
   return (
     <div className="flex flex-col gap-2">
+      <JobPicker selected={playJob} onChange={onChangePlayJob} />
       <SoloKindPicker kind={soloKind} onChange={setSoloKind} />
-      {soloKind === "kanpe" ? <KanpeRunner /> : <PlayRunner playRole={playRole} />}
+      {soloKind === "kanpe" ? <KanpeRunner seat={seat} /> : <PlayRunner seat={seat} />}
     </div>
   );
 }
@@ -253,11 +226,9 @@ function SoloKindPicker({
 }
 
 /** ソロ・操作プレイ: 円形アリーナでドットを動かして機構を処理する。 */
-function PlayRunner({ playRole }: { playRole: PlayRole }) {
+function PlayRunner({ seat }: { seat: number }) {
   // 操作プレイ中はキー操作のためフォーカス可能にする（デスクトップ）。
   useOverlayFocus(true);
-  // ロール → 席（TH=0 / DPS=4）。アリーナ判定もカンペも同じ席で扱う。
-  const seat = playRole === "TH" ? 0 : 4;
   const [setup, setSetup] = useState<SimSetup | null>(null);
   const [startAt, setStartAt] = useState<number | null>(null);
   // プレイヤーが自分で書き込むカンペ（解答データから自動補完しない）。
@@ -374,7 +345,7 @@ function PlayRunner({ playRole }: { playRole: PlayRole }) {
 }
 
 /** ソロ・カンペ練習（従来動作・1バイトも挙動を変えない）。 */
-function KanpeRunner() {
+function KanpeRunner({ seat }: { seat: number }) {
   const [setup, setSetup] = useState<SimSetup | null>(null);
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [phase, setPhase] = useState<"idle" | "playing" | "process">("idle");
@@ -425,7 +396,7 @@ function KanpeRunner() {
   return (
     <PracticeRun
       setup={setup}
-      seat={0}
+      seat={seat}
       startedAt={startedAt}
       setStartedAt={setStartedAt}
       phase={phase}
@@ -454,9 +425,7 @@ const JOB_META: Record<Job, { label: string; icon: string; slots: number }> = {
 
 const JOB_ORDER: Job[] = ["tank", "healer", "dps"];
 
-// セッションのプレイロールは「共有・永続化」要件のみ（トップのトグルが担う）。
-// セッション席は mySeat のままで、ロール由来の席変更は後フェーズで対応する。
-function SessionRunner(_props: { playRole: PlayRole }) {
+function SessionRunner() {
   // セッション中の練習状態。
   const [setup, setSetup] = useState<SimSetup | null>(null);
   const [startedAt, setStartedAt] = useState<number | null>(null);
