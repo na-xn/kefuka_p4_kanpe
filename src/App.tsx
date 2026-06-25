@@ -9,6 +9,7 @@ import { EventCard } from "@/components/p4/EventCard";
 import { ProcessFlow } from "@/components/p4/ProcessFlow";
 import { MinimumMode, INITIAL_MIN } from "@/components/p4/MinimumMode";
 import type { MinState } from "@/components/p4/MinimumMode";
+import { SimulationMode } from "@/components/p4/SimulationMode";
 import { INPUT_EVENTS } from "@/p4/events";
 import type { State, Phase, MenuState } from "@/p4/types";
 import {
@@ -154,6 +155,8 @@ export default function App() {
   const [hideEdgeSteps, setHideEdgeSteps] = useState(false); // ①生者の傷・⑧アルテマを隠す
   // ミニマムモード（テスト機能・通常モードと独立）
   const [minMode, setMinMode] = useState(false);
+  // 練習モード（シミュレーション・ソロ用。simMode が ON のとき他に優先して描画）
+  const [simMode, setSimMode] = useState(false);
   const [minState, setMinState] = useState<MinState>(INITIAL_MIN);
   const setMin = (id: string, value: string) =>
     setMinState((s) => ({ ...s, [id]: value }));
@@ -314,6 +317,8 @@ export default function App() {
       if (sl != null) setShowSpeechLog(sl === "true");
       const mm = localStorage.getItem("minMode");
       if (mm != null) setMinMode(mm === "true");
+      const sm = localStorage.getItem("simMode");
+      if (sm != null) setSimMode(sm === "true");
       const tk = localStorage.getItem("truthKeysOn");
       if (tk != null) setKeyInputOn(tk === "true");
       const pk1 = localStorage.getItem("posKey1");
@@ -379,6 +384,13 @@ export default function App() {
       /* 無視 */
     }
   }, [minMode]);
+  useEffect(() => {
+    try {
+      localStorage.setItem("simMode", String(simMode));
+    } catch {
+      /* 無視 */
+    }
+  }, [simMode]);
   // 読み上げログの購読（speak() の各イベントを受信して蓄積、最新50件保持）。
   useEffect(() => {
     setSpeechLogger((e) => setSpeechLog((prev) => [...prev.slice(-49), e]));
@@ -864,7 +876,7 @@ export default function App() {
           {...dragProps}
           className="flex h-8 shrink-0 items-center justify-between gap-2 border-b px-2"
         >
-          {!minMode && phase === "process" ? (
+          {!minMode && !simMode && phase === "process" ? (
             <Button
               variant="secondary"
               size="xs"
@@ -889,7 +901,7 @@ export default function App() {
             </span>
           )}
           <div className="flex items-center gap-1">
-            {minMode ? (
+            {minMode || simMode ? (
               <Button variant="destructive" size="icon-xs" onClick={resetAll} aria-label="リセット" title="リセット">
                 <RotateCcw />
               </Button>
@@ -928,7 +940,9 @@ export default function App() {
         {/* 本体（高さはウィンドウ自動可変。最大時のみスクロール） */}
         <div className="flex-1 overflow-y-auto px-2 py-2">
           <div ref={contentRef}>
-          {minMode ? (
+          {simMode ? (
+            <SimulationMode />
+          ) : minMode ? (
             <MinimumMode value={minState} set={setMin} />
           ) : phase === "input" ? (
             <div className="flex flex-col gap-2">
@@ -1137,6 +1151,15 @@ export default function App() {
                 type="checkbox"
                 checked={minMode}
                 onChange={(e) => setMinMode(e.target.checked)}
+                className="size-3.5 accent-primary"
+              />
+            </label>
+            <label className="mt-1.5 flex cursor-pointer items-center justify-between text-[11px] font-medium text-muted-foreground">
+              <span>練習モード（シミュレーション）</span>
+              <input
+                type="checkbox"
+                checked={simMode}
+                onChange={(e) => setSimMode(e.target.checked)}
                 className="size-3.5 accent-primary"
               />
             </label>
