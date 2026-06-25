@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Gauge } from "lucide-react";
-import type { SimSetup } from "@/p4/simulation";
+import type { SimSetup, Truth } from "@/p4/simulation";
+import { toMinState } from "@/p4/simulation";
 import {
   ARENA_SIZE,
   CENTER,
@@ -11,10 +12,12 @@ import {
   AOE_CIRCLE_RADIUS,
   AOE_DONUT_INNER,
   AOE_DONUT_OUTER,
+  THUNDER_STRIP_W,
   clampToArena,
   gc3BossPos,
   requiredAction,
   evaluate,
+  centerAoeSafe,
   MECHANIC_SEC,
   type MechanicKey,
   type Point,
@@ -22,18 +25,19 @@ import {
 } from "@/p4/arena";
 
 /**
- * 操作プレイ・アリーナ（Phase B: ロール機構のみ）。
+ * 操作プレイ・アリーナ。
  *
  * 円形アリーナ上でドットを動かし、実戦タイムラインの各機構の解決秒に
  * 「正しい位置/移動/視線/色」に居るかを参照ジオメトリで判定する。
+ * 参照 sim.html の LOOK（常時ボス + キャストバー / 真偽インジケータ /
+ * デバフアイコンスタック / 寛容な AoE 予告 / 中央サンダガ・ブリザガ十字）を再現し、
+ * t=0 から画面が空にならないようにする。
  *
- * props は後段のセッション相乗りを見据えた形:
+ * props:
  *  - setup: 共有セットアップ（generateSim 由来）
  *  - seat:  自分の席（既定 0）
  *  - startAt: 開始時刻（ms epoch。同期クロック用。未指定なら mount 時刻）
  *  - onResult: 各機構の判定結果コールバック（任意）
- *
- * 中央サンダガ/ブリザガ十字 AoE とセッション相乗りは後段（Phase C/D）。
  */
 
 export type PlayResult = { key: MechanicKey; ok: boolean; reason: string; label: string };
@@ -59,7 +63,193 @@ const MECH_NAME: Record<MechanicKey, string> = {
 const MECH_ORDER: MechanicKey[] = ["gc3", "early", "juso1", "honoo", "late", "juso2", "tsunami"];
 
 /** 機構の解決前リードイン秒（事前にターゲットを描画して予告する）。 */
-const LEAD_IN = 6;
+const LEAD_IN = 8;
+
+/**
+ * 中央ボス AoE の解決秒。
+ * GC1 中央サンダガ/ブリザガ @53s、GC2 中央 @76s（参照フローに沿わせた値）。
+ * 約6秒前から低アルファで予告し、解決秒で高アルファ → 直後にクリア。
+ */
+const CENTER_GC1_SEC = 53;
+const CENTER_GC2_SEC = 76;
+const CENTER_LEAD = 6;
+
+/** 中央 AoE の擬似機構キー（HUD/結果には MECH_ORDER とは別に集計）。 */
+type CenterKey = "centerGc1" | "centerGc2";
+
+/* ============================================================
+ * デバフアイコン定義（席視点の保有デバフ）
+ * ========================================================== */
+
+/** /play/<name>.png を引くためのアイコンキー集合。 */
+const ICON_FILES = {
+  mizu: "water_compression",
+  rai: "forked_lightning",
+  mushoku: "acceleration_bomb",
+  shisen: "evil_eye",
+  honoo: "fire",
+  tsunami: "water",
+  aragan: "allagan_field",
+  shi: "living_transcendence",
+  seija: "living_scar_pink",
+  shisha: "dead_scar_blue",
+  truth: "truth",
+  fake: "fake",
+} as const;
+type IconKey = keyof typeof ICON_FILES;
+
+const ICON_KEYS = Object.keys(ICON_FILES) as IconKey[];
+
+/** 1デバフ表示エントリ。application で出現し resolveSec で消える。 */
+type DebuffEntry = {
+  iconKey: IconKey;
+  /** 出現秒（APPLICATION）。 */
+  applySec: number;
+  /** 解決秒（カウントダウンの終点）。 */
+  resolveSec: number;
+  /** フォールバック矩形色。 */
+  color: string;
+};
+
+/**
+ * 席のタイムライン保有デバフを setup から導出する。
+ * GC1役割@8 / wave1@16 / GC2役割@24 / wave2@32 / GC3役割+傷@40 で出現。
+ */
+function buildDebuffs(setup: SimSetup, seat: number): DebuffEntry[] {
+  const p = setup.players.find((pl) => pl.seat === seat);
+  if (!p) return [];
+  const ms = toMinState(setup, seat);
+  const out: DebuffEntry[] = [];
+
+  // 各 GC 役割の解決秒（早/遅は waterWhen に従う）。
+  const waterEarly = ms.waterWhen === "haya";
+  // 水雷側 GC の解決秒。
+  const waterSec = waterEarly ? MECHANIC_SEC.early : MECHANIC_SEC.late;
+  // 加速度系側 GC の解決秒。
+  const accelEarly = !waterEarly;
+  const accelIsShisen = ms.shisen === "yes";
+  const accelSec = accelIsShisen
+    ? accelEarly
+      ? MECHANIC_SEC.juso1
+      : MECHANIC_SEC.juso2
+    : accelEarly
+      ? MECHANIC_SEC.early
+      : MECHANIC_SEC.late;
+
+  // GC1 役割は p.gc1Role、GC2 役割は p.gc2Role。各々の解決秒は水雷/加速度系で決まる。
+  const gc1IsWater = p.gc1Role === "mizu" || p.gc1Role === "rai";
+  const gc1Sec = gc1IsWater ? waterSec : accelSec;
+  const gc2Sec = gc1IsWater ? accelSec : waterSec;
+
+  const roleColor = (r: string): string => {
+    if (r === "mizu") return "#00b4d8";
+    if (r === "rai") return "#bf55ec";
+    if (r === "shisen") return "#a2d2ff";
+    return "#ffcc00"; // mushoku
+  };
+
+  // GC1 役割 @8。
+  out.push({
+    iconKey: p.gc1Role as IconKey,
+    applySec: 8,
+    resolveSec: gc1Sec,
+    color: roleColor(p.gc1Role),
+  });
+  // wave1 @16（honoo/tsunami）。
+  out.push({
+    iconKey: setup.wave1Type as IconKey,
+    applySec: 16,
+    resolveSec: setup.wave1Type === "honoo" ? MECHANIC_SEC.honoo : MECHANIC_SEC.tsunami,
+    color: setup.wave1Type === "honoo" ? "#ff4500" : "#00b4d8",
+  });
+  // GC2 役割 @24。
+  out.push({
+    iconKey: p.gc2Role as IconKey,
+    applySec: 24,
+    resolveSec: gc2Sec,
+    color: roleColor(p.gc2Role),
+  });
+  // wave2 @32。
+  out.push({
+    iconKey: setup.wave2Type as IconKey,
+    applySec: 32,
+    resolveSec: setup.wave2Type === "honoo" ? MECHANIC_SEC.honoo : MECHANIC_SEC.tsunami,
+    color: setup.wave2Type === "honoo" ? "#ff4500" : "#00b4d8",
+  });
+  // GC3 役割 + 傷 @40。
+  out.push({
+    iconKey: p.gc3Role as IconKey,
+    applySec: 40,
+    resolveSec: MECHANIC_SEC.gc3,
+    color: p.gc3Role === "aragan" ? "#00f5d4" : "#ff4444",
+  });
+  out.push({
+    iconKey: p.gc3Scar as IconKey,
+    applySec: 40,
+    resolveSec: MECHANIC_SEC.gc3,
+    color: p.gc3Scar === "seija" ? "#ff69b4" : "#00b4d8",
+  });
+
+  return out;
+}
+
+/** 現在の GC ウィンドウに応じた中央 AoE パラメータ。 */
+function centerParams(setup: SimSetup, which: CenterKey) {
+  const g = which === "centerGc1" ? setup.centerAoE.gc1 : setup.centerAoE.gc2;
+  return {
+    thunderPattern: g.thunderPattern,
+    blizzardPattern: g.blizzardPattern,
+    sandagaShin: g.sandagaTruth === "shin",
+    blizzagaShin: g.blizzagaTruth === "shin",
+  };
+}
+
+/* ============================================================
+ * 画像プリロード（モジュールレベルで一度だけ）
+ * ========================================================== */
+
+type ImgMap = Partial<Record<IconKey, HTMLImageElement>>;
+type LoadedMap = Partial<Record<IconKey, boolean>>;
+
+const imgCache: ImgMap = {};
+const loadedCache: LoadedMap = {};
+let preloadStarted = false;
+
+function preloadImages(onLoad: () => void) {
+  if (preloadStarted) return;
+  preloadStarted = true;
+  for (const key of ICON_KEYS) {
+    const img = new Image();
+    img.onload = () => {
+      loadedCache[key] = true;
+      onLoad();
+    };
+    img.onerror = () => {
+      loadedCache[key] = false;
+    };
+    img.src = `/play/${ICON_FILES[key]}.png`;
+    imgCache[key] = img;
+  }
+}
+
+/* ============================================================
+ * ボス配置（参照: 中央 + 外周2体）
+ * ========================================================== */
+
+const BOSS_RADIUS = 25;
+const CENTER_BOSS = { x: CENTER.x, y: CENTER.y, color: "#9b5de5" };
+const SUB_BOSSES = [
+  {
+    x: CENTER.x + Math.cos((4 * Math.PI) / 3) * (ARENA_RADIUS - 40),
+    y: CENTER.y + Math.sin((4 * Math.PI) / 3) * (ARENA_RADIUS - 40),
+    color: "#5c3d99",
+  },
+  {
+    x: CENTER.x + Math.cos((5 * Math.PI) / 3) * (ARENA_RADIUS - 40),
+    y: CENTER.y + Math.sin((5 * Math.PI) / 3) * (ARENA_RADIUS - 40),
+    color: "#5c3d99",
+  },
+];
 
 export function PlayArena({ setup, seat = 0, startAt, onResult }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -70,6 +260,12 @@ export function PlayArena({ setup, seat = 0, startAt, onResult }: Props) {
   useEffect(() => {
     startRef.current = startAt ?? Date.now();
   }, [startAt, setup]);
+
+  // 画像ロード状態のトリガ（再描画用カウンタ）。
+  const [, setImgTick] = useState(0);
+  useEffect(() => {
+    preloadImages(() => setImgTick((t) => t + 1));
+  }, []);
 
   // プレイヤー状態は ref で保持（毎フレーム更新、再レンダリングを避ける）。
   const player = useRef({ x: 400, y: 550, lastDx: 0, lastDy: -1, dead: false, deadReason: "" });
@@ -86,8 +282,15 @@ export function PlayArena({ setup, seat = 0, startAt, onResult }: Props) {
   const resultsRef = useRef(results);
   resultsRef.current = results;
 
+  // 中央 AoE 判定済みフラグ（ref で十分）。
+  const centerJudged = useRef<Record<CenterKey, boolean>>({ centerGc1: false, centerGc2: false });
+
   // AoE 原点（波を「置いた」瞬間のプレイヤー位置）。リードイン開始時に確定。
   const aoeOrigin = useRef<Partial<Record<MechanicKey, Point>>>({});
+
+  // 席の保有デバフ。
+  const debuffs = useRef<DebuffEntry[]>([]);
+  debuffs.current = buildDebuffs(setup, seat);
 
   // HUD 用クロック（粗いティック）。
   const [clock, setClock] = useState(0);
@@ -97,6 +300,7 @@ export function PlayArena({ setup, seat = 0, startAt, onResult }: Props) {
   useEffect(() => {
     player.current = { x: 400, y: 550, lastDx: 0, lastDy: -1, dead: false, deadReason: "" };
     aoeOrigin.current = {};
+    centerJudged.current = { centerGc1: false, centerGc2: false };
     setResults({});
     setDead(false);
   }, [setup, seat]);
@@ -105,6 +309,7 @@ export function PlayArena({ setup, seat = 0, startAt, onResult }: Props) {
     startRef.current = Date.now();
     player.current = { x: 400, y: 550, lastDx: 0, lastDy: -1, dead: false, deadReason: "" };
     aoeOrigin.current = {};
+    centerJudged.current = { centerGc1: false, centerGc2: false };
     setResults({});
     setDead(false);
   }, []);
@@ -188,11 +393,6 @@ export function PlayArena({ setup, seat = 0, startAt, onResult }: Props) {
     if (!ctx) return;
     const SPEED = 4;
     let raf = 0;
-
-    const css = (name: string, fallback: string) => {
-      const v = getComputedStyle(canvas).getPropertyValue(name).trim();
-      return v || fallback;
-    };
 
     const loop = () => {
       const pl = player.current;
@@ -292,8 +492,22 @@ export function PlayArena({ setup, seat = 0, startAt, onResult }: Props) {
         }
       }
 
+      // --- 中央ボス AoE 判定（GC1@53 / GC2@76）---
+      for (const ck of ["centerGc1", "centerGc2"] as CenterKey[]) {
+        const sec = ck === "centerGc1" ? CENTER_GC1_SEC : CENTER_GC2_SEC;
+        if (elapsed >= sec && !centerJudged.current[ck]) {
+          centerJudged.current[ck] = true;
+          const safe = centerAoeSafe({ x: pl.x, y: pl.y }, centerParams(setup, ck));
+          if (!safe && !pl.dead) {
+            pl.dead = true;
+            pl.deadReason = "中央ボス AoE 被弾!";
+            setDead(true);
+          }
+        }
+      }
+
       // --- 描画 ---
-      draw(ctx, css, setup, seat, elapsed, pl, aoeOrigin.current);
+      draw(ctx, setup, seat, elapsed, pl, aoeOrigin.current, debuffs.current);
 
       // HUD クロックを粗く反映。
       setClock((c0) => (Math.abs(c0 - elapsed) > 0.25 ? elapsed : c0));
@@ -341,7 +555,7 @@ export function PlayArena({ setup, seat = 0, startAt, onResult }: Props) {
           ref={canvasRef}
           width={ARENA_SIZE}
           height={ARENA_SIZE}
-          className="block h-auto w-full rounded-lg border bg-card/30 text-foreground"
+          className="block h-auto w-full rounded-lg border"
         />
         {dead && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-lg bg-black/55 text-center">
@@ -389,45 +603,65 @@ export function PlayArena({ setup, seat = 0, startAt, onResult }: Props) {
  * 描画
  * ========================================================== */
 
+/** どの中央 GC ウィンドウか（無ければ null）。 */
+function activeCenter(elapsed: number): CenterKey | null {
+  if (elapsed >= CENTER_GC1_SEC - CENTER_LEAD && elapsed < CENTER_GC1_SEC + 1.5) return "centerGc1";
+  if (elapsed >= CENTER_GC2_SEC - CENTER_LEAD && elapsed < CENTER_GC2_SEC + 1.5) return "centerGc2";
+  return null;
+}
+
 function draw(
   ctx: CanvasRenderingContext2D,
-  css: (n: string, f: string) => string,
   setup: SimSetup,
   seat: number,
   elapsed: number,
   pl: { x: number; y: number; lastDx: number; lastDy: number; dead: boolean },
   origins: Partial<Record<MechanicKey, Point>>,
+  debuffs: DebuffEntry[],
 ) {
-  const fg = css("color", "#e5e7eb");
   ctx.clearRect(0, 0, ARENA_SIZE, ARENA_SIZE);
 
-  // アリーナ円。
+  // --- アリーナ円（参照: dark disc #1a1a1a / #555 stroke） ---
   ctx.beginPath();
   ctx.arc(CENTER.x, CENTER.y, ARENA_RADIUS, 0, Math.PI * 2);
-  ctx.fillStyle = "rgba(120,120,140,0.10)";
+  ctx.fillStyle = "#1a1a1a";
   ctx.fill();
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = "rgba(150,150,170,0.5)";
+  ctx.lineWidth = 5;
+  ctx.strokeStyle = "#555";
   ctx.stroke();
 
-  // ゾーンヒント（h12/h3/h6/h9）。
+  // --- ゾーンヒント（h12/h3/h6/h9） ---
   const zoneLabels: Record<string, string> = { h12: "12", h3: "3", h6: "6", h9: "9" };
   for (const [k, z] of Object.entries(ZONES)) {
     ctx.beginPath();
     ctx.arc(z.x, z.y, ZONE_RADIUS, 0, Math.PI * 2);
     ctx.setLineDash([6, 6]);
-    ctx.strokeStyle = "rgba(150,150,170,0.35)";
+    ctx.strokeStyle = "rgba(170,170,190,0.28)";
     ctx.lineWidth = 1.5;
     ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle = "rgba(150,150,170,0.5)";
+    ctx.fillStyle = "rgba(170,170,190,0.45)";
     ctx.font = "bold 22px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(zoneLabels[k], z.x, z.y);
   }
+  ctx.textBaseline = "alphabetic";
 
-  // 各機構のリードイン中ターゲットを描画。
+  // --- 中央ボス AoE（サンダガ十字 + ブリザガ象限） ---
+  const center = activeCenter(elapsed);
+  if (center) {
+    const g = center === "centerGc1" ? setup.centerAoE.gc1 : setup.centerAoE.gc2;
+    const sec = center === "centerGc1" ? CENTER_GC1_SEC : CENTER_GC2_SEC;
+    // リードインは低アルファ、解決秒で高アルファ。
+    const resolving = elapsed >= sec;
+    const aBlz = resolving ? 0.45 : 0.12;
+    const aThn = resolving ? 0.45 : 0.12;
+    drawBlizzardLayer(ctx, g.blizzardPattern, aBlz);
+    drawThunderLayer(ctx, g.thunderPattern, aThn);
+  }
+
+  // --- 各機構のリードイン中ターゲット（寛容な予告） ---
   for (const key of MECH_ORDER) {
     const sec = MECHANIC_SEC[key];
     if (elapsed < sec - LEAD_IN || elapsed > sec + 1.5) continue;
@@ -435,24 +669,215 @@ function draw(
     drawTarget(ctx, req, key, setup, origins);
   }
 
-  // プレイヤードット。
-  ctx.beginPath();
-  ctx.arc(pl.x, pl.y, PLAYER_RADIUS, 0, Math.PI * 2);
-  ctx.fillStyle = pl.dead ? "#ff4444" : "#00e0c0";
-  ctx.fill();
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = "#003b35";
-  ctx.stroke();
-  // 向きインジケータ。
-  const dl = Math.hypot(pl.lastDx, pl.lastDy) || 1;
-  ctx.beginPath();
-  ctx.moveTo(pl.x, pl.y);
-  ctx.lineTo(pl.x + (pl.lastDx / dl) * 22, pl.y + (pl.lastDy / dl) * 22);
-  ctx.strokeStyle = pl.dead ? "#ff8888" : "#00e0c0";
-  ctx.lineWidth = 3;
-  ctx.stroke();
+  // --- ボス（中央 + 外周2体）+ キャストバー + 真偽インジケータ ---
+  drawBosses(ctx, setup, elapsed, center);
 
-  ctx.fillStyle = fg;
+  // --- プレイヤードット ---
+  if (!pl.dead) {
+    ctx.beginPath();
+    ctx.arc(pl.x, pl.y, PLAYER_RADIUS, 0, Math.PI * 2);
+    ctx.fillStyle = "#00e0c0";
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#fff";
+    ctx.stroke();
+    const dl = Math.hypot(pl.lastDx, pl.lastDy) || 1;
+    ctx.beginPath();
+    ctx.moveTo(pl.x, pl.y);
+    ctx.lineTo(pl.x + (pl.lastDx / dl) * 22, pl.y + (pl.lastDy / dl) * 22);
+    ctx.strokeStyle = "#ff0055";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+  } else {
+    ctx.strokeStyle = "#ff3333";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(pl.x - 15, pl.y - 15);
+    ctx.lineTo(pl.x + 15, pl.y + 15);
+    ctx.moveTo(pl.x + 15, pl.y - 15);
+    ctx.lineTo(pl.x - 15, pl.y + 15);
+    ctx.stroke();
+  }
+
+  // --- デバフアイコンスタック（プレイヤー近傍）+ カウントダウン ---
+  drawDebuffStack(ctx, elapsed, pl, debuffs);
+
+  // --- 経過時間表示（参照） ---
+  ctx.fillStyle = "#fff";
+  ctx.font = "bold 20px sans-serif";
+  ctx.textAlign = "left";
+  ctx.fillText(`戦闘経過時間: ${Math.floor(elapsed)}秒`, 24, 44);
+}
+
+/** サンダガ雷ストリップ（参照 drawThundergaAoELayer: ±PI/4 回転、w=175）。 */
+function drawThunderLayer(ctx: CanvasRenderingContext2D, pattern: number, alpha: number) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(CENTER.x, CENTER.y, ARENA_RADIUS, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.fillStyle = `rgba(255, 105, 180, ${alpha})`;
+  ctx.translate(CENTER.x, CENTER.y);
+  ctx.rotate(pattern >= 2 ? Math.PI / 4 : -Math.PI / 4);
+  const w = THUNDER_STRIP_W;
+  const R = ARENA_RADIUS;
+  if (pattern % 2 === 0) {
+    ctx.fillRect(-w, -R, w, R * 2);
+    ctx.fillRect(w, -R, w, R * 2);
+  } else {
+    ctx.fillRect(-2 * w, -R, w, R * 2);
+    ctx.fillRect(0, -R, w, R * 2);
+  }
+  ctx.restore();
+}
+
+/** ブリザガ象限（参照 drawBlizzagaAoELayer）。 */
+function drawBlizzardLayer(ctx: CanvasRenderingContext2D, pattern: number, alpha: number) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(CENTER.x, CENTER.y, ARENA_RADIUS, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.fillStyle = `rgba(0, 180, 216, ${alpha})`;
+  const cx = CENTER.x;
+  const cy = CENTER.y;
+  if (pattern === 0) {
+    ctx.fillRect(cx, 0, ARENA_SIZE, cy);
+    ctx.fillRect(0, cy, cx, ARENA_SIZE);
+  } else {
+    ctx.fillRect(0, 0, cx, cy);
+    ctx.fillRect(cx, cy, ARENA_SIZE, ARENA_SIZE);
+  }
+  ctx.restore();
+}
+
+/** 3体のボス + キャストバー + 真偽インジケータ。 */
+function drawBosses(
+  ctx: CanvasRenderingContext2D,
+  setup: SimSetup,
+  elapsed: number,
+  center: CenterKey | null,
+) {
+  // キャストバーの進捗: 次に来る機構解決へ向けて満ちる（常時テレグラフ）。
+  // 中央ボスは中央 AoE の進捗、外周ボスは波/水雷の進捗で代用。
+  const allSecs = [...Object.values(MECHANIC_SEC), CENTER_GC1_SEC, CENTER_GC2_SEC].sort(
+    (a, b) => a - b,
+  );
+  const prevSec = allSecs.filter((s) => s <= elapsed).pop() ?? 0;
+  const nextSec = allSecs.find((s) => s > elapsed) ?? prevSec + 1;
+  const span = Math.max(1, nextSec - prevSec);
+  const genericProgress = Math.min(1, Math.max(0, (elapsed - prevSec) / span));
+
+  const bossList = [CENTER_BOSS, ...SUB_BOSSES];
+  bossList.forEach((boss, index) => {
+    // ボス本体。
+    ctx.beginPath();
+    ctx.arc(boss.x, boss.y, BOSS_RADIUS, 0, Math.PI * 2);
+    ctx.fillStyle = boss.color;
+    ctx.fill();
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // 真偽インジケータ。
+    if (index === 0) {
+      drawCenterTruthRings(ctx, boss.x, boss.y, setup, center);
+    } else {
+      // 外周ボス: GC1/GC2 真偽（参照 sub-boss currentEffect）。簡易に gc1/gc2Truth を表示。
+      const truth: Truth = index === 1 ? setup.gc1Truth : setup.gc2Truth;
+      drawSubBossRing(ctx, boss.x, boss.y, truth);
+    }
+
+    // キャストバー（参照: barW=100, barH=10, y=boss.y-bossRadius-25）。
+    const barW = 100;
+    const barH = 10;
+    const barX = boss.x - barW / 2;
+    const barY = boss.y - BOSS_RADIUS - 25;
+    ctx.fillStyle = "#000";
+    ctx.fillRect(barX, barY, barW, barH);
+    let progColor = "#ffaa00";
+    let prog = genericProgress;
+    if (index === 0 && center) {
+      const sec = center === "centerGc1" ? CENTER_GC1_SEC : CENTER_GC2_SEC;
+      prog = Math.min(1, Math.max(0, (elapsed - (sec - CENTER_LEAD)) / CENTER_LEAD));
+      progColor = "#bf55ec";
+    }
+    if (prog >= 1) progColor = "#ff3333";
+    ctx.fillStyle = progColor;
+    ctx.fillRect(barX, barY, barW * prog, barH);
+    ctx.strokeStyle = "#888";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(barX, barY, barW, barH);
+  });
+}
+
+/** 真偽インジケータ用の小さな楕円リング + truth/fake アイコン（参照 drawCenterBossRings 簡略）。 */
+function drawTruthEllipse(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  ringStroke: string,
+  innerStroke: string,
+  shin: boolean,
+) {
+  const rx = 45;
+  const ry = 15;
+  const size = 20;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.strokeStyle = ringStroke;
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.strokeStyle = innerStroke;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  const key: IconKey = shin ? "truth" : "fake";
+  const img = imgCache[key];
+  if (loadedCache.truth && loadedCache.fake && img) {
+    ctx.drawImage(img, -rx - size / 2, -size / 2, size, size);
+    ctx.drawImage(img, rx - size / 2, -size / 2, size, size);
+  } else {
+    ctx.fillStyle = shin ? "#00b4d8" : "#ff4444";
+    ctx.fillRect(-rx - 5, -5, 10, 10);
+    ctx.fillRect(rx - 5, -5, 10, 10);
+  }
+  ctx.restore();
+}
+
+/** 中央ボスの真偽（GC ウィンドウ中はサンダガ/ブリザガ、それ以外は GC1/GC2 のサンダガ/ブリザガ）。 */
+function drawCenterTruthRings(
+  ctx: CanvasRenderingContext2D,
+  bx: number,
+  by: number,
+  setup: SimSetup,
+  center: CenterKey | null,
+) {
+  const g =
+    center === "centerGc2"
+      ? setup.centerAoE.gc2
+      : setup.centerAoE.gc1; // 既定/GC1 表示。
+  // 上=サンダガ（紫系）、下=ブリザガ（青系）。
+  drawTruthEllipse(
+    ctx,
+    bx,
+    by - 25,
+    "rgba(138, 43, 226, 0.4)",
+    "#bf55ec",
+    g.sandagaTruth === "shin",
+  );
+  drawTruthEllipse(
+    ctx,
+    bx,
+    by + 45,
+    "rgba(0, 180, 216, 0.4)",
+    "#00b4d8",
+    g.blizzagaTruth === "shin",
+  );
+}
+
+/** 外周ボスの真偽リング（参照 sub-boss）。 */
+function drawSubBossRing(ctx: CanvasRenderingContext2D, bx: number, by: number, truth: Truth) {
+  drawTruthEllipse(ctx, bx, by, "rgba(0, 180, 216, 0.35)", "#00f5d4", truth === "shin");
 }
 
 /** ある機構の「正しい場所/形」を半透明で予告描画。 */
@@ -465,7 +890,8 @@ function drawTarget(
 ) {
   const safe = "rgba(78,201,176,0.18)";
   const safeEdge = "rgba(78,201,176,0.8)";
-  const danger = "rgba(255,80,80,0.18)";
+  const danger = "rgba(255,69,0,0.30)";
+  const dangerEdge = "#ff4500";
 
   const fillZone = (z: Point) => {
     ctx.beginPath();
@@ -489,21 +915,31 @@ function drawTarget(
       break;
     case "aoe": {
       const o = origins[key] ?? CENTER;
+      ctx.save();
       ctx.fillStyle = danger;
+      ctx.strokeStyle = dangerEdge;
+      ctx.lineWidth = 3;
       if (req.shape === "CIRCLE") {
         ctx.beginPath();
         ctx.arc(o.x, o.y, AOE_CIRCLE_RADIUS, 0, Math.PI * 2);
         ctx.fill();
+        ctx.stroke();
       } else if (req.shape === "DONUT") {
         ctx.beginPath();
         ctx.arc(o.x, o.y, AOE_DONUT_OUTER, 0, Math.PI * 2);
         ctx.arc(o.x, o.y, AOE_DONUT_INNER, 0, Math.PI * 2, true);
         ctx.fill("evenodd");
+        ctx.beginPath();
+        ctx.arc(o.x, o.y, AOE_DONUT_OUTER, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(o.x, o.y, AOE_DONUT_INNER, 0, Math.PI * 2);
+        ctx.stroke();
       }
+      ctx.restore();
       break;
     }
     case "gc3": {
-      // 分断面 + 安全色側を塗る。
       const boss = gc3BossPos(setup.gc3BossAngle);
       drawSplit(ctx, boss, req.color === "PINK" ? "PINK" : "BLUE");
       break;
@@ -514,43 +950,31 @@ function drawTarget(
     case "move":
     case "none":
     default:
-      // 位置自由（視線/移動）はラベルのみ。中央近傍に表示。
       break;
   }
 }
 
-/** GC3 分断面とボス、安全側の色を描画。 */
+/** GC3 分断面（参照 drawWave3SplitAoE: ボスへ translate→中心向き rotate、pink=+側 / blue=-側）+ 安全側強調。 */
 function drawSplit(ctx: CanvasRenderingContext2D, boss: Point, safeColor: "PINK" | "BLUE") {
-  const pink = "rgba(255,105,180,0.18)";
-  const blue = "rgba(0,180,216,0.18)";
-  // ボス→中心方向の角度。
   const ang = Math.atan2(CENTER.y - boss.y, CENTER.x - boss.x);
-  ctx.save();
-  // アリーナ円でクリップ。
-  ctx.beginPath();
-  ctx.arc(CENTER.x, CENTER.y, ARENA_RADIUS, 0, Math.PI * 2);
-  ctx.clip();
-  ctx.translate(boss.x, boss.y);
-  ctx.rotate(ang);
   const R = ARENA_RADIUS * 3;
-  // 参照同様: 回転後 +y 側を PINK、-y 側を BLUE。
-  ctx.fillStyle = pink;
-  ctx.fillRect(-R, 0, R * 2, R);
-  ctx.fillStyle = blue;
-  ctx.fillRect(-R, -R, R * 2, R);
-  ctx.restore();
 
-  // 安全側の強調枠。
   ctx.save();
   ctx.beginPath();
   ctx.arc(CENTER.x, CENTER.y, ARENA_RADIUS, 0, Math.PI * 2);
   ctx.clip();
   ctx.translate(boss.x, boss.y);
   ctx.rotate(ang);
-  const R2 = ARENA_RADIUS * 3;
-  ctx.fillStyle = safeColor === "PINK" ? "rgba(255,105,180,0.22)" : "rgba(0,180,216,0.22)";
-  if (safeColor === "PINK") ctx.fillRect(-R2, 0, R2 * 2, R2);
-  else ctx.fillRect(-R2, -R2, R2 * 2, R2);
+  // 参照: pink = +回転側(rect(0,0,3R,3R)) / blue = -側(rect(0,-3R,3R,3R))。
+  ctx.fillStyle = "rgba(255, 105, 180, 0.20)";
+  ctx.fillRect(0, 0, R, R);
+  ctx.fillStyle = "rgba(0, 180, 216, 0.20)";
+  ctx.fillRect(0, -R, R, R);
+  // 安全側の強調。
+  ctx.fillStyle =
+    safeColor === "PINK" ? "rgba(255, 105, 180, 0.22)" : "rgba(0, 180, 216, 0.22)";
+  if (safeColor === "PINK") ctx.fillRect(0, 0, R, R);
+  else ctx.fillRect(0, -R, R, R);
   ctx.restore();
 
   // ボスマーカー。
@@ -558,4 +982,52 @@ function drawSplit(ctx: CanvasRenderingContext2D, boss: Point, safeColor: "PINK"
   ctx.arc(boss.x, boss.y, 14, 0, Math.PI * 2);
   ctx.fillStyle = "rgba(220,60,60,0.9)";
   ctx.fill();
+}
+
+/** デバフアイコンスタック（プレイヤー右上に小さく並べる）+ 残り秒カウントダウン。 */
+function drawDebuffStack(
+  ctx: CanvasRenderingContext2D,
+  elapsed: number,
+  pl: { x: number; y: number },
+  debuffs: DebuffEntry[],
+) {
+  const active = debuffs.filter((d) => elapsed >= d.applySec && elapsed < d.resolveSec + 0.5);
+  if (active.length === 0) return;
+
+  const iconSize = 28;
+  const gap = 32;
+  // プレイヤー右上に基準点。アリーナ右端を超えないようにクランプ。
+  let baseX = pl.x + PLAYER_RADIUS + 8;
+  const baseY = pl.y - PLAYER_RADIUS - iconSize - 16;
+  const totalW = active.length * gap;
+  if (baseX + totalW > ARENA_SIZE - 8) baseX = ARENA_SIZE - 8 - totalW;
+  if (baseX < 8) baseX = 8;
+  const clampY = Math.max(8, baseY);
+
+  active.forEach((d, i) => {
+    const x = baseX + i * gap;
+    const y = clampY;
+    const img = imgCache[d.iconKey];
+    if (loadedCache[d.iconKey] && img) {
+      ctx.drawImage(img, x, y, iconSize, iconSize);
+    } else {
+      ctx.fillStyle = d.color;
+      ctx.fillRect(x, y, iconSize, iconSize);
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 8px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(d.iconKey.slice(0, 3), x + iconSize / 2, y + 18);
+    }
+    // 残り秒（参照: 白文字 + 黒縁）。
+    const remain = Math.max(0, Math.ceil(d.resolveSec - elapsed));
+    ctx.save();
+    ctx.font = "bold 12px sans-serif";
+    ctx.textAlign = "center";
+    ctx.strokeStyle = "#000";
+    ctx.lineWidth = 3;
+    ctx.strokeText(String(remain), x + iconSize / 2, y + iconSize + 13);
+    ctx.fillStyle = "#fff";
+    ctx.fillText(String(remain), x + iconSize / 2, y + iconSize + 13);
+    ctx.restore();
+  });
 }

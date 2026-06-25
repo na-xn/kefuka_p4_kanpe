@@ -55,6 +55,30 @@ export type SimSetup = {
    * セッションで全クライアントが同じ分断面を共有できるよう決定的に生成する。
    */
   gc3BossAngle: number;
+  /**
+   * 中央ボスのサンダガ/ブリザガ十字・象限 AoE の決定的ジオメトリ（GC1/GC2 ごと）。
+   *
+   * 参照 sim.html の `drawThundergaAoELayer` / `drawBlizzagaAoELayer` /
+   * `evaluateCurrentPosition` の意味論に一致する:
+   * - thunderPattern ∈ 0..3 — 中央で ±45° 回転した幅175の雷ストリップ配置。
+   * - blizzardPattern ∈ 0..1 — 中央4象限のうち対角2象限を塗るブリザガ。
+   * - sandagaTruth/blizzagaTruth — ほんと(shin)=表示面が実発火（避ける）/
+   *   うそ(gi)=反対面が発火（補集合を避ける）。
+   */
+  centerAoE: {
+    gc1: {
+      sandagaTruth: Truth;
+      blizzagaTruth: Truth;
+      thunderPattern: number;
+      blizzardPattern: number;
+    };
+    gc2: {
+      sandagaTruth: Truth;
+      blizzagaTruth: Truth;
+      thunderPattern: number;
+      blizzardPattern: number;
+    };
+  };
   /** 8人分の割当（seat 0..7）。 */
   players: PlayerAssignment[];
 };
@@ -163,17 +187,45 @@ export function generateSim(rng: () => number = Math.random): SimSetup {
   const wave1Type: WaveType = rng() < 0.5 ? "honoo" : "tsunami";
   const wave2Type: WaveType = wave1Type === "honoo" ? "tsunami" : "honoo";
 
+  const gc1Truth = randTruth(rng);
+  const gc2Truth = randTruth(rng);
+  const wave1Truth = randTruth(rng);
+  const wave2Truth = randTruth(rng);
+  const gc1WaterEarly = rng() < 0.5;
+  const thundaTruth = randTruth(rng);
+  const blizzaTruth = randTruth(rng);
+  const gc3BossAngle = Math.floor(rng() * 8) % 8;
+
+  // 中央 AoE ジオメトリ: 既存の rng() 呼び出しを一切ずらさないよう、
+  // すべての決定的フィールドを生成し終えた後でまとめて引く。
+  // 順序: gc1.sandagaTruth, gc1.blizzagaTruth, gc1.thunderPattern, gc1.blizzardPattern, 次に gc2 同順。
+  const centerAoE = {
+    gc1: {
+      sandagaTruth: randTruth(rng),
+      blizzagaTruth: randTruth(rng),
+      thunderPattern: Math.floor(rng() * 4),
+      blizzardPattern: Math.floor(rng() * 2),
+    },
+    gc2: {
+      sandagaTruth: randTruth(rng),
+      blizzagaTruth: randTruth(rng),
+      thunderPattern: Math.floor(rng() * 4),
+      blizzardPattern: Math.floor(rng() * 2),
+    },
+  };
+
   return {
-    gc1Truth: randTruth(rng),
-    gc2Truth: randTruth(rng),
+    gc1Truth,
+    gc2Truth,
     wave1Type,
-    wave1Truth: randTruth(rng),
+    wave1Truth,
     wave2Type,
-    wave2Truth: randTruth(rng),
-    gc1WaterEarly: rng() < 0.5,
-    thundaTruth: randTruth(rng),
-    blizzaTruth: randTruth(rng),
-    gc3BossAngle: Math.floor(rng() * 8) % 8,
+    wave2Truth,
+    gc1WaterEarly,
+    thundaTruth,
+    blizzaTruth,
+    gc3BossAngle,
+    centerAoE,
     players,
   };
 }

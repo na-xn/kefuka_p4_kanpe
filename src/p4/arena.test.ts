@@ -16,6 +16,10 @@ import {
   evaluate,
   ARENA_RADIUS,
   PLAYER_RADIUS,
+  inThunderStrip,
+  inBlizzardQuadrant,
+  centerAoeSafe,
+  THUNDER_STRIP_W,
   type Point,
 } from "@/p4/arena";
 import { generateSim, type SimSetup } from "@/p4/simulation";
@@ -204,5 +208,100 @@ describe("evaluate pass/fail", () => {
     const at = splitColorAt({ x: 400, y: 300 }, boss);
     const r = evaluate(pink, { x: 400, y: 300 }, { x: 0, y: 0 }, false, undefined, boss);
     expect(r.ok).toBe(at === "PINK");
+  });
+});
+
+describe("center AoE geometry (サンダガ/ブリザガ)", () => {
+  // THUNDER_STRIP_W = 175; concrete points below are derived from rotX/rotY math.
+  expect(THUNDER_STRIP_W).toBe(175);
+
+  it("inThunderStrip per pattern matches reference rotX/rotY cases", () => {
+    // pattern 0: rotX in [-W,0) or [W,2W]. rotX=(px-py)/√2.
+    // px=300,py=0 -> rotX≈212 in [175,350] -> in strip.
+    expect(inThunderStrip({ x: 700, y: 400 }, 0)).toBe(true);
+    // center -> rotX=0 -> not in (0 excluded from [-W,0)).
+    expect(inThunderStrip({ x: 400, y: 400 }, 0)).toBe(false);
+    // pattern 1: rotX in [-2W,-W) or [0,W). px=70,py=0 -> rotX≈49 in [0,175).
+    expect(inThunderStrip({ x: 470, y: 400 }, 1)).toBe(true);
+    // pattern 2: rotY in [-W,0) or [W,2W]. rotY=(px+py)/√2.
+    // px=0,py=300 -> rotY≈212 in [175,350].
+    expect(inThunderStrip({ x: 400, y: 700 }, 2)).toBe(true);
+    // pattern 3: rotY in [-2W,-W) or [0,W). px=0,py=70 -> rotY≈49 in [0,175).
+    expect(inThunderStrip({ x: 400, y: 470 }, 3)).toBe(true);
+    // sanity: invalid pattern -> false.
+    expect(inThunderStrip({ x: 700, y: 400 }, 9)).toBe(false);
+  });
+
+  it("inBlizzardQuadrant per pattern", () => {
+    // pattern 0: (px>=0&&py<=0)||(px<=0&&py>=0) -> NE & SW quadrants.
+    expect(inBlizzardQuadrant({ x: 500, y: 300 }, 0)).toBe(true); // px>0,py<0
+    expect(inBlizzardQuadrant({ x: 300, y: 500 }, 0)).toBe(true); // px<0,py>0
+    expect(inBlizzardQuadrant({ x: 500, y: 500 }, 0)).toBe(false); // px>0,py>0
+    // pattern 1: the other two quadrants.
+    expect(inBlizzardQuadrant({ x: 500, y: 500 }, 1)).toBe(true); // SE
+    expect(inBlizzardQuadrant({ x: 300, y: 300 }, 1)).toBe(true); // NW
+    expect(inBlizzardQuadrant({ x: 500, y: 300 }, 1)).toBe(false);
+  });
+
+  it("centerAoeSafe truth: must avoid the shown faces", () => {
+    // A point in BOTH thunder(pat0) and blizzard(pat0).
+    // (500,300): blizzard pat0 true; thunder pat0: px=100,py=-100 -> rotX=200/√2≈141 -> not [175,350], rotX>=0 not in [-W,0)->false.
+    // Pick a point clearly in thunder pat0 and clearly out of blizzard pat0:
+    const inThunderOnly: Point = { x: 700, y: 400 }; // thunder pat0 true, blizzard pat0: px=300,py=0 -> py<=0&px>=0 -> true actually
+    // recompute: (700,400): px=300,py=0. blizzard pat0 (px>=0&&py<=0) true.
+    expect(inThunderStrip(inThunderOnly, 0)).toBe(true);
+    expect(inBlizzardQuadrant(inThunderOnly, 0)).toBe(true);
+    // shin/shin: shown faces fire -> this point is hit (in both) -> unsafe.
+    expect(
+      centerAoeSafe(inThunderOnly, {
+        thunderPattern: 0,
+        blizzardPattern: 0,
+        sandagaShin: true,
+        blizzagaShin: true,
+      }),
+    ).toBe(false);
+
+    // A point OUT of both shown faces is safe under shin/shin.
+    // center (400,400): thunder pat0 false, blizzard pat0: px=0,py=0 -> (0>=0&&0<=0) true. not safe.
+    // Use (350,450): px=-50,py=50. blizzard pat0: (px<=0&&py>=0) true. hmm.
+    // Find point out of blizzard pat0: need NOT(px>=0&py<=0) and NOT(px<=0&py>=0) -> px,py same sign nonzero.
+    // (500,500): px=100,py=100. blizzard pat0 false. thunder pat0: rotX=0 -> false. -> out of both.
+    const outBoth: Point = { x: 500, y: 500 };
+    expect(inThunderStrip(outBoth, 0)).toBe(false);
+    expect(inBlizzardQuadrant(outBoth, 0)).toBe(false);
+    expect(
+      centerAoeSafe(outBoth, {
+        thunderPattern: 0,
+        blizzardPattern: 0,
+        sandagaShin: true,
+        blizzagaShin: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("centerAoeSafe fake: must avoid the complement", () => {
+    // outBoth (500,500): out of both shown faces.
+    // gi/gi (fake): the OTHER face fires -> the complement is hit -> being OUT means hit -> unsafe.
+    const outBoth: Point = { x: 500, y: 500 };
+    expect(
+      centerAoeSafe(outBoth, {
+        thunderPattern: 0,
+        blizzardPattern: 0,
+        sandagaShin: false,
+        blizzagaShin: false,
+      }),
+    ).toBe(false);
+    // A point inside both shown faces is SAFE under gi/gi.
+    const inBoth: Point = { x: 700, y: 400 };
+    expect(inThunderStrip(inBoth, 0)).toBe(true);
+    expect(inBlizzardQuadrant(inBoth, 0)).toBe(true);
+    expect(
+      centerAoeSafe(inBoth, {
+        thunderPattern: 0,
+        blizzardPattern: 0,
+        sandagaShin: false,
+        blizzagaShin: false,
+      }),
+    ).toBe(true);
   });
 });

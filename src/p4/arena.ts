@@ -180,6 +180,80 @@ export function gc3RequiredColor(
 }
 
 /* ============================================================
+ * 中央ボス サンダガ(雷十字)/ブリザガ(象限) AoE — 参照 evaluateCurrentPosition 移植
+ * ========================================================== */
+
+/** サンダガ雷ストリップの幅（参照 w=175）。 */
+export const THUNDER_STRIP_W = 175;
+
+/**
+ * 点 p がサンダガ雷ストリップ内か（pattern 0..3）。
+ * 参照 evaluateCurrentPosition の rotX/rotY ロジックを忠実移植:
+ *   px=p.x-400, py=p.y-400, rotX=(px-py)/√2, rotY=(px+py)/√2, w=175。
+ */
+export function inThunderStrip(p: Point, pattern: number): boolean {
+  const px = p.x - CENTER.x;
+  const py = p.y - CENTER.y;
+  const rotX = (px - py) / Math.SQRT2;
+  const rotY = (px + py) / Math.SQRT2;
+  const w = THUNDER_STRIP_W;
+  switch (pattern) {
+    case 0:
+      return (rotX >= -w && rotX < 0) || (rotX >= w && rotX <= 2 * w);
+    case 1:
+      return (rotX >= -2 * w && rotX < -w) || (rotX >= 0 && rotX < w);
+    case 2:
+      return (rotY >= -w && rotY < 0) || (rotY >= w && rotY <= 2 * w);
+    case 3:
+      return (rotY >= -2 * w && rotY < -w) || (rotY >= 0 && rotY < w);
+    default:
+      return false;
+  }
+}
+
+/**
+ * 点 p がブリザガ象限内か（pattern 0..1）。
+ * pattern 0: (px≥0&&py≤0)||(px≤0&&py≥0) の対角2象限。
+ * pattern 1: 残りの対角2象限。
+ */
+export function inBlizzardQuadrant(p: Point, pattern: number): boolean {
+  const px = p.x - CENTER.x;
+  const py = p.y - CENTER.y;
+  if (pattern === 0) {
+    return (px >= 0 && py <= 0) || (px <= 0 && py >= 0);
+  }
+  return (px <= 0 && py <= 0) || (px >= 0 && py >= 0);
+}
+
+/** centerAoeSafe の入力。 */
+export type CenterAoeParams = {
+  thunderPattern: number;
+  blizzardPattern: number;
+  /** サンダガが ほんと(true) — 表示ストリップが実発火（避ける）。 */
+  sandagaShin: boolean;
+  /** ブリザガが ほんと(true) — 表示象限が実発火（避ける）。 */
+  blizzagaShin: boolean;
+};
+
+/**
+ * 中央ボス AoE 解決時、点 p が安全か（参照 checkSafety の反転）。
+ *
+ * 参照: 被弾 = (blizzagaTruth ? inBlizzard : !inBlizzard)
+ *            || (sandagaTruth ? inThunder : !inThunder)。
+ * ほんと(shin)=表示面が発火 → そこを避ける。
+ * うそ(gi)=反対面が発火 → 補集合を避ける。
+ *
+ * @returns 安全なら true。
+ */
+export function centerAoeSafe(p: Point, params: CenterAoeParams): boolean {
+  const inThunder = inThunderStrip(p, params.thunderPattern);
+  const inBlizzard = inBlizzardQuadrant(p, params.blizzardPattern);
+  const hitBlizzard = params.blizzagaShin ? inBlizzard : !inBlizzard;
+  const hitThunder = params.sandagaShin ? inThunder : !inThunder;
+  return !(hitBlizzard || hitThunder);
+}
+
+/* ============================================================
  * 席視点の「要求アクション」マッピング
  * ========================================================== */
 
