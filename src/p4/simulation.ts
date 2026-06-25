@@ -14,6 +14,8 @@ export type Truth = "shin" | "gi";
 export type GcRole = "mizu" | "rai" | "shisen" | "mushoku";
 /** GC3 の役割: アラガンフィールド / 死の超越。 */
 export type Gc3Role = "aragan" | "shi";
+/** GC3 傷デバフ: 生者の傷 / 死者の傷。 */
+export type Gc3Scar = "seija" | "shisha";
 /** 波状攻撃の属性: 炎(ほのお) / 水(つなみ)。 */
 export type WaveType = "honoo" | "tsunami";
 
@@ -24,6 +26,7 @@ export type PlayerAssignment = {
   gc1Role: GcRole;
   gc2Role: GcRole;
   gc3Role: Gc3Role;
+  gc3Scar: Gc3Scar;
 };
 
 /** レイド全体のシミュレーションセットアップ。 */
@@ -127,6 +130,19 @@ export function generateSim(rng: () => number = Math.random): SimSetup {
   ];
   const gc3Roles = shuffle(gc3Pool, rng);
 
+  // --- GC3 傷デバフ: seija×4 / shisha×4（gc3Role とは独立したシャッフル）。 ---
+  const gc3ScarPool: Gc3Scar[] = [
+    "seija",
+    "seija",
+    "seija",
+    "seija",
+    "shisha",
+    "shisha",
+    "shisha",
+    "shisha",
+  ];
+  const gc3Scars = shuffle(gc3ScarPool, rng);
+
   const players: PlayerAssignment[] = [];
   for (let seat = 0; seat < 8; seat++) {
     players.push({
@@ -134,6 +150,7 @@ export function generateSim(rng: () => number = Math.random): SimSetup {
       gc1Role: gc1Roles[seat],
       gc2Role: gc2Roles[seat],
       gc3Role: gc3Roles[seat],
+      gc3Scar: gc3Scars[seat],
     });
   }
 

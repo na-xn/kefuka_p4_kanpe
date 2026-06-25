@@ -177,5 +177,13 @@ export function buildRevealSchedule(setup: SimSetup, seat = 0): RevealRow[] {
       label: gc3RoleLabel(me.gc3Role),
       resolveSec: null,
     },
+    {
+      key: "gc3scar",
+      atSec: 40,
+      caption: "GC3 生者/死者",
+      icon: me.gc3Scar === "seija" ? DEBUFF_ICON.seija : DEBUFF_ICON.shisha,
+      label: me.gc3Scar === "seija" ? "生者(生者の傷)" : "死者(死者の傷)",
+      resolveSec: null,
+    },
   ];
 }

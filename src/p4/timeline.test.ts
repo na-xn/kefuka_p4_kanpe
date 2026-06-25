@@ -111,8 +111,8 @@ describe("buildTimeline", () => {
 });
 
 describe("buildAnswerTimeline", () => {
-  /** 最小有効 SimSetup — seat0: GC1=水(mizu)/GC2=視線(shisen)、GC3 は引数で切り替える。 */
-  function makeSetup(gc3Role: "aragan" | "shi"): SimSetup {
+  /** 最小有効 SimSetup — seat0: GC1=水(mizu)/GC2=視線(shisen)、GC3 と傷は引数で切り替える。 */
+  function makeSetup(gc3Role: "aragan" | "shi", gc3Scar: "seija" | "shisha" = "seija"): SimSetup {
     return {
       gc1Truth: "shin",
       gc2Truth: "shin",
@@ -124,14 +124,14 @@ describe("buildAnswerTimeline", () => {
       thundaTruth: "shin",
       blizzaTruth: "shin",
       players: [
-        { seat: 0, gc1Role: "mizu", gc2Role: "shisen", gc3Role },
-        { seat: 1, gc1Role: "rai",  gc2Role: "mushoku", gc3Role: "aragan" },
-        { seat: 2, gc1Role: "shisen", gc2Role: "mizu", gc3Role: "aragan" },
-        { seat: 3, gc1Role: "mushoku", gc2Role: "rai", gc3Role: "aragan" },
-        { seat: 4, gc1Role: "mizu", gc2Role: "shisen", gc3Role: "shi" },
-        { seat: 5, gc1Role: "rai",  gc2Role: "mushoku", gc3Role: "shi" },
-        { seat: 6, gc1Role: "shisen", gc2Role: "mizu", gc3Role: "shi" },
-        { seat: 7, gc1Role: "mushoku", gc2Role: "rai", gc3Role: "shi" },
+        { seat: 0, gc1Role: "mizu", gc2Role: "shisen", gc3Role, gc3Scar },
+        { seat: 1, gc1Role: "rai",  gc2Role: "mushoku", gc3Role: "aragan", gc3Scar: "seija" },
+        { seat: 2, gc1Role: "shisen", gc2Role: "mizu", gc3Role: "aragan", gc3Scar: "seija" },
+        { seat: 3, gc1Role: "mushoku", gc2Role: "rai", gc3Role: "aragan", gc3Scar: "seija" },
+        { seat: 4, gc1Role: "mizu", gc2Role: "shisen", gc3Role: "shi", gc3Scar: "shisha" },
+        { seat: 5, gc1Role: "rai",  gc2Role: "mushoku", gc3Role: "shi", gc3Scar: "shisha" },
+        { seat: 6, gc1Role: "shisen", gc2Role: "mizu", gc3Role: "shi", gc3Scar: "shisha" },
+        { seat: 7, gc1Role: "mushoku", gc2Role: "rai", gc3Role: "shi", gc3Scar: "shisha" },
       ],
     };
   }
@@ -143,17 +143,35 @@ describe("buildAnswerTimeline", () => {
   });
 
   it("gc3Role=aragan のとき aragan アイコンと「生きる」テキストを持つ", () => {
-    const rows = buildAnswerTimeline(makeSetup("aragan"), 0);
+    const rows = buildAnswerTimeline(makeSetup("aragan", "seija"), 0);
     const gc3 = rows[0];
     expect(gc3.icon).toBe(DEBUFF_ICON.aragan);
-    expect(gc3.text).toBe("外周エクスデス：生きる（無敵/ダメージ受けない）");
+    expect(gc3.text).toContain("外周エクスデス：生きる");
+    expect(gc3.text).toContain("生者");
+    expect(gc3.extraIcon).toBe(DEBUFF_ICON.seija);
   });
 
   it("gc3Role=shi のとき shi アイコンと「死ぬ」テキストを持つ", () => {
-    const rows = buildAnswerTimeline(makeSetup("shi"), 0);
+    const rows = buildAnswerTimeline(makeSetup("shi", "shisha"), 0);
     const gc3 = rows[0];
     expect(gc3.icon).toBe(DEBUFF_ICON.shi);
-    expect(gc3.text).toBe("外周エクスデス：死ぬ（ダメージ受ける）");
+    expect(gc3.text).toContain("外周エクスデス：死ぬ");
+    expect(gc3.text).toContain("死者");
+    expect(gc3.extraIcon).toBe(DEBUFF_ICON.shisha);
+  });
+
+  it("gc3Scar=seija のとき seija extraIcon を持つ", () => {
+    const rows = buildAnswerTimeline(makeSetup("aragan", "seija"), 0);
+    const gc3 = rows.find((r) => r.key === "gc3")!;
+    expect(gc3.extraIcon).toBe(DEBUFF_ICON.seija);
+    expect(gc3.text).toContain("生者");
+  });
+
+  it("gc3Scar=shisha のとき shisha extraIcon を持つ", () => {
+    const rows = buildAnswerTimeline(makeSetup("aragan", "shisha"), 0);
+    const gc3 = rows.find((r) => r.key === "gc3")!;
+    expect(gc3.extraIcon).toBe(DEBUFF_ICON.shisha);
+    expect(gc3.text).toContain("死者");
   });
 
   it("rows は sec 昇順でソートされている", () => {

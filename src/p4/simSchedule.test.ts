@@ -9,6 +9,7 @@ import {
   truthLabel,
   PROCESS_AT_SEC,
 } from "@/p4/simSchedule";
+import { DEBUFF_ICON } from "@/p4/icons";
 
 /** 決定的 RNG（線形合同法）。 */
 function seeded(seed: number): () => number {
@@ -20,11 +21,11 @@ function seeded(seed: number): () => number {
 }
 
 describe("simSchedule", () => {
-  it("builds 5 rows at t=8/16/24/32/40 in order", () => {
+  it("builds 6 rows at t=8/16/24/32/40/40 in order", () => {
     const setup = generateSim(seeded(42));
     const rows = buildRevealSchedule(setup);
-    expect(rows.map((r) => r.atSec)).toEqual([8, 16, 24, 32, 40]);
-    expect(rows.map((r) => r.key)).toEqual(["gc1", "wave1", "gc2", "wave2", "gc3"]);
+    expect(rows.map((r) => r.atSec)).toEqual([8, 16, 24, 32, 40, 40]);
+    expect(rows.map((r) => r.key)).toEqual(["gc1", "wave1", "gc2", "wave2", "gc3", "gc3scar"]);
   });
 
   it("GC3 row carries no truth; others carry truth", () => {
@@ -32,6 +33,7 @@ describe("simSchedule", () => {
     const rows = buildRevealSchedule(setup);
     const byKey = Object.fromEntries(rows.map((r) => [r.key, r]));
     expect(byKey.gc3.truth).toBeUndefined();
+    expect(byKey.gc3scar.truth).toBeUndefined();
     expect(byKey.gc1.truth).toBe(setup.gc1Truth);
     expect(byKey.gc2.truth).toBe(setup.gc2Truth);
     expect(byKey.wave1.truth).toBe(setup.wave1Truth);
@@ -61,6 +63,25 @@ describe("simSchedule", () => {
     const rows = buildRevealSchedule(setup);
     const byKey = Object.fromEntries(rows.map((r) => [r.key, r]));
     expect(byKey.gc3.resolveSec).toBeNull();
+    expect(byKey.gc3scar.resolveSec).toBeNull();
+  });
+
+  it("gc3scar row: icon and label reflect player's scar", () => {
+    for (const seed of [1, 42, 99, 777]) {
+      const setup = generateSim(seeded(seed));
+      const me = setup.players.find((p) => p.seat === 0)!;
+      const rows = buildRevealSchedule(setup, 0);
+      const byKey = Object.fromEntries(rows.map((r) => [r.key, r]));
+      const scar = byKey.gc3scar;
+      expect(scar.atSec).toBe(40);
+      if (me.gc3Scar === "seija") {
+        expect(scar.icon).toBe(DEBUFF_ICON.seija);
+        expect(scar.label).toBe("生者(生者の傷)");
+      } else {
+        expect(scar.icon).toBe(DEBUFF_ICON.shisha);
+        expect(scar.label).toBe("死者(死者の傷)");
+      }
+    }
   });
 
   it("wave rows: honoo=62, tsunami=84", () => {
@@ -86,14 +107,14 @@ describe("simSchedule", () => {
       thundaTruth: "shin",
       blizzaTruth: "shin",
       players: [
-        { seat: 0, gc1Role: "mizu", gc2Role: "shisen", gc3Role: "aragan" },
-        { seat: 1, gc1Role: "rai", gc2Role: "mushoku", gc3Role: "aragan" },
-        { seat: 2, gc1Role: "shisen", gc2Role: "mizu", gc3Role: "aragan" },
-        { seat: 3, gc1Role: "mushoku", gc2Role: "rai", gc3Role: "aragan" },
-        { seat: 4, gc1Role: "mizu", gc2Role: "shisen", gc3Role: "shi" },
-        { seat: 5, gc1Role: "rai", gc2Role: "mushoku", gc3Role: "shi" },
-        { seat: 6, gc1Role: "shisen", gc2Role: "mizu", gc3Role: "shi" },
-        { seat: 7, gc1Role: "mushoku", gc2Role: "rai", gc3Role: "shi" },
+        { seat: 0, gc1Role: "mizu", gc2Role: "shisen", gc3Role: "aragan", gc3Scar: "seija" },
+        { seat: 1, gc1Role: "rai", gc2Role: "mushoku", gc3Role: "aragan", gc3Scar: "seija" },
+        { seat: 2, gc1Role: "shisen", gc2Role: "mizu", gc3Role: "aragan", gc3Scar: "seija" },
+        { seat: 3, gc1Role: "mushoku", gc2Role: "rai", gc3Role: "aragan", gc3Scar: "seija" },
+        { seat: 4, gc1Role: "mizu", gc2Role: "shisen", gc3Role: "shi", gc3Scar: "shisha" },
+        { seat: 5, gc1Role: "rai", gc2Role: "mushoku", gc3Role: "shi", gc3Scar: "shisha" },
+        { seat: 6, gc1Role: "shisen", gc2Role: "mizu", gc3Role: "shi", gc3Scar: "shisha" },
+        { seat: 7, gc1Role: "mushoku", gc2Role: "rai", gc3Role: "shi", gc3Scar: "shisha" },
       ],
     };
     const rows = buildRevealSchedule(base);
@@ -115,14 +136,14 @@ describe("simSchedule", () => {
       thundaTruth: "shin",
       blizzaTruth: "shin",
       players: [
-        { seat: 0, gc1Role: "mizu", gc2Role: "shisen", gc3Role: "aragan" },
-        { seat: 1, gc1Role: "rai", gc2Role: "mushoku", gc3Role: "aragan" },
-        { seat: 2, gc1Role: "shisen", gc2Role: "mizu", gc3Role: "aragan" },
-        { seat: 3, gc1Role: "mushoku", gc2Role: "rai", gc3Role: "aragan" },
-        { seat: 4, gc1Role: "mizu", gc2Role: "shisen", gc3Role: "shi" },
-        { seat: 5, gc1Role: "rai", gc2Role: "mushoku", gc3Role: "shi" },
-        { seat: 6, gc1Role: "shisen", gc2Role: "mizu", gc3Role: "shi" },
-        { seat: 7, gc1Role: "mushoku", gc2Role: "rai", gc3Role: "shi" },
+        { seat: 0, gc1Role: "mizu", gc2Role: "shisen", gc3Role: "aragan", gc3Scar: "seija" },
+        { seat: 1, gc1Role: "rai", gc2Role: "mushoku", gc3Role: "aragan", gc3Scar: "seija" },
+        { seat: 2, gc1Role: "shisen", gc2Role: "mizu", gc3Role: "aragan", gc3Scar: "seija" },
+        { seat: 3, gc1Role: "mushoku", gc2Role: "rai", gc3Role: "aragan", gc3Scar: "seija" },
+        { seat: 4, gc1Role: "mizu", gc2Role: "shisen", gc3Role: "shi", gc3Scar: "shisha" },
+        { seat: 5, gc1Role: "rai", gc2Role: "mushoku", gc3Role: "shi", gc3Scar: "shisha" },
+        { seat: 6, gc1Role: "shisen", gc2Role: "mizu", gc3Role: "shi", gc3Scar: "shisha" },
+        { seat: 7, gc1Role: "mushoku", gc2Role: "rai", gc3Role: "shi", gc3Scar: "shisha" },
       ],
     };
     const rowsEarly = buildRevealSchedule(baseEarly);
@@ -154,14 +175,14 @@ describe("simSchedule", () => {
       thundaTruth: "shin",
       blizzaTruth: "shin",
       players: [
-        { seat: 0, gc1Role: "shisen", gc2Role: "mizu", gc3Role: "aragan" },
-        { seat: 1, gc1Role: "mushoku", gc2Role: "rai", gc3Role: "aragan" },
-        { seat: 2, gc1Role: "mizu", gc2Role: "shisen", gc3Role: "aragan" },
-        { seat: 3, gc1Role: "rai", gc2Role: "mushoku", gc3Role: "aragan" },
-        { seat: 4, gc1Role: "shisen", gc2Role: "mizu", gc3Role: "shi" },
-        { seat: 5, gc1Role: "mushoku", gc2Role: "rai", gc3Role: "shi" },
-        { seat: 6, gc1Role: "mizu", gc2Role: "shisen", gc3Role: "shi" },
-        { seat: 7, gc1Role: "rai", gc2Role: "mushoku", gc3Role: "shi" },
+        { seat: 0, gc1Role: "shisen", gc2Role: "mizu", gc3Role: "aragan", gc3Scar: "seija" },
+        { seat: 1, gc1Role: "mushoku", gc2Role: "rai", gc3Role: "aragan", gc3Scar: "seija" },
+        { seat: 2, gc1Role: "mizu", gc2Role: "shisen", gc3Role: "aragan", gc3Scar: "seija" },
+        { seat: 3, gc1Role: "rai", gc2Role: "mushoku", gc3Role: "aragan", gc3Scar: "seija" },
+        { seat: 4, gc1Role: "shisen", gc2Role: "mizu", gc3Role: "shi", gc3Scar: "shisha" },
+        { seat: 5, gc1Role: "mushoku", gc2Role: "rai", gc3Role: "shi", gc3Scar: "shisha" },
+        { seat: 6, gc1Role: "mizu", gc2Role: "shisen", gc3Role: "shi", gc3Scar: "shisha" },
+        { seat: 7, gc1Role: "rai", gc2Role: "mushoku", gc3Role: "shi", gc3Scar: "shisha" },
       ],
     };
     const rows1 = buildRevealSchedule(setupShisenGC1);
@@ -172,14 +193,14 @@ describe("simSchedule", () => {
     const setupShisenGC2: SimSetup = {
       ...setupShisenGC1,
       players: [
-        { seat: 0, gc1Role: "mizu", gc2Role: "shisen", gc3Role: "aragan" },
-        { seat: 1, gc1Role: "rai", gc2Role: "mushoku", gc3Role: "aragan" },
-        { seat: 2, gc1Role: "shisen", gc2Role: "mizu", gc3Role: "aragan" },
-        { seat: 3, gc1Role: "mushoku", gc2Role: "rai", gc3Role: "aragan" },
-        { seat: 4, gc1Role: "mizu", gc2Role: "shisen", gc3Role: "shi" },
-        { seat: 5, gc1Role: "rai", gc2Role: "mushoku", gc3Role: "shi" },
-        { seat: 6, gc1Role: "shisen", gc2Role: "mizu", gc3Role: "shi" },
-        { seat: 7, gc1Role: "mushoku", gc2Role: "rai", gc3Role: "shi" },
+        { seat: 0, gc1Role: "mizu", gc2Role: "shisen", gc3Role: "aragan", gc3Scar: "seija" },
+        { seat: 1, gc1Role: "rai", gc2Role: "mushoku", gc3Role: "aragan", gc3Scar: "seija" },
+        { seat: 2, gc1Role: "shisen", gc2Role: "mizu", gc3Role: "aragan", gc3Scar: "seija" },
+        { seat: 3, gc1Role: "mushoku", gc2Role: "rai", gc3Role: "aragan", gc3Scar: "seija" },
+        { seat: 4, gc1Role: "mizu", gc2Role: "shisen", gc3Role: "shi", gc3Scar: "shisha" },
+        { seat: 5, gc1Role: "rai", gc2Role: "mushoku", gc3Role: "shi", gc3Scar: "shisha" },
+        { seat: 6, gc1Role: "shisen", gc2Role: "mizu", gc3Role: "shi", gc3Scar: "shisha" },
+        { seat: 7, gc1Role: "mushoku", gc2Role: "rai", gc3Role: "shi", gc3Scar: "shisha" },
       ],
     };
     const rows2 = buildRevealSchedule(setupShisenGC2);
@@ -200,14 +221,14 @@ describe("simSchedule", () => {
       thundaTruth: "shin",
       blizzaTruth: "shin",
       players: [
-        { seat: 0, gc1Role: "mushoku", gc2Role: "mizu", gc3Role: "aragan" },
-        { seat: 1, gc1Role: "shisen", gc2Role: "rai", gc3Role: "aragan" },
-        { seat: 2, gc1Role: "mizu", gc2Role: "shisen", gc3Role: "aragan" },
-        { seat: 3, gc1Role: "rai", gc2Role: "mushoku", gc3Role: "aragan" },
-        { seat: 4, gc1Role: "mushoku", gc2Role: "mizu", gc3Role: "shi" },
-        { seat: 5, gc1Role: "shisen", gc2Role: "rai", gc3Role: "shi" },
-        { seat: 6, gc1Role: "mizu", gc2Role: "shisen", gc3Role: "shi" },
-        { seat: 7, gc1Role: "rai", gc2Role: "mushoku", gc3Role: "shi" },
+        { seat: 0, gc1Role: "mushoku", gc2Role: "mizu", gc3Role: "aragan", gc3Scar: "seija" },
+        { seat: 1, gc1Role: "shisen", gc2Role: "rai", gc3Role: "aragan", gc3Scar: "seija" },
+        { seat: 2, gc1Role: "mizu", gc2Role: "shisen", gc3Role: "aragan", gc3Scar: "seija" },
+        { seat: 3, gc1Role: "rai", gc2Role: "mushoku", gc3Role: "aragan", gc3Scar: "seija" },
+        { seat: 4, gc1Role: "mushoku", gc2Role: "mizu", gc3Role: "shi", gc3Scar: "shisha" },
+        { seat: 5, gc1Role: "shisen", gc2Role: "rai", gc3Role: "shi", gc3Scar: "shisha" },
+        { seat: 6, gc1Role: "mizu", gc2Role: "shisen", gc3Role: "shi", gc3Scar: "shisha" },
+        { seat: 7, gc1Role: "rai", gc2Role: "mushoku", gc3Role: "shi", gc3Scar: "shisha" },
       ],
     };
     const rows1 = buildRevealSchedule(setupMushokuGC1);
@@ -218,14 +239,14 @@ describe("simSchedule", () => {
     const setupMushokuGC2: SimSetup = {
       ...setupMushokuGC1,
       players: [
-        { seat: 0, gc1Role: "mizu", gc2Role: "mushoku", gc3Role: "aragan" },
-        { seat: 1, gc1Role: "rai", gc2Role: "shisen", gc3Role: "aragan" },
-        { seat: 2, gc1Role: "shisen", gc2Role: "mizu", gc3Role: "aragan" },
-        { seat: 3, gc1Role: "mushoku", gc2Role: "rai", gc3Role: "aragan" },
-        { seat: 4, gc1Role: "mizu", gc2Role: "mushoku", gc3Role: "shi" },
-        { seat: 5, gc1Role: "rai", gc2Role: "shisen", gc3Role: "shi" },
-        { seat: 6, gc1Role: "shisen", gc2Role: "mizu", gc3Role: "shi" },
-        { seat: 7, gc1Role: "mushoku", gc2Role: "rai", gc3Role: "shi" },
+        { seat: 0, gc1Role: "mizu", gc2Role: "mushoku", gc3Role: "aragan", gc3Scar: "seija" },
+        { seat: 1, gc1Role: "rai", gc2Role: "shisen", gc3Role: "aragan", gc3Scar: "seija" },
+        { seat: 2, gc1Role: "shisen", gc2Role: "mizu", gc3Role: "aragan", gc3Scar: "seija" },
+        { seat: 3, gc1Role: "mushoku", gc2Role: "rai", gc3Role: "aragan", gc3Scar: "seija" },
+        { seat: 4, gc1Role: "mizu", gc2Role: "mushoku", gc3Role: "shi", gc3Scar: "shisha" },
+        { seat: 5, gc1Role: "rai", gc2Role: "shisen", gc3Role: "shi", gc3Scar: "shisha" },
+        { seat: 6, gc1Role: "shisen", gc2Role: "mizu", gc3Role: "shi", gc3Scar: "shisha" },
+        { seat: 7, gc1Role: "mushoku", gc2Role: "rai", gc3Role: "shi", gc3Scar: "shisha" },
       ],
     };
     const rows2 = buildRevealSchedule(setupMushokuGC2);

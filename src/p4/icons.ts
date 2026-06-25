@@ -8,6 +8,8 @@ export const DEBUFF_ICON = {
   tsunami: "/icon/chaos_water.png", // 混沌の水
   aragan: "/icon/aragan_field.png", // アラガンフィールド
   shi: "/icon/death_over.png", // 死の超越
+  seija: "/icon/seija.png", // 生者の傷
+  shisha: "/icon/shisha.png", // 死者の傷
 } as const;
 
 /** 担当(雷/水/なし)の水雷アイコン。なし/未選択は null。 */

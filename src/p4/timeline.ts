@@ -204,12 +204,15 @@ export function buildAnswerTimeline(setup: SimSetup, seat: number): AnswerRow[] 
 
   const gc3Role = player.gc3Role;
   const gc3Icon = gc3Role === "aragan" ? DEBUFF_ICON.aragan : DEBUFF_ICON.shi;
-  const gc3Text = `外周エクスデス：${seishi(gc3Role)}`;
+  const scarLabel = player.gc3Scar === "seija" ? "生者" : "死者";
+  const scarIcon = player.gc3Scar === "seija" ? DEBUFF_ICON.seija : DEBUFF_ICON.shisha;
+  const gc3Text = `外周エクスデス：${seishi(gc3Role)}（${scarLabel}）`;
 
   const gc3Row: AnswerRow = {
     key: "gc3",
     sec: 46,
     icon: gc3Icon,
+    extraIcon: scarIcon,
     text: gc3Text,
   };
 

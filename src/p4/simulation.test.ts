@@ -5,6 +5,7 @@ import {
   toMinState,
   type GcRole,
   type Gc3Role,
+  type Gc3Scar,
 } from "@/p4/simulation";
 
 /** 決定的な seeded RNG（mulberry32）。 */
@@ -42,6 +43,17 @@ describe("generateSim composition", () => {
 
       const gc3 = counts(setup.players.map((p) => p.gc3Role as Gc3Role));
       expect(gc3).toEqual({ aragan: 4, shi: 4 });
+    }
+  });
+
+  it("gc3Scar always 4 seija / 4 shisha, each player has a valid scar", () => {
+    for (const seed of SEEDS) {
+      const setup = generateSim(mulberry32(seed));
+      for (const p of setup.players) {
+        expect(["seija", "shisha"]).toContain(p.gc3Scar as Gc3Scar);
+      }
+      const scar = counts(setup.players.map((p) => p.gc3Scar as Gc3Scar));
+      expect(scar).toEqual({ seija: 4, shisha: 4 });
     }
   });
 
