@@ -6,8 +6,18 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "kefukap4kanpe",
   "compatibility_date": "2026-06-18",
+  // Worker エントリ（静的アセット配信 + WebSocket セッション中継）。
+  // worker/index.ts は SPA ビルド（dist）には一切混ざらない（app の tsconfig が worker を exclude）。
+  "main": "worker/index.ts",
   "assets": {
     "directory": "./dist",
-    "not_found_handling": "single-page-application"
-  }
+    "not_found_handling": "single-page-application",
+    // Worker から env.ASSETS.fetch() で静的アセットへフォールバックするためのバインディング。
+    "binding": "ASSETS"
+  },
+  // 8人セッション部屋（席管理 + メッセージ中継）。アプリコードは import しない。
+  "durable_objects": {
+    "bindings": [{ "name": "SESSION", "class_name": "SessionRoom" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SessionRoom"] }]
 }

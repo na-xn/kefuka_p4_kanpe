@@ -65,11 +65,20 @@ pnpm tauri dev    # デスクトップアプリ起動（要 Rust + WebView2 + GU
 
 ### web デプロイ（Cloudflare Workers / Static Assets）
 
-`main` への push で Cloudflare が自動ビルド・デプロイ（公開: <https://kefuka-p4-kanpe.na-xn.app/>）。設定は [`wrangler.jsonc`](./wrangler.jsonc)（`assets.directory = ./dist`、`not_found_handling = single-page-application`）。
+`main` への push で Cloudflare が自動ビルド・デプロイ（公開: <https://kefuka-p4-kanpe.na-xn.app/>）。設定は [`wrangler.jsonc`](./wrangler.jsonc)（`assets.directory = ./dist`、`not_found_handling = single-page-application`、`main = worker/index.ts`）。
 
-- Cloudflare 側の **Build command: `pnpm build`** / **Deploy command: `wrangler deploy`**。
-- ⚠️ `@cloudflare/vite-plugin` は**入れない**こと。同じ `vite.config.ts` を Tauri ビルドでも使うため、入れると出力構成が変わり（`dist/client`）デスクトップビルドが壊れる。
-- 手動デプロイ: `pnpm build && npx wrangler deploy`。
+- Cloudflare 側の **Build command: `pnpm build`** / **Deploy command: `wrangler deploy`**。`wrangler deploy` が Worker をバンドルし、`dist` を静的アセットとしてアップロードし、Durable Object のマイグレーション（`v1`）を流す。
+- ⚠️ `@cloudflare/vite-plugin` は**入れない**こと。同じ `vite.config.ts` を Tauri ビルドでも使うため、入れると出力構成が変わり（`dist/client`）デスクトップビルドが壊れる。SPA ビルドは `tsc -b && vite build` のまま（`worker/` は app の tsconfig が `exclude` するので `tsc -b` では一切コンパイルされない）。
+- 手動デプロイ: `pnpm build && npx wrangler deploy`。ドライラン確認は `npx wrangler deploy --dry-run --outdir /tmp/wrangler-dry`。
+
+#### 8人セッション同期（Worker + Durable Object）
+
+`worker/index.ts` の Worker が、`GET /api/session/:id/ws` の WebSocket を Durable Object「`SessionRoom`」へ橋渡しし、それ以外は静的アセット（SPA）を配信する。
+
+- **DO はただのセッション部屋**（席管理 + メッセージ中継のみ）。アプリコード（`generateSim` 等）は import しない。
+- お題は**ホストクライアント**が `generateSim()` で生成し `start` で送信 → DO が全員へブロードキャスト。各端末は受信 setup + 自分の席 + カウントダウンで練習を回す。
+- 純ロジック（席割り当て・ホスト判定・ロスター生成）は `worker/room-logic.ts` に分離し `worker/room-logic.test.ts` でユニットテスト。
+- **ローカル開発**で WS を動かすには Worker ランタイムが要るため `npx wrangler dev`（`pnpm dev` の Vite だけではセッションは接続できない／ソロは動く）。
 
 ## 技術スタック
 

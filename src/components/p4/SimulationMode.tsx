@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Play,
   RotateCcw,
@@ -10,6 +10,11 @@ import {
   Snowflake,
   Users,
   Eye,
+  Wifi,
+  WifiOff,
+  Crown,
+  User,
+  LogOut,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MinimumMode, INITIAL_MIN } from "@/components/p4/MinimumMode";
@@ -26,17 +31,18 @@ import { compareMinState } from "@/p4/simCompare";
 import type { FieldCompare } from "@/p4/simCompare";
 import { buildAnswerTimeline } from "@/p4/timeline";
 import type { AnswerRow } from "@/p4/timeline";
+import { useSession } from "@/p4/session";
+import type { SessionApi, SeatSlot } from "@/p4/session";
 
 /**
- * 練習モード（シミュレーション）。ソロ用・バックエンドなし。
+ * 練習モード（シミュレーション）。
  *
- * 「お題開始」で generateSim() のお題を生成し、実戦タイムに沿って席0の割当を
- * 順次リビール（t=8/16/24/32/40）。t=50（または「処理へスキップ」）で
- * toMinState(setup,0) を MinState 化し、既存 <MinimumMode> で処理タイムラインを表示する。
+ * 「ソロ」: バックエンドなし。generateSim() のお題を生成し、席0視点で実戦タイムに
+ * 沿ってリビール → 処理タイムライン。速度トグル(1x/2x)あり。
  *
- * 入力モード:
- *   auto   — 自動でカンペに反映（従来動作）。
- *   manual — 自分でポチポチ入力し、「答え合わせ」で正誤チェック。
+ * 「セッション(8人)」: Cloudflare Durable Object へ WebSocket 接続。空席は NPC。
+ * ホスト（最小席）が generateSim() でお題を作り、`start` で全員へブロードキャスト。
+ * 各クライアントは自分の席視点で同じお題を回す。速度は 1x 固定（端末間の desync 回避）。
  */
 
 type InputMode = "auto" | "manual";
@@ -61,37 +67,60 @@ function saveInputMode(m: InputMode) {
   }
 }
 
+type SimMode = "solo" | "session";
+
+/** 練習モードのトップ。ソロ/セッションの選択と画面切替を行う。 */
 export function SimulationMode() {
+  const [mode, setMode] = useState<SimMode>("solo");
+
+  return (
+    <div className="flex flex-col gap-2">
+      <ModePicker mode={mode} onChange={setMode} />
+      {mode === "solo" ? <SoloRunner /> : <SessionRunner />}
+    </div>
+  );
+}
+
+/** ソロ/セッションの切替セグメント。 */
+function ModePicker({
+  mode,
+  onChange,
+}: {
+  mode: SimMode;
+  onChange: (m: SimMode) => void;
+}) {
+  return (
+    <div className="flex justify-center">
+      <div className="flex rounded-lg border overflow-hidden">
+        {(["solo", "session"] as SimMode[]).map((m) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => onChange(m)}
+            className={`px-4 py-1.5 text-xs font-bold transition-colors ${
+              mode === m
+                ? "bg-primary text-primary-foreground"
+                : "bg-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {m === "solo" ? "ソロ" : "セッション(8人)"}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+ * ソロ（従来動作・1バイトも挙動を変えない）
+ * ========================================================== */
+
+function SoloRunner() {
   const [setup, setSetup] = useState<SimSetup | null>(null);
   const [startedAt, setStartedAt] = useState<number | null>(null);
-  const [now, setNow] = useState(0);
   const [phase, setPhase] = useState<"idle" | "playing" | "process">("idle");
-  const [minState, setMinState] = useState<MinState>(INITIAL_MIN);
-  const [speed, setSpeed] = useState(1); // 1 | 2（スケジュールを speed で割る）
   const [inputMode, setInputMode] = useState<InputMode>(loadInputMode);
-  /** 答え合わせ結果（manual モードで「答え合わせ」ボタン後にセット）。 */
-  const [compareResult, setCompareResult] = useState<FieldCompare[] | null>(null);
-  /** 「答えを全部表示」スキップ（処理フェーズで全行を即時開示）。 */
-  const [revealAll, setRevealAll] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const stop = () => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-  };
-  useEffect(() => stop, []);
-
-  // playing / process を通して startedAt を基準に経過秒を刻み続ける（50で止めない）。
-  useEffect(() => {
-    if ((phase !== "playing" && phase !== "process") || startedAt == null) return;
-    const id = setInterval(() => {
-      setNow((Date.now() - startedAt) / 1000);
-    }, 200);
-    timerRef.current = id;
-    return () => clearInterval(id);
-  }, [phase, startedAt]);
+  const [speed, setSpeed] = useState(1); // 1 | 2
 
   const changeInputMode = (m: InputMode) => {
     setInputMode(m);
@@ -100,62 +129,25 @@ export function SimulationMode() {
 
   /** 新しいお題を生成して実戦タイム開始。 */
   const start = () => {
-    stop();
     const s = generateSim();
     setSetup(s);
-    setMinState({ ...INITIAL_MIN });
-    setCompareResult(null);
-    setRevealAll(false);
     const t0 = Date.now();
     setStartedAt(t0);
-    setNow(0);
     setPhase("playing");
   };
 
-  /** アイドルへ戻す（お題/タイマー/処理状態をクリア）。 */
+  /** アイドルへ戻す。 */
   const reset = () => {
-    stop();
     setSetup(null);
     setStartedAt(null);
-    setNow(0);
-    setMinState({ ...INITIAL_MIN });
-    setCompareResult(null);
-    setRevealAll(false);
     setPhase("idle");
   };
 
-  /** 処理フェーズへ。クロックは止めない（解決リストが実時間で順次開示）。 */
-  const toProcess = () => {
-    setRevealAll(false);
-    setPhase("process");
-  };
-
-  // speed を反映した経過秒（リビール/しきい値判定に使う）。
-  const elapsed = now * speed;
-
-  // playing 中、t=PROCESS_AT_SEC を超えたら自動で処理フェーズへ（クロックは継続）。
-  useEffect(() => {
-    if (phase === "playing" && setup && elapsed >= PROCESS_AT_SEC) {
-      toProcess();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, setup, elapsed]);
-
-  /** 「処理へスキップ」: クロックを処理開始時刻(51秒)へ進めて処理フェーズへ。 */
-  const skipToProcess = () => {
-    if (startedAt != null) {
-      // elapsed = (now*speed) なので、startedAt を巻き戻して elapsed=51 を作る。
-      setStartedAt(Date.now() - (PROCESS_AT_SEC + 1) * 1000 / speed);
-    }
-    toProcess();
-  };
-
-  // --- アイドル ---
-  if (phase === "idle" || !setup) {
+  if (phase === "idle" || !setup || startedAt == null) {
     return (
       <div className="flex flex-col items-center gap-3 py-6">
         <div className="px-2 text-center text-xs text-muted-foreground">
-          <p className="font-bold text-foreground">練習モード（シミュレーション）</p>
+          <p className="font-bold text-foreground">練習モード（ソロ）</p>
           <p className="mt-1">
             ソロ用のお題練習です。「お題開始」を押すと実戦タイムに沿って
             自分（席1相当）のデバフが順番に開示されます。
@@ -171,19 +163,354 @@ export function SimulationMode() {
     );
   }
 
-  const schedule = buildRevealSchedule(setup);
+  return (
+    <PracticeRun
+      setup={setup}
+      seat={0}
+      startedAt={startedAt}
+      setStartedAt={setStartedAt}
+      phase={phase}
+      setPhase={setPhase}
+      inputMode={inputMode}
+      onChangeInputMode={changeInputMode}
+      speed={speed}
+      onNewTopic={start}
+      onAbort={reset}
+      allowSkip
+      allowSpeedHint
+    />
+  );
+}
 
-  // --- 処理フェーズ（読み取り専用・解決リストを実時間で順次開示） ---
+/* ============================================================
+ * セッション(8人)
+ * ========================================================== */
+
+function SessionRunner() {
+  // セッション中の練習状態。
+  const [setup, setSetup] = useState<SimSetup | null>(null);
+  const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [phase, setPhase] = useState<"idle" | "playing" | "process">("idle");
+  const [inputMode, setInputMode] = useState<InputMode>(loadInputMode);
+
+  const changeInputMode = (m: InputMode) => {
+    setInputMode(m);
+    saveInputMode(m);
+  };
+
+  // start 受信: 各クライアントが受信時刻 + startInMs を開始時刻とする（簡易同期）。
+  const session = useSession({
+    onStart: ({ setup: s, startInMs }) => {
+      setSetup(s);
+      setStartedAt(Date.now() + startInMs);
+      setPhase("playing");
+    },
+    onReset: () => {
+      setSetup(null);
+      setStartedAt(null);
+      setPhase("idle");
+    },
+  });
+
+  // ロビー入力。
+  const [sessionId, setSessionId] = useState("");
+  const [name, setName] = useState("");
+
+  const joined = session.status === "joined";
+
+  // 未接続 or 練習が始まっていない → ロビー。
+  if (!joined || phase === "idle" || setup == null || startedAt == null) {
+    return (
+      <SessionLobby
+        session={session}
+        sessionId={sessionId}
+        setSessionId={setSessionId}
+        name={name}
+        setName={setName}
+        onStart={() => {
+          // ホストのみ: お題生成して 3秒リードで全員へ送る（onStart で各自開始）。
+          const s = generateSim();
+          session.sendStart(s, 3000);
+        }}
+        inputMode={inputMode}
+        onChangeInputMode={changeInputMode}
+      />
+    );
+  }
+
+  // mySeat は joined 時に必ず存在。
+  const seat = session.mySeat ?? 0;
+
+  return (
+    <div className="flex flex-col gap-2">
+      <SessionStatusBar session={session} />
+      <PracticeRun
+        setup={setup}
+        seat={seat}
+        startedAt={startedAt}
+        setStartedAt={setStartedAt}
+        phase={phase}
+        setPhase={setPhase}
+        inputMode={inputMode}
+        onChangeInputMode={changeInputMode}
+        speed={1}
+        // 新しいお題は「ホストのみ」reset → 全員ロビーへ。非ホストはボタンを出さない。
+        onNewTopic={session.isHost ? () => session.sendReset() : undefined}
+        onAbort={undefined}
+        allowSkip={false}
+        allowSpeedHint={false}
+      />
+    </div>
+  );
+}
+
+/** セッションのロビー（接続前 + ロスター待機）。 */
+function SessionLobby({
+  session,
+  sessionId,
+  setSessionId,
+  name,
+  setName,
+  onStart,
+  inputMode,
+  onChangeInputMode,
+}: {
+  session: SessionApi;
+  sessionId: string;
+  setSessionId: (s: string) => void;
+  name: string;
+  setName: (s: string) => void;
+  onStart: () => void;
+  inputMode: InputMode;
+  onChangeInputMode: (m: InputMode) => void;
+}) {
+  const joined = session.status === "joined";
+
+  if (!joined) {
+    const connecting = session.status === "connecting";
+    return (
+      <div className="flex flex-col items-center gap-3 py-4">
+        <div className="px-2 text-center text-xs text-muted-foreground">
+          <p className="font-bold text-foreground">セッション練習（8人）</p>
+          <p className="mt-1">
+            同じ<strong>セッションID</strong>を共有して参加します。空席はNPC。
+            最小席のホストが「開始」を押すと全員同時に同じお題を回せます。
+          </p>
+        </div>
+        <div className="flex w-full max-w-xs flex-col gap-2">
+          <input
+            value={sessionId}
+            onChange={(e) => setSessionId(e.target.value)}
+            placeholder="セッションID（例: party1）"
+            className="rounded-md border bg-background px-2 py-2 text-sm text-foreground"
+          />
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="名前"
+            className="rounded-md border bg-background px-2 py-2 text-sm text-foreground"
+          />
+          <Button
+            variant="default"
+            className="h-11 w-full text-sm font-bold"
+            disabled={!sessionId.trim() || !name.trim() || connecting}
+            onClick={() => session.connect(sessionId.trim(), name.trim() || "Player")}
+          >
+            <Wifi className="size-4" /> {connecting ? "接続中…" : "参加"}
+          </Button>
+          {session.status === "full" && (
+            <p className="text-center text-[11px] text-destructive">
+              満席です（8人）。別のIDで試してください。
+            </p>
+          )}
+          {session.status === "error" && (
+            <p className="text-center text-[11px] text-destructive">
+              接続に失敗しました。IDとネットワークを確認してください。
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // 参加済み → ロスター + ホストの開始ボタン。
+  return (
+    <div className="flex flex-col gap-2 py-2">
+      <SessionStatusBar session={session} />
+      <InputModeToggle mode={inputMode} onChange={onChangeInputMode} compact />
+      <p className="px-0.5 text-[11px] font-bold text-muted-foreground">参加者（8席）</p>
+      <RosterList roster={session.roster} />
+      {session.isHost ? (
+        <Button
+          variant="default"
+          className="h-12 w-full text-base font-bold"
+          onClick={onStart}
+        >
+          <Play className="size-5" /> 開始（全員に配信）
+        </Button>
+      ) : (
+        <p className="px-2 py-2 text-center text-xs text-muted-foreground">
+          ホストの「開始」を待っています…
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** 接続状態 + 退出ボタンの小バー。 */
+function SessionStatusBar({ session }: { session: SessionApi }) {
+  const occupied = session.roster.filter((s) => s.occupied).length;
+  return (
+    <div className="flex items-center justify-between rounded-md border bg-card/40 px-2 py-1">
+      <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-foreground">
+        {session.status === "joined" ? (
+          <Wifi className="size-3.5 text-green-500" />
+        ) : (
+          <WifiOff className="size-3.5 text-muted-foreground" />
+        )}
+        {occupied}/8 接続
+        {session.mySeat != null && (
+          <span className="text-muted-foreground">・席{session.mySeat + 1}</span>
+        )}
+        {session.isHost && <Crown className="size-3.5 text-amber-500" />}
+      </span>
+      <Button variant="ghost" size="xs" onClick={session.disconnect} aria-label="退出">
+        <LogOut className="size-3.5" /> 退出
+      </Button>
+    </div>
+  );
+}
+
+/** 8席ロスター表示（占有/NPC・★ホスト・あなた）。 */
+function RosterList({ roster }: { roster: SeatSlot[] }) {
+  return (
+    <div className="grid grid-cols-2 gap-1">
+      {roster.map((slot) => (
+        <div
+          key={slot.seat}
+          className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] ${
+            slot.occupied && slot.isMe
+              ? "border-primary bg-primary/10"
+              : "bg-card/40"
+          }`}
+        >
+          <span className="w-8 shrink-0 font-bold tabular-nums text-muted-foreground">
+            席{slot.seat + 1}
+          </span>
+          {slot.occupied ? (
+            <>
+              {slot.isHost ? (
+                <Crown className="size-3.5 shrink-0 text-amber-500" />
+              ) : (
+                <User className="size-3.5 shrink-0 text-muted-foreground" />
+              )}
+              <span className="min-w-0 flex-1 truncate font-bold text-foreground">
+                {slot.name}
+              </span>
+              {slot.isMe && (
+                <span className="shrink-0 rounded bg-primary px-1 py-0.5 text-[9px] font-bold text-primary-foreground">
+                  あなた
+                </span>
+              )}
+            </>
+          ) : (
+            <span className="min-w-0 flex-1 truncate text-muted-foreground/70">
+              NPC（空席）
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ============================================================
+ * 共有: 練習ラン（実戦タイム → 処理タイムライン）
+ * ソロ/セッション両方がこの1本を席・速度・操作の差分だけで使う。
+ * ========================================================== */
+
+function PracticeRun({
+  setup,
+  seat,
+  startedAt,
+  setStartedAt,
+  phase,
+  setPhase,
+  inputMode,
+  onChangeInputMode,
+  speed,
+  onNewTopic,
+  onAbort,
+  allowSkip,
+  allowSpeedHint,
+}: {
+  setup: SimSetup;
+  seat: number;
+  startedAt: number;
+  setStartedAt: (n: number) => void;
+  phase: "playing" | "process" | "idle";
+  setPhase: (p: "playing" | "process" | "idle") => void;
+  inputMode: InputMode;
+  onChangeInputMode: (m: InputMode) => void;
+  speed: number;
+  /** 「新しいお題」操作（無いとボタン非表示）。 */
+  onNewTopic?: () => void;
+  /** 「中断」操作（無いとボタン非表示）。 */
+  onAbort?: () => void;
+  allowSkip: boolean;
+  allowSpeedHint: boolean;
+}) {
+  const [now, setNow] = useState(0);
+  const [minState, setMinState] = useState<MinState>(INITIAL_MIN);
+  const [compareResult, setCompareResult] = useState<FieldCompare[] | null>(null);
+  const [revealAll, setRevealAll] = useState(false);
+
+  // お題が変わったら入力/採点/開示状態をリセット。
+  useEffect(() => {
+    setMinState({ ...INITIAL_MIN });
+    setCompareResult(null);
+    setRevealAll(false);
+  }, [setup]);
+
+  // 経過秒を刻む（playing / process 通して）。startedAt は未来時刻のこともある（セッションのリード）。
+  useEffect(() => {
+    if (phase !== "playing" && phase !== "process") return;
+    const id = setInterval(() => {
+      setNow((Date.now() - startedAt) / 1000);
+    }, 200);
+    return () => clearInterval(id);
+  }, [phase, startedAt]);
+
+  const elapsed = Math.max(0, now * speed);
+
+  const toProcess = () => {
+    setRevealAll(false);
+    setPhase("process");
+  };
+
+  // playing 中 t>=PROCESS_AT_SEC で自動的に処理フェーズへ。
+  useEffect(() => {
+    if (phase === "playing" && elapsed >= PROCESS_AT_SEC) {
+      setRevealAll(false);
+      setPhase("process");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, elapsed]);
+
+  /** 処理へスキップ（クロックを 51秒へ進める。ソロのみ）。 */
+  const skipToProcess = () => {
+    setStartedAt(Date.now() - ((PROCESS_AT_SEC + 1) * 1000) / speed);
+    toProcess();
+  };
+
+  const schedule = buildRevealSchedule(setup, seat);
+
+  // --- 処理フェーズ ---
   if (phase === "process") {
-    const correct = toMinState(setup, 0);
-    // GC3 行(sec=48)を先頭に含む完全な答えタイムライン（sec 昇順済み）。
-    const ordered = buildAnswerTimeline(setup, 0);
-    const revealed = ordered.filter(
-      (it) => revealAll || elapsed >= it.sec,
-    );
-    const upcoming = ordered.find(
-      (it) => !revealAll && elapsed < it.sec,
-    );
+    const correct = toMinState(setup, seat);
+    const ordered = buildAnswerTimeline(setup, seat);
+    const revealed = ordered.filter((it) => revealAll || elapsed >= it.sec);
+    const upcoming = ordered.find((it) => !revealAll && elapsed < it.sec);
     const allShown = revealed.length === ordered.length;
 
     const mmP = Math.floor(elapsed / 60);
@@ -197,24 +524,25 @@ export function SimulationMode() {
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between px-0.5">
           <span className="text-xs font-bold text-muted-foreground">処理タイムライン（解決）</span>
-          <Button variant="default" size="xs" onClick={start}>
-            <RotateCcw /> 新しいお題
-          </Button>
+          {onNewTopic && (
+            <Button variant="default" size="xs" onClick={onNewTopic}>
+              <RotateCcw /> 新しいお題
+            </Button>
+          )}
         </div>
 
-        {/* 経過クロック + 次の開示ヒント */}
         <div className="flex items-center justify-between px-0.5">
           <span className="inline-flex items-center gap-1 text-xs font-bold tabular-nums text-foreground">
             <Gauge className="size-3.5 shrink-0" />
             {mmP}:{String(ssP).padStart(2, "0")}
           </span>
           <span className="text-[10px] text-muted-foreground">
-            {speed}x ・ {revealed.length}/{ordered.length}
+            {allowSpeedHint && `${speed}x ・ `}
+            {revealed.length}/{ordered.length}
             {upcoming && ` ・ 次 ${upcoming.sec}s`}
           </span>
         </div>
 
-        {/* 割当サマリ（コンパクト） */}
         <div className="flex flex-wrap gap-1.5">
           {schedule.map((r) => (
             <SummaryChip key={r.key} row={r} />
@@ -222,7 +550,6 @@ export function SimulationMode() {
         </div>
         <div className="border-t" />
 
-        {/* 読み取り専用の解決アイテム（実時間で順次開示） */}
         <div className="flex flex-col gap-1.5">
           {revealed.length === 0 ? (
             <p className="px-2 py-3 text-center text-xs text-muted-foreground">
@@ -233,7 +560,6 @@ export function SimulationMode() {
           )}
         </div>
 
-        {/* 「答えを全部表示」スキップ */}
         {!allShown && (
           <Button
             variant="secondary"
@@ -244,28 +570,25 @@ export function SimulationMode() {
           </Button>
         )}
 
-        {/* manual モード専用: 付与フェーズの入力を採点する答え合わせ */}
         {inputMode === "manual" && (
           <div className="flex flex-col gap-2">
             <div className="border-t" />
             {compareResult == null ? (
-              <Button
-                variant="default"
-                className="h-11 w-full font-bold"
-                onClick={handleCompare}
-              >
+              <Button variant="default" className="h-11 w-full font-bold" onClick={handleCompare}>
                 答え合わせ
               </Button>
             ) : (
               <>
                 <ComparePanel results={compareResult} />
-                <Button
-                  variant="default"
-                  className="h-10 w-full text-sm font-bold"
-                  onClick={start}
-                >
-                  <RotateCcw className="size-4" /> 新しいお題
-                </Button>
+                {onNewTopic && (
+                  <Button
+                    variant="default"
+                    className="h-10 w-full text-sm font-bold"
+                    onClick={onNewTopic}
+                  >
+                    <RotateCcw className="size-4" /> 新しいお題
+                  </Button>
+                )}
               </>
             )}
           </div>
@@ -275,24 +598,31 @@ export function SimulationMode() {
   }
 
   // --- 実戦タイム（playing） ---
-  const revealed = schedule.filter((r) => elapsed >= r.atSec / 1);
+  const revealed = schedule.filter((r) => elapsed >= r.atSec);
   const progress = Math.min(1, elapsed / PROCESS_AT_SEC);
   const mm = Math.floor(elapsed / 60);
   const ss = Math.floor(elapsed % 60);
+  // セッションのリード中（startedAt が未来）はカウントダウン表示。
+  const lead = Math.max(0, Math.ceil((startedAt - Date.now()) / 1000));
 
   return (
     <div className="flex flex-col gap-2">
-      {/* 入力モード表示（playing 中も lit で表示） */}
-      <InputModeToggle mode={inputMode} onChange={changeInputMode} compact />
+      <InputModeToggle mode={inputMode} onChange={onChangeInputMode} compact />
 
-      {/* 経過クロック + 進捗 */}
+      {lead > 0 && (
+        <p className="rounded-md border border-primary/40 bg-primary/10 px-2 py-1 text-center text-xs font-bold text-foreground">
+          開始まで {lead}…
+        </p>
+      )}
+
       <div className="flex items-center justify-between px-0.5">
         <span className="inline-flex items-center gap-1 text-xs font-bold tabular-nums text-foreground">
           <Gauge className="size-3.5 shrink-0" />
           {mm}:{String(ss).padStart(2, "0")}
         </span>
         <span className="text-[10px] text-muted-foreground">
-          {speed}x ・ {revealed.length}/{schedule.length}
+          {allowSpeedHint && `${speed}x ・ `}
+          {revealed.length}/{schedule.length}
         </span>
       </div>
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
@@ -302,7 +632,6 @@ export function SimulationMode() {
         />
       </div>
 
-      {/* リビール行（到来順に表示・既出は残る） */}
       <div className="flex flex-col gap-1.5">
         {revealed.length === 0 ? (
           <p className="px-2 py-3 text-center text-xs text-muted-foreground">
@@ -313,7 +642,6 @@ export function SimulationMode() {
         )}
       </div>
 
-      {/* manual モード: 付与フェーズ中に編集可能なカンペ入力（ポチポチ用） */}
       {inputMode === "manual" && (
         <>
           <div className="border-t" />
@@ -327,15 +655,30 @@ export function SimulationMode() {
         </>
       )}
 
-      {/* 操作 */}
-      <div className="mt-1 flex items-center gap-2">
-        <Button variant="secondary" className="h-11 flex-1 text-sm font-bold" onClick={skipToProcess}>
-          <FastForward className="size-4" /> 処理へスキップ
-        </Button>
-        <Button variant="destructive" size="icon" className="h-11 w-11" onClick={reset} aria-label="新しいお題">
-          <RotateCcw />
-        </Button>
-      </div>
+      {(allowSkip || onAbort) && (
+        <div className="mt-1 flex items-center gap-2">
+          {allowSkip && (
+            <Button
+              variant="secondary"
+              className="h-11 flex-1 text-sm font-bold"
+              onClick={skipToProcess}
+            >
+              <FastForward className="size-4" /> 処理へスキップ
+            </Button>
+          )}
+          {onAbort && (
+            <Button
+              variant="destructive"
+              size="icon"
+              className="h-11 w-11"
+              onClick={onAbort}
+              aria-label="中断"
+            >
+              <RotateCcw />
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -370,9 +713,7 @@ function InputModeToggle({
       </div>
       {!compact && (
         <p className="text-[10px] text-muted-foreground text-center max-w-xs">
-          {mode === "auto"
-            ? "自動でカンペに反映"
-            : "自分で入力して答え合わせ"}
+          {mode === "auto" ? "自動でカンペに反映" : "自分で入力して答え合わせ"}
         </p>
       )}
     </div>
@@ -452,8 +793,7 @@ function SpeedToggle({ speed, setSpeed }: { speed: number; setSpeed: (s: number)
   );
 }
 
-/** 処理フェーズの解決1行（読み取り専用）。デバフアイコン＋行動テキスト。
- * MinimumMode の TimelineRow と同じアイコン描画方針。 */
+/** 処理フェーズの解決1行（読み取り専用）。 */
 function ResolvedRow({ item }: { item: AnswerRow }) {
   return (
     <div className="flex items-center gap-2 rounded-md border bg-card/40 px-2 py-1.5">
@@ -480,15 +820,12 @@ function ResolvedRow({ item }: { item: AnswerRow }) {
   );
 }
 
-/** リビール1行（アイコン＋見出し＋ラベル＋真偽＋カウントダウン）。 */
 /** デバフ残り秒の表示。60s 以上は分表記(1m)で、59 になってから秒カウントダウン。 */
 const fmtRemain = (s: number) => (s >= 60 ? `${Math.floor(s / 60)}m` : `${s}s`);
 
 function RevealCard({ row, elapsed }: { row: RevealRow; elapsed: number }) {
   const remaining =
-    row.resolveSec != null
-      ? Math.max(0, Math.ceil(row.resolveSec - elapsed))
-      : null;
+    row.resolveSec != null ? Math.max(0, Math.ceil(row.resolveSec - elapsed)) : null;
   return (
     <div className="flex items-center gap-2 rounded-md border bg-card/40 px-2 py-1.5">
       <img src={row.icon} alt="" className="h-6 w-auto shrink-0 rounded-[2px]" draggable={false} />

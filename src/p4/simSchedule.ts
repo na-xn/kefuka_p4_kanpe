@@ -119,17 +119,19 @@ function gcResolveSec(
 }
 
 /**
- * 席 0 視点のリビールスケジュール（1x 基準）を組み立てる。
+ * 指定席視点のリビールスケジュール（1x 基準）を組み立てる。
  *
  * - t=8  → GC1 役割 + GC1 真偽
  * - t=16 → 1回目 つなみ/ほのお + 真偽
  * - t=24 → GC2 役割 + GC2 真偽
  * - t=32 → 2回目 つなみ/ほのお + 真偽
  * - t=40 → GC3 役割（真偽なし）
+ *
+ * @param seat 視点の席番号（ソロは 0、セッションは自分の席）。
  */
-export function buildRevealSchedule(setup: SimSetup): RevealRow[] {
-  const me = setup.players.find((p) => p.seat === 0);
-  if (!me) throw new Error("seat 0 not found in setup");
+export function buildRevealSchedule(setup: SimSetup, seat = 0): RevealRow[] {
+  const me = setup.players.find((p) => p.seat === seat);
+  if (!me) throw new Error(`seat ${seat} not found in setup`);
   return [
     {
       key: "gc1",
