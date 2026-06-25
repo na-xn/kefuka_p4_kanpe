@@ -299,6 +299,29 @@ function preloadImages(onLoad: () => void) {
 }
 
 /* ============================================================
+ * ロールアイコンプリロード（モジュールレベルで一度だけ）
+ * ========================================================== */
+
+const ROLE_ICON_FILES = { tank: "TankRole", healer: "HealerRole", dps: "DPSRole" } as const;
+type RoleIconKey = keyof typeof ROLE_ICON_FILES;
+const roleImgCache: Partial<Record<RoleIconKey, HTMLImageElement>> = {};
+const roleLoadedCache: Partial<Record<RoleIconKey, boolean>> = {};
+let rolePreloadStarted = false;
+function preloadRoleIcons(onLoad: () => void) {
+  if (rolePreloadStarted) { onLoad(); return; }
+  rolePreloadStarted = true;
+  const keys = Object.keys(ROLE_ICON_FILES) as RoleIconKey[];
+  let loaded = 0;
+  for (const k of keys) {
+    const img = new Image();
+    img.onload = () => { roleLoadedCache[k] = true; loaded++; if (loaded === keys.length) onLoad(); };
+    img.onerror = () => { loaded++; if (loaded === keys.length) onLoad(); };
+    img.src = `/icon/${ROLE_ICON_FILES[k]}.png`;
+    roleImgCache[k] = img;
+  }
+}
+
+/* ============================================================
  * ボス配置（参照: 中央 + 外周2体）
  * ========================================================== */
 
@@ -347,6 +370,7 @@ export function PlayArena({
   const [, setImgTick] = useState(0);
   useEffect(() => {
     preloadImages(() => setImgTick((t) => t + 1));
+    preloadRoleIcons(() => setImgTick((t) => t + 1));
   }, []);
 
   // プレイヤー状態は ref で保持（毎フレーム更新、再レンダリングを避ける）。
@@ -953,9 +977,12 @@ function drawOtherSeats(
     // occupiedSeats に居て実位置未着の席も、暫定的に npcState で描く（上で解決済み）。
     void occupiedSeats;
 
+    // ジョブを setup から解決（tank/healer/dps）。デフォルト "dps"。
+    const job: RoleIconKey = (setup.players.find((p) => p.seat === s)?.job ?? "dps") as RoleIconKey;
+
+    // 視線ライン（先に描き、アイコン/ドットの下になるようにする）。
     ctx.save();
     ctx.globalAlpha = NPC_ALPHA;
-    // 視線ライン（人間より短く細く）。
     const fl = Math.hypot(fx, fy) || 1;
     ctx.beginPath();
     ctx.moveTo(x, y);
@@ -963,27 +990,39 @@ function drawOtherSeats(
     ctx.strokeStyle = "rgba(255,255,255,0.85)";
     ctx.lineWidth = 2;
     ctx.stroke();
-    // ドット本体（ロール色フィル + 細い白枠）。
-    ctx.beginPath();
-    ctx.arc(x, y, NPC_RADIUS, 0, Math.PI * 2);
-    ctx.fillStyle = npcFill(role);
-    ctx.fill();
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = "rgba(255,255,255,0.9)";
-    ctx.stroke();
     ctx.restore();
 
-    // 席番号ラベル（seat+1）をドット中央に小さく。
+    // アイコン or フォールバックドット。
     ctx.save();
     ctx.globalAlpha = NPC_ALPHA;
-    ctx.font = "bold 11px sans-serif";
+    const iconSize = NPC_RADIUS * 2.6;
+    const roleImg = roleImgCache[job];
+    if (roleLoadedCache[job] && roleImg) {
+      // ロールアイコン画像を中央に描画。
+      ctx.drawImage(roleImg, x - iconSize / 2, y - iconSize / 2, iconSize, iconSize);
+    } else {
+      // フォールバック: ロール色の円ドット + 白枠。
+      ctx.beginPath();
+      ctx.arc(x, y, NPC_RADIUS, 0, Math.PI * 2);
+      ctx.fillStyle = npcFill(role);
+      ctx.fill();
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = "rgba(255,255,255,0.9)";
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // 席番号ラベル（seat+1）をアイコン/ドットの下に小さく。
+    ctx.save();
+    ctx.globalAlpha = NPC_ALPHA;
+    ctx.font = "10px sans-serif";
     ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
+    ctx.textBaseline = "top";
     ctx.lineWidth = 3;
-    ctx.strokeStyle = "rgba(0,0,0,0.6)";
-    ctx.strokeText(String(s + 1), x, y + 0.5);
+    ctx.strokeStyle = "rgba(0,0,0,0.7)";
+    ctx.strokeText(String(s + 1), x, y + iconSize / 2 + 2);
     ctx.fillStyle = "#fff";
-    ctx.fillText(String(s + 1), x, y + 0.5);
+    ctx.fillText(String(s + 1), x, y + iconSize / 2 + 2);
     ctx.restore();
     ctx.textBaseline = "alphabetic";
   }
