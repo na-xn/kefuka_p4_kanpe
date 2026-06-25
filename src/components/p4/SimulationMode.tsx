@@ -281,22 +281,33 @@ function PlayRunner({ playRole }: { playRole: PlayRole }) {
           <RotateCcw /> 新しいお題
         </Button>
       </div>
-      {/* 広い画面ではアリーナ（左）とカンペ入力（右）を横並び、狭い/モバイルでは縦積み。 */}
+      {/* 広い画面では アリーナ（大・左）とカンペ入力（細・右）を横並び、狭い/モバイルでは縦積み。
+          サンダガ/ブリザガより下の導出タイムラインは下部全幅へ分離する。 */}
       <div className="flex flex-col gap-2 md:flex-row">
-        {/* 左カラム: アリーナ（潰れない basis/max を確保。canvas はコンテナにスケール）。 */}
-        <div className="shrink-0 md:basis-[420px] md:max-w-[480px]">
+        {/* 左カラム: アリーナ（大きく伸びる。canvas はコンテナにスケール）。 */}
+        <div className="min-w-0 flex-1">
           <PlayArena setup={setup} seat={seat} startAt={startAt} onNewTopic={start} />
         </div>
-        {/* 右カラム: 自分で書き込むカンペ（サンダガ/ブリザガ含む。アリーナのキー/ポインタ操作とは独立）。 */}
-        <div className="min-w-0 flex-1 border-t pt-2 md:border-l md:border-t-0 md:pl-2 md:pt-0">
+        {/* 右カラム: 自分で書き込むカンペ「入力」のみ（細幅固定。アリーナのキー/ポインタ操作とは独立）。
+            導出タイムラインは下部に分離するので view="input"。 */}
+        <div className="shrink-0 border-t pt-2 md:w-[230px] md:basis-[230px] md:border-l md:border-t-0 md:pl-2 md:pt-0">
           <p className="px-0.5 pb-1 text-[10px] font-semibold text-muted-foreground">
             カンペ入力（デバフが付いたら入力）
           </p>
           <MinimumMode
+            view="input"
             value={minState}
             set={(id, v) => setMinState((s) => ({ ...s, [id]: v }))}
           />
         </div>
+      </div>
+      {/* 下部全幅: サンダガ/ブリザガより下の導出処理タイムライン。 */}
+      <div className="border-t pt-2">
+        <MinimumMode
+          view="timeline"
+          value={minState}
+          set={(id, v) => setMinState((s) => ({ ...s, [id]: v }))}
+        />
       </div>
     </div>
   );

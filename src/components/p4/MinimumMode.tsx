@@ -171,10 +171,22 @@ function TimelineRow({ item }: { item: Item }) {
 export function MinimumMode({
   value,
   set,
+  view = "full",
 }: {
   value: MinState;
   set: MinSet;
+  /**
+   * 表示範囲。
+   *  - "full"（既定）: 入力（真偽・役割・サンダガ/ブリザガ記憶）＋導出タイムライン。
+   *  - "input": 入力セクションのみ（導出タイムラインを出さない）。
+   *  - "timeline": 導出タイムラインのみ（入力を出さない）。
+   * 操作プレイの横並びレイアウトで、入力を右の細い列・タイムラインを下部全幅に分割するために使う。
+   * 他の呼び出し元（カンペ練習・セッション・通常ミニマムモード）は既定 "full" で従来どおり。
+   */
+  view?: "full" | "input" | "timeline";
 }) {
+  const showInput = view === "full" || view === "input";
+  const showTimeline = view === "full" || view === "timeline";
   const v = (k: string) => value[k] ?? INITIAL_MIN[k] ?? "";
 
   const waterType = v("waterType"); // mizu | rai
@@ -201,6 +213,8 @@ export function MinimumMode({
 
   return (
     <div className="flex flex-col gap-2">
+      {showInput && (
+        <>
       {/* 1) 真偽判定（4トグル・タップで真↔偽） */}
       <div className="grid grid-cols-2 gap-1.5">
         <TruthChip label="GC1" value={gc1} onToggle={() => toggleTruth("gc1")} iconNode={<Swords className="size-5" />} />
@@ -266,10 +280,13 @@ export function MinimumMode({
         <TruthChip label="サンダガ" value={v("thunda")} onToggle={() => toggleTruth("thunda")} iconNode={<Zap className="size-5" />} />
         <TruthChip label="ブリザガ" value={v("blizza")} onToggle={() => toggleTruth("blizza")} iconNode={<Snowflake className="size-5" />} />
       </div>
+        </>
+      )}
 
-      <div className="border-t" />
+      {view === "full" && <div className="border-t" />}
 
-      {/* 4) 導出タイムライン（処理順ソート＋ブロック） */}
+      {showTimeline && (
+      /* 4) 導出タイムライン（処理順ソート＋ブロック） */
       <div className="flex flex-col gap-1.5">
         {groups.map((grp, gi) => {
           // 水雷・加速度（早=1/遅=4）は中身1つでも常にブロック枠。単独処理（視線/ほのお/つなみ）は枠なし。
@@ -287,6 +304,7 @@ export function MinimumMode({
           );
         })}
       </div>
+      )}
 
     </div>
   );

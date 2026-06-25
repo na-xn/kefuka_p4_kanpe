@@ -112,6 +112,14 @@ type DebuffEntry = {
   resolveSec: number;
   /** フォールバック矩形色。 */
   color: string;
+  /**
+   * このデバフの「実際の」真偽（判定が読むのと同じ setup 由来の真実）。
+   * 水雷/雷/加速弾/視線 → 担当 GC の真偽（gc1Truth/gc2Truth）。
+   * つなみ/ほのお → wave の真偽（wave1Truth/wave2Truth）。
+   * GC3（アラガン/超越・傷）は分断ボス上に別途真偽を出すので、ここでは付けない。
+   * 真偽が無いデバフは undefined（バッジ非表示）。
+   */
+  truth?: Truth;
 };
 
 /**
@@ -155,38 +163,47 @@ function buildDebuffs(setup: SimSetup, seat: number): DebuffEntry[] {
 
   // 役割デバフを1つ付与する。視線(shisen)は参照 SET2 = 加速弾(bomb) + 視線(eye) の
   // 2デバフを持つ（爆弾は env、視線は juso で別々に解決）。
-  const pushRole = (role: string, applySec: number, resolveSec: number) => {
+  // truth は担当 GC の真偽（gc1Truth/gc2Truth）。判定が読むのと同じ setup 由来の真実。
+  const pushRole = (role: string, applySec: number, resolveSec: number, truth: Truth) => {
     if (role === "shisen") {
       // 視線（魔眼）アイコン: juso タイミングで解決。
-      out.push({ iconKey: "shisen", applySec, resolveSec, color: roleColor("shisen") });
+      out.push({ iconKey: "shisen", applySec, resolveSec, color: roleColor("shisen"), truth });
       // 加速弾（爆弾）アイコン: env タイミングで解決。
-      out.push({ iconKey: "mushoku", applySec, resolveSec: bombSec, color: roleColor("mushoku") });
+      out.push({
+        iconKey: "mushoku",
+        applySec,
+        resolveSec: bombSec,
+        color: roleColor("mushoku"),
+        truth,
+      });
       return;
     }
-    out.push({ iconKey: role as IconKey, applySec, resolveSec, color: roleColor(role) });
+    out.push({ iconKey: role as IconKey, applySec, resolveSec, color: roleColor(role), truth });
   };
 
   // 付与秒は参照 assignGimmickDebuffs / assign11BossDebuff のボス詠唱完了時刻に一致:
   //   GC1 役割 @8（assignGimmickDebuffs(1)）, wave1 @12（assign11BossDebuff(1)）,
   //   GC2 役割 @20（assignGimmickDebuffs(2)）, wave2 @24（assign11BossDebuff(2)）,
   //   GC3 役割+傷 @32（assignGimmickDebuffs(3) wave3 分岐）。
-  // GC1 役割 @8（boss2 グランドクロス完了）。
-  pushRole(p.gc1Role, APPLY_SEC.gc1Role, gc1Sec);
-  // wave1 @12（boss1 つなみ/ほのお完了）。
+  // GC1 役割 @8（boss2 グランドクロス完了）。truth=gc1Truth。
+  pushRole(p.gc1Role, APPLY_SEC.gc1Role, gc1Sec, setup.gc1Truth);
+  // wave1 @12（boss1 つなみ/ほのお完了）。truth=wave1Truth。
   out.push({
     iconKey: setup.wave1Type as IconKey,
     applySec: APPLY_SEC.wave1,
     resolveSec: setup.wave1Type === "honoo" ? MECHANIC_SEC.honoo : MECHANIC_SEC.tsunami,
     color: setup.wave1Type === "honoo" ? "#ff4500" : "#00b4d8",
+    truth: setup.wave1Truth,
   });
-  // GC2 役割 @20。
-  pushRole(p.gc2Role, APPLY_SEC.gc2Role, gc2Sec);
-  // wave2 @24。
+  // GC2 役割 @20。truth=gc2Truth。
+  pushRole(p.gc2Role, APPLY_SEC.gc2Role, gc2Sec, setup.gc2Truth);
+  // wave2 @24。truth=wave2Truth。
   out.push({
     iconKey: setup.wave2Type as IconKey,
     applySec: APPLY_SEC.wave2,
     resolveSec: setup.wave2Type === "honoo" ? MECHANIC_SEC.honoo : MECHANIC_SEC.tsunami,
     color: setup.wave2Type === "honoo" ? "#ff4500" : "#00b4d8",
+    truth: setup.wave2Truth,
   });
   // GC3 役割 + 傷 @32。
   out.push({
@@ -1250,5 +1267,37 @@ function drawDebuffStack(
     ctx.fillStyle = "#fff";
     ctx.fillText(String(remain), x + iconSize / 2, y + iconSize + 13);
     ctx.restore();
+
+    // 実際の真偽バッジ（判定が読むのと同じ setup 由来の真実）。
+    // 中央/分断ボスの真偽インジケータと同じ truth.png / fake.png を再利用。
+    // パドルの色を読むのと同じく、プレイヤーが「真/偽 → 行動 → 位置」を自分で判断する。
+    if (d.truth) {
+      const shin = d.truth === "shin";
+      const badgeKey: IconKey = shin ? "truth" : "fake";
+      const badge = imgCache[badgeKey];
+      const bs = 14;
+      // アイコン左上に小さく重ねる。
+      const bx = x - bs / 2;
+      const byy = y - bs / 2;
+      if (loadedCache[badgeKey] && badge) {
+        ctx.drawImage(badge, bx, byy, bs, bs);
+      } else {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(x, y, bs / 2, 0, Math.PI * 2);
+        ctx.fillStyle = shin ? "#00b4d8" : "#ff4444";
+        ctx.fill();
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 10px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(shin ? "真" : "偽", x, y + 0.5);
+        ctx.restore();
+        ctx.textBaseline = "alphabetic";
+      }
+    }
   });
 }
