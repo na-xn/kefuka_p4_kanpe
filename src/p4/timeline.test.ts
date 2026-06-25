@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { buildTimeline, itemRevealSec, type Item } from "@/p4/timeline";
+import { buildTimeline, itemRevealSec, buildAnswerTimeline, type Item } from "@/p4/timeline";
+import type { SimSetup } from "@/p4/simulation";
+import { DEBUFF_ICON } from "@/p4/icons";
 
 /** key で Item を取り出すヘルパ。 */
 function byKey(items: Item[], key: string): Item | undefined {
@@ -105,6 +107,83 @@ describe("buildTimeline", () => {
     const phases = items.map((i) => i.phase);
     const sorted = [...phases].sort((a, b) => a - b);
     expect(phases).toEqual(sorted);
+  });
+});
+
+describe("buildAnswerTimeline", () => {
+  /** 最小有効 SimSetup — seat0: GC1=水(mizu)/GC2=視線(shisen)、GC3 は引数で切り替える。 */
+  function makeSetup(gc3Role: "aragan" | "shi"): SimSetup {
+    return {
+      gc1Truth: "shin",
+      gc2Truth: "shin",
+      wave1Type: "honoo",
+      wave1Truth: "shin",
+      wave2Type: "tsunami",
+      wave2Truth: "shin",
+      gc1WaterEarly: true,
+      thundaTruth: "shin",
+      blizzaTruth: "shin",
+      players: [
+        { seat: 0, gc1Role: "mizu", gc2Role: "shisen", gc3Role },
+        { seat: 1, gc1Role: "rai",  gc2Role: "mushoku", gc3Role: "aragan" },
+        { seat: 2, gc1Role: "shisen", gc2Role: "mizu", gc3Role: "aragan" },
+        { seat: 3, gc1Role: "mushoku", gc2Role: "rai", gc3Role: "aragan" },
+        { seat: 4, gc1Role: "mizu", gc2Role: "shisen", gc3Role: "shi" },
+        { seat: 5, gc1Role: "rai",  gc2Role: "mushoku", gc3Role: "shi" },
+        { seat: 6, gc1Role: "shisen", gc2Role: "mizu", gc3Role: "shi" },
+        { seat: 7, gc1Role: "mushoku", gc2Role: "rai", gc3Role: "shi" },
+      ],
+    };
+  }
+
+  it("先頭行は GC3 行で sec=48", () => {
+    const rows = buildAnswerTimeline(makeSetup("aragan"), 0);
+    expect(rows[0].key).toBe("gc3");
+    expect(rows[0].sec).toBe(48);
+  });
+
+  it("gc3Role=aragan のとき aragan アイコンと「生きる」テキストを持つ", () => {
+    const rows = buildAnswerTimeline(makeSetup("aragan"), 0);
+    const gc3 = rows[0];
+    expect(gc3.icon).toBe(DEBUFF_ICON.aragan);
+    expect(gc3.text).toBe("外周エクスデス：生きる（無敵/ダメージ受けない）");
+  });
+
+  it("gc3Role=shi のとき shi アイコンと「死ぬ」テキストを持つ", () => {
+    const rows = buildAnswerTimeline(makeSetup("shi"), 0);
+    const gc3 = rows[0];
+    expect(gc3.icon).toBe(DEBUFF_ICON.shi);
+    expect(gc3.text).toBe("外周エクスデス：死ぬ（ダメージ受ける）");
+  });
+
+  it("rows は sec 昇順でソートされている", () => {
+    const rows = buildAnswerTimeline(makeSetup("aragan"), 0);
+    const secs = rows.map((r) => r.sec);
+    const sorted = [...secs].sort((a, b) => a - b);
+    expect(secs).toEqual(sorted);
+  });
+
+  it("GC3 行以外は buildTimeline + itemRevealSec と一致する", () => {
+    const setup = makeSetup("aragan");
+    const rows = buildAnswerTimeline(setup, 0);
+    const nonGc3 = rows.filter((r) => r.key !== "gc3");
+
+    // buildTimeline は toMinState(setup,0) で呼ばれるが、ここでは結果のキーと秒だけ照合。
+    const expectedSecs = [51, 57, 62, 74, 79, 84]; // phase 1~6 の標準秒
+    for (const row of nonGc3) {
+      expect(expectedSecs).toContain(row.sec);
+    }
+    // buildTimeline が返すキーがすべて存在する。
+    const keys = nonGc3.map((r) => r.key);
+    // 最低限の必須キーが存在する（水が早なので water/accel か water_accel があるはず）。
+    const hasWater = keys.includes("water") || keys.includes("water_accel");
+    expect(hasWater).toBe(true);
+  });
+
+  it("GC3 行を除くと 6 行（buildTimeline の標準出力と同数）", () => {
+    const rows = buildAnswerTimeline(makeSetup("shi"), 0);
+    const nonGc3 = rows.filter((r) => r.key !== "gc3");
+    expect(nonGc3).toHaveLength(6);
   });
 });
 

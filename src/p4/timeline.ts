@@ -9,9 +9,11 @@
  * 1バイトも変えずに一致する。
  */
 
-import { accel, raiMizuAction, tsunamiHonooAction, juso } from "@/p4/logic";
+import { accel, raiMizuAction, tsunamiHonooAction, juso, seishi } from "@/p4/logic";
 import { DEBUFF_ICON } from "@/p4/icons";
 import type { Choice } from "@/p4/types";
+import type { SimSetup } from "@/p4/simulation";
+import { toMinState } from "@/p4/simulation";
 
 /** 既定値（INITIAL_MIN と同一）。buildTimeline は欠損キーをこれで補完する。 */
 const INITIAL_MIN: Record<string, string> = {
@@ -173,4 +175,55 @@ export function itemRevealSec(item: Item): number {
   if (p < 5) return 74; // 遅水雷/加速度（group 4）
   if (p < 6) return 79; // 視線 遅 wave2
   return 84; // つなみ
+}
+
+/**
+ * シミュレーション練習モード用の「処理フェーズ答えタイムライン」の1行。
+ * GC3 生者の傷行を先頭に含む（sec=48）。
+ */
+export type AnswerRow = {
+  key: string;
+  /** 絶対リビール秒（この秒を過ぎたら表示する）。 */
+  sec: number;
+  icon?: string;
+  extraIcon?: string;
+  lucide?: "zap" | "snow" | "users";
+  text: string | null;
+};
+
+/**
+ * 練習モード処理フェーズ全体の答えタイムラインを組み立てる。
+ *
+ * GC3 行（外周エクスデス → 生者の傷）を sec=48 で先頭に配置し、
+ * 続いて buildTimeline(toMinState(setup, seat)) の各アイテムを
+ * itemRevealSec で秒へ変換して結合。sec の昇順（同値は phase 順）でソートして返す。
+ */
+export function buildAnswerTimeline(setup: SimSetup, seat: number): AnswerRow[] {
+  const player = setup.players.find((p) => p.seat === seat);
+  if (!player) throw new Error(`seat ${seat} not found in setup`);
+
+  const gc3Role = player.gc3Role;
+  const gc3Icon = gc3Role === "aragan" ? DEBUFF_ICON.aragan : DEBUFF_ICON.shi;
+  const gc3Text = `外周エクスデス：${seishi(gc3Role)}`;
+
+  const gc3Row: AnswerRow = {
+    key: "gc3",
+    sec: 48,
+    icon: gc3Icon,
+    text: gc3Text,
+  };
+
+  const min = toMinState(setup, seat);
+  const items = buildTimeline(min);
+  const itemRows: AnswerRow[] = items.map((item) => ({
+    key: item.key,
+    sec: itemRevealSec(item),
+    icon: item.icon,
+    extraIcon: item.extraIcon,
+    lucide: item.lucide,
+    text: item.text,
+  }));
+
+  // GC3 行(48)が先頭になるよう sec 昇順でソート（同値はitemRevealSec/phase の出現順を維持）。
+  return [gc3Row, ...itemRows].sort((a, b) => a.sec - b.sec);
 }

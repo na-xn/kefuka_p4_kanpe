@@ -24,8 +24,8 @@ import {
 import type { RevealRow } from "@/p4/simSchedule";
 import { compareMinState } from "@/p4/simCompare";
 import type { FieldCompare } from "@/p4/simCompare";
-import { buildTimeline, itemRevealSec } from "@/p4/timeline";
-import type { Item } from "@/p4/timeline";
+import { buildAnswerTimeline } from "@/p4/timeline";
+import type { AnswerRow } from "@/p4/timeline";
 
 /**
  * 練習モード（シミュレーション）。ソロ用・バックエンドなし。
@@ -176,19 +176,13 @@ export function SimulationMode() {
   // --- 処理フェーズ（読み取り専用・解決リストを実時間で順次開示） ---
   if (phase === "process") {
     const correct = toMinState(setup, 0);
-    // 真偽反転した結果（処理順タイムライン）。これが「正解の処理一覧」。
-    const resolved = buildTimeline(correct);
-    // itemRevealSec → phase で安定ソート。
-    const ordered = [...resolved].sort((a, b) => {
-      const sa = itemRevealSec(a);
-      const sb = itemRevealSec(b);
-      return sa !== sb ? sa - sb : a.phase - b.phase;
-    });
+    // GC3 行(sec=48)を先頭に含む完全な答えタイムライン（sec 昇順済み）。
+    const ordered = buildAnswerTimeline(setup, 0);
     const revealed = ordered.filter(
-      (it) => revealAll || elapsed >= itemRevealSec(it),
+      (it) => revealAll || elapsed >= it.sec,
     );
     const upcoming = ordered.find(
-      (it) => !revealAll && elapsed < itemRevealSec(it),
+      (it) => !revealAll && elapsed < it.sec,
     );
     const allShown = revealed.length === ordered.length;
 
@@ -216,7 +210,7 @@ export function SimulationMode() {
           </span>
           <span className="text-[10px] text-muted-foreground">
             {speed}x ・ {revealed.length}/{ordered.length}
-            {upcoming && ` ・ 次 ${itemRevealSec(upcoming)}s`}
+            {upcoming && ` ・ 次 ${upcoming.sec}s`}
           </span>
         </div>
 
@@ -460,7 +454,7 @@ function SpeedToggle({ speed, setSpeed }: { speed: number; setSpeed: (s: number)
 
 /** 処理フェーズの解決1行（読み取り専用）。デバフアイコン＋行動テキスト。
  * MinimumMode の TimelineRow と同じアイコン描画方針。 */
-function ResolvedRow({ item }: { item: Item }) {
+function ResolvedRow({ item }: { item: AnswerRow }) {
   return (
     <div className="flex items-center gap-2 rounded-md border bg-card/40 px-2 py-1.5">
       <span className="flex min-w-6 shrink-0 items-center justify-center gap-0.5">
