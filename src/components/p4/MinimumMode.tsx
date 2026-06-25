@@ -261,7 +261,15 @@ export function MinimumMode({
 
       <div className="border-t" />
 
-      {/* 3) 導出タイムライン（処理順ソート＋ブロック） */}
+      {/* 3) マジックアウト記憶（水雷/加速度の下・処理タイムラインの上） */}
+      <div className="flex flex-col gap-1.5 rounded-lg border-2 border-primary/40 bg-primary/5 p-1.5">
+        <TruthChip label="サンダガ" value={v("thunda")} onToggle={() => toggleTruth("thunda")} iconNode={<Zap className="size-5" />} />
+        <TruthChip label="ブリザガ" value={v("blizza")} onToggle={() => toggleTruth("blizza")} iconNode={<Snowflake className="size-5" />} />
+      </div>
+
+      <div className="border-t" />
+
+      {/* 4) 導出タイムライン（処理順ソート＋ブロック） */}
       <div className="flex flex-col gap-1.5">
         {groups.map((grp, gi) => {
           // 水雷・加速度（早=1/遅=4）は中身1つでも常にブロック枠。単独処理（視線/ほのお/つなみ）は枠なし。
@@ -280,11 +288,6 @@ export function MinimumMode({
         })}
       </div>
 
-      {/* 4) マジックアウト記憶（最下部・ブロック） */}
-      <div className="flex flex-col gap-1.5 rounded-lg border-2 border-primary/40 bg-primary/5 p-1.5">
-        <TruthChip label="サンダガ" value={v("thunda")} onToggle={() => toggleTruth("thunda")} iconNode={<Zap className="size-5" />} />
-        <TruthChip label="ブリザガ" value={v("blizza")} onToggle={() => toggleTruth("blizza")} iconNode={<Snowflake className="size-5" />} />
-      </div>
     </div>
   );
 }

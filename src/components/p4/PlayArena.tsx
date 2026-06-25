@@ -702,6 +702,10 @@ function draw(
   }
 
   // --- 各機構のリードイン中ターゲット（寛容な予告） ---
+  // 視線（魔眼）の発射源: この席が視線(shisen)担当なら席本人が「視線対象者＝発射源」で、
+  // 視線はその足元から全方向に発射される。視線担当でなければ中央ボスが源。
+  const isGazeSource = toMinState(setup, seat).shisen === "yes";
+  const gazeSource: Point = isGazeSource ? { x: pl.x, y: pl.y } : CENTER;
   for (const key of MECH_ORDER) {
     const sec = MECHANIC_SEC[key];
     const req = requiredAction(setup, seat, key);
@@ -712,7 +716,7 @@ function draw(
     } else {
       if (elapsed < sec - LEAD_IN || elapsed > sec + 1.5) continue;
     }
-    drawTarget(ctx, req, key, setup, origins);
+    drawTarget(ctx, req, key, setup, origins, gazeSource);
   }
 
   // --- ボス（中央 + 外周2体）+ キャストバー + 真偽インジケータ ---
@@ -1020,6 +1024,8 @@ function drawTarget(
   key: MechanicKey,
   setup: SimSetup,
   origins: Partial<Record<MechanicKey, Point>>,
+  /** 視線（魔眼）の発射源。視線担当席なら席本人の足元、そうでなければ中央ボス。 */
+  gazeSource: Point = CENTER,
 ) {
   const danger = "rgba(255,69,0,0.30)";
   const dangerEdge = "#ff4500";
@@ -1068,7 +1074,8 @@ function drawTarget(
     case "look":
     case "hide":
       // 視線（魔眼）が来ること自体は予告するが、見る/見ないの正解は明かさない。
-      drawEyeTelegraph(ctx);
+      // 視線は発射源（視線対象者＝席本人 or 中央ボス）から全方向へ放射される。
+      drawEyeTelegraph(ctx, gazeSource);
       break;
     case "stop":
     case "move":
@@ -1079,31 +1086,51 @@ function drawTarget(
 }
 
 /**
- * 魔眼（視線）予告: 中央ボスから視線が来ることだけを示す。
- * 練習なので「見る／見ない」の正解は明かさない（プレイヤーがデバフから判断する）。
+ * 魔眼（視線）予告: 視線が「発射源から全方向へ」放射されることを示す。
+ *
+ * 視線は視線対象者（src）を源とし、全方向に発射される。練習なので
+ * 「見る／見ない」の正解は明かさない（プレイヤーがデバフから判断する）。
+ *
+ * @param src 視線の発射源（視線担当席なら席本人の足元、そうでなければ中央ボス）。
  */
-function drawEyeTelegraph(ctx: CanvasRenderingContext2D) {
+function drawEyeTelegraph(ctx: CanvasRenderingContext2D, src: Point = CENTER) {
   ctx.save();
-  // 中央ボスの視線マーカー（赤い眼の輪）。
+
+  // 全方向の視線レイ（源から放射状に伸びる赤い線）。「全方向に発射」を可視化する。
+  const RAYS = 16;
+  const rayLen = ARENA_RADIUS * 2.2;
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = "rgba(255,51,51,0.45)";
+  for (let i = 0; i < RAYS; i++) {
+    const a = (i / RAYS) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(src.x, src.y);
+    ctx.lineTo(src.x + Math.cos(a) * rayLen, src.y + Math.sin(a) * rayLen);
+    ctx.stroke();
+  }
+
+  // 発射源の眼マーカー（赤い眼の輪）。
   ctx.beginPath();
-  ctx.arc(CENTER.x, CENTER.y, BOSS_RADIUS + 10, 0, Math.PI * 2);
-  ctx.strokeStyle = "rgba(255,51,51,0.8)";
+  ctx.arc(src.x, src.y, 22, 0, Math.PI * 2);
+  ctx.strokeStyle = "rgba(255,51,51,0.9)";
   ctx.lineWidth = 3;
   ctx.stroke();
   const img = imgCache.shisen;
   const size = 26;
   if (loadedCache.shisen && img) {
-    ctx.drawImage(img, CENTER.x - size / 2, CENTER.y - BOSS_RADIUS - 30 - size, size, size);
+    ctx.drawImage(img, src.x - size / 2, src.y - 36 - size, size, size);
   }
+
   // 「視線」が来ることだけを示す中立ラベル（正解は出さない）。
-  const label = "視線（魔眼）";
+  const label = "視線（魔眼・全方向）";
   ctx.font = "bold 16px sans-serif";
   ctx.textAlign = "center";
   ctx.lineWidth = 4;
   ctx.strokeStyle = "#000";
-  ctx.strokeText(label, CENTER.x, CENTER.y - BOSS_RADIUS - 14);
+  const ly = Math.max(20, src.y - 30);
+  ctx.strokeText(label, src.x, ly);
   ctx.fillStyle = "#ffd9a0";
-  ctx.fillText(label, CENTER.x, CENTER.y - BOSS_RADIUS - 14);
+  ctx.fillText(label, src.x, ly);
   ctx.restore();
 }
 

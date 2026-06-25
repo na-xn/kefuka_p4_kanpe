@@ -92,6 +92,23 @@ describe("generateSim composition", () => {
     }
   });
 
+  it("gc3SplitTruth is a deterministic shin/gi truth", () => {
+    for (const seed of SEEDS) {
+      const setup = generateSim(mulberry32(seed));
+      expect(["shin", "gi"]).toContain(setup.gc3SplitTruth);
+      const again = generateSim(mulberry32(seed));
+      expect(again.gc3SplitTruth).toBe(setup.gc3SplitTruth);
+    }
+  });
+
+  it("gc3SplitTruth is additive: existing center/boss fields don't shift", () => {
+    // 新 rng() は全フィールド生成後に引くため、それ以前のフィールドは不変。
+    const setup = generateSim(mulberry32(2024));
+    const ref = generateSim(mulberry32(2024));
+    expect(setup.centerAoE).toEqual(ref.centerAoE);
+    expect(setup.gc3BossAngle).toBe(ref.gc3BossAngle);
+  });
+
   it("centerAoE has gc1/gc2/gc3 + 単発 sandaga/blizzaga, all deterministic & in range", () => {
     for (const seed of SEEDS) {
       const setup = generateSim(mulberry32(seed));

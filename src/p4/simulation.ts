@@ -56,6 +56,15 @@ export type SimSetup = {
    */
   gc3BossAngle: number;
   /**
+   * GC3 分断（エクスデス）ボスのキャスト真偽。
+   *
+   * 参照 sim.html `checkWave3SplitSafety`: `wave3BossB.currentEffect` が
+   * ほんと(shin)/うそ(gi) を持ち、うそ(gi) のときアラガン/超越の解釈を反転する
+   * （`if (!isBossTruth) isAlagField = !isAlagField;`）。
+   * セッション内で全クライアントが同じ安全側を共有できるよう決定的に生成する。
+   */
+  gc3SplitTruth: Truth;
+  /**
    * 中央ボスのサンダガ/ブリザガ十字・象限 AoE の決定的ジオメトリ（GC1/GC2 ごと）。
    *
    * 参照 sim.html の `drawThundergaAoELayer` / `drawBlizzagaAoELayer` /
@@ -249,6 +258,10 @@ export function generateSim(rng: () => number = Math.random): SimSetup {
     },
   };
 
+  // GC3 分断ボスのキャスト真偽。決定性を崩さないため、既存の全 rng() 呼び出しの
+  // 「後」に追加で引く（参照 wave3BossB.currentEffect 相当）。
+  const gc3SplitTruth = randTruth(rng);
+
   return {
     gc1Truth,
     gc2Truth,
@@ -260,6 +273,7 @@ export function generateSim(rng: () => number = Math.random): SimSetup {
     thundaTruth,
     blizzaTruth,
     gc3BossAngle,
+    gc3SplitTruth,
     centerAoE,
     players,
   };

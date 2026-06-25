@@ -142,6 +142,33 @@ describe("requiredAction mapping", () => {
     }
   });
 
+  it("gc3 split truth(gi) flips the required color vs shin (every role×scar)", () => {
+    // 参照 checkWave3SplitSafety: wave3BossB.currentEffect が うそ なら
+    // アラガン/超越の解釈が反転 → 立つべき色も反転する。
+    const seatOf = (role: "aragan" | "shi", scar: "seija" | "shisha") =>
+      setup.players.find((p) => p.gc3Role === role && p.gc3Scar === scar)?.seat;
+    for (const role of ["aragan", "shi"] as const) {
+      for (const scar of ["seija", "shisha"] as const) {
+        const seat = seatOf(role, scar);
+        if (seat === undefined) continue;
+        const shinReq = requiredAction(
+          { ...setup, gc3SplitTruth: "shin" },
+          seat,
+          "gc3",
+        );
+        const giReq = requiredAction(
+          { ...setup, gc3SplitTruth: "gi" },
+          seat,
+          "gc3",
+        );
+        // 真偽の反転で要求色が必ず入れ替わる（PINK↔BLUE）。
+        expect(shinReq.color).not.toBe(giReq.color);
+        expect(giReq.color).toBe(gc3RequiredColor(role, scar, false));
+        expect(shinReq.color).toBe(gc3RequiredColor(role, scar, true));
+      }
+    }
+  });
+
   it("each seat has exactly one water mechanic at early or late, with stack/spread kind", () => {
     for (let seat = 0; seat < 8; seat++) {
       const early = requiredAction(setup, seat, "early");

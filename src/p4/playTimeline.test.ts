@@ -32,6 +32,7 @@ function setupWith(centerAoE: SimSetup["centerAoE"]): SimSetup {
     thundaTruth: "shin",
     blizzaTruth: "shin",
     gc3BossAngle: 0,
+    gc3SplitTruth: "shin",
     centerAoE,
     players: [],
   };

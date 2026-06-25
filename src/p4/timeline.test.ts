@@ -124,6 +124,7 @@ describe("buildAnswerTimeline", () => {
       thundaTruth: "shin",
       blizzaTruth: "shin",
       gc3BossAngle: 0,
+      gc3SplitTruth: "shin",
       centerAoE: {
         gc1: { sandagaTruth: "shin", blizzagaTruth: "shin", thunderPattern: 0, blizzardPattern: 0 },
         gc2: { sandagaTruth: "shin", blizzagaTruth: "shin", thunderPattern: 0, blizzardPattern: 0 },

@@ -436,7 +436,8 @@ export function requiredAction(setup: SimSetup, seat: number, key: MechanicKey):
   const accelEarly = !waterEarly;
 
   if (key === "gc3") {
-    const bossShin = true; // 我々のモデルにボス真偽は無いので「ほんと」固定（後段フェーズで拡張可）。
+    // 分断ボスのキャスト真偽（うそ=gi なら gc3RequiredColor 内でアラガン/超越を反転）。
+    const bossShin = setup.gc3SplitTruth === "shin";
     const color = gc3RequiredColor(player.gc3Role, player.gc3Scar, bossShin);
     return { kind: "gc3", label: seishi(player.gc3Role) ?? "", color };
   }
