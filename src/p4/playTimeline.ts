@@ -160,12 +160,14 @@ export const MECH_ORDER = [
  * 解決の直後 +1.5s までは「解決表示」を許すため、resolveSec+1.5 まで返す。
  */
 export function activeCenterCast(elapsed: number): CenterCast | null {
-  // 序盤グランドクロス。
+  // 序盤の中央ボス magic charge（サンダガ十字 + ブリザガ象限）。
+  // 参照 bosses[0]（中央）は サンダガ/ブリザガ を詠唱する（グランドクロスではない）。
+  // グランドクロスは 4時のサブボス（bosses[2]）の役割デバフ詠唱（フィールド AoE なし）。
   for (const key of ["gc1", "gc2", "gc3"] as CenterGcKey[]) {
     const resolveSec = CENTER_GC_SEC[key];
     const castStart = resolveSec - CENTER_CAST_LEN;
     if (elapsed >= castStart && elapsed < resolveSec + 1.5) {
-      return { name: "グランドクロス", castStart, resolveSec, instance: key, geometry: "cross" };
+      return { name: "サンダガ／ブリザガ", castStart, resolveSec, instance: key, geometry: "cross" };
     }
   }
   // mid-fight サンダガ。

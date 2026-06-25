@@ -370,24 +370,25 @@ export function requiredAction(setup: SimSetup, seat: number, key: MechanicKey):
   // --- 加速度系タイミング（視線 or 無職）---
   // 視線(shisen): juso1(57, 早) / juso2(79, 遅)。
   // 無職(mushoku): 加速度爆弾。早=51 / 遅=74 に解決（水雷と同じ位置帯のタイミング）。
+  // 加速度系（視線/無職）は必ず「加速弾(爆弾)」を持つ。爆弾は env チェック（早=51/遅=74）で解決。
+  // 視線(shisen)は加えて「視線(魔眼)」も持ち、これは juso（早=57/遅=79）で解決する。
+  // 参照 sim.html assignGimmickDebuffs: SET2 = BOMB(+EYE)。
+  const bombKey: MechanicKey = accelEarly ? "early" : "late";
+  if (key === bombKey) {
+    const truth = (accelTruthShin ? "shin" : "gi") as "shin" | "gi";
+    const action = accel(truth) ?? "";
+    // 止まる(stop) / 動く(move)。
+    const kind: RequiredKind = action === "止まる" ? "stop" : "move";
+    return { kind, label: action };
+  }
   if (accelIsShisen) {
-    // 視線。
-    const jusoKey = accelEarly ? "juso1" : "juso2";
+    // 視線（魔眼）の解決。早→juso1(57) / 遅→juso2(79)。
+    const jusoKey: MechanicKey = accelEarly ? "juso1" : "juso2";
     if (key === jusoKey) {
       const truth = (accelTruthShin ? "shin" : "gi") as "shin" | "gi";
       const action = juso(truth) ?? "";
       // 見ない → 中央に背を向ける(hide) / 見る → 中央を向く(look)。
       const kind: RequiredKind = action === "見ない" ? "hide" : "look";
-      return { kind, label: action };
-    }
-  } else {
-    // 無職(mushoku): 加速度爆弾。早/遅は accelEarly。
-    const bombKey = accelEarly ? "early" : "late";
-    if (key === bombKey) {
-      const truth = (accelTruthShin ? "shin" : "gi") as "shin" | "gi";
-      const action = accel(truth) ?? "";
-      // 止まる(stop) / 動く(move)。
-      const kind: RequiredKind = action === "止まる" ? "stop" : "move";
       return { kind, label: action };
     }
   }

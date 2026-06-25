@@ -80,7 +80,9 @@ describe("playTimeline schedule constants (参照 sim.html 抽出)", () => {
 describe("activeCenterCast", () => {
   it("各窓で正しいキャスト（名前・geometry）を返す", () => {
     expect(activeCenterCast(4)?.instance).toBe("gc1");
-    expect(activeCenterCast(4)?.name).toBe("グランドクロス");
+    // 中央ボスは サンダガ/ブリザガ（magic charge）を詠唱する（グランドクロスではない）。
+    expect(activeCenterCast(4)?.name).toBe("サンダガ／ブリザガ");
+    expect(activeCenterCast(4)?.name).not.toContain("グランドクロス");
     expect(activeCenterCast(4)?.geometry).toBe("cross");
     expect(activeCenterCast(16)?.instance).toBe("gc2");
     expect(activeCenterCast(28)?.instance).toBe("gc3");

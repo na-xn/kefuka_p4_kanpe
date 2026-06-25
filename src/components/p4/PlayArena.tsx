@@ -25,6 +25,7 @@ import {
 } from "@/p4/arena";
 import {
   MECH_ORDER,
+  CENTER_GC_SEC,
   activeCenterCast,
   castProgress,
   centerResolutions,
@@ -134,6 +135,8 @@ function buildDebuffs(setup: SimSetup, seat: number): DebuffEntry[] {
   const gc1IsWater = p.gc1Role === "mizu" || p.gc1Role === "rai";
   const gc1Sec = gc1IsWater ? waterSec : accelSec;
   const gc2Sec = gc1IsWater ? accelSec : waterSec;
+  // 加速度系の爆弾(加速弾)は env チェック（早=51/遅=74）で解決する。
+  const bombSec = accelEarly ? MECHANIC_SEC.early : MECHANIC_SEC.late;
 
   const roleColor = (r: string): string => {
     if (r === "mizu") return "#00b4d8";
@@ -142,17 +145,25 @@ function buildDebuffs(setup: SimSetup, seat: number): DebuffEntry[] {
     return "#ffcc00"; // mushoku
   };
 
+  // 役割デバフを1つ付与する。視線(shisen)は参照 SET2 = 加速弾(bomb) + 視線(eye) の
+  // 2デバフを持つ（爆弾は env、視線は juso で別々に解決）。
+  const pushRole = (role: string, applySec: number, resolveSec: number) => {
+    if (role === "shisen") {
+      // 視線（魔眼）アイコン: juso タイミングで解決。
+      out.push({ iconKey: "shisen", applySec, resolveSec, color: roleColor("shisen") });
+      // 加速弾（爆弾）アイコン: env タイミングで解決。
+      out.push({ iconKey: "mushoku", applySec, resolveSec: bombSec, color: roleColor("mushoku") });
+      return;
+    }
+    out.push({ iconKey: role as IconKey, applySec, resolveSec, color: roleColor(role) });
+  };
+
   // 付与秒は参照 assignGimmickDebuffs / assign11BossDebuff のボス詠唱完了時刻に一致:
   //   GC1 役割 @8（assignGimmickDebuffs(1)）, wave1 @12（assign11BossDebuff(1)）,
   //   GC2 役割 @20（assignGimmickDebuffs(2)）, wave2 @24（assign11BossDebuff(2)）,
   //   GC3 役割+傷 @32（assignGimmickDebuffs(3) wave3 分岐）。
   // GC1 役割 @8。
-  out.push({
-    iconKey: p.gc1Role as IconKey,
-    applySec: 8,
-    resolveSec: gc1Sec,
-    color: roleColor(p.gc1Role),
-  });
+  pushRole(p.gc1Role, 8, gc1Sec);
   // wave1 @12（honoo/tsunami）。
   out.push({
     iconKey: setup.wave1Type as IconKey,
@@ -161,12 +172,7 @@ function buildDebuffs(setup: SimSetup, seat: number): DebuffEntry[] {
     color: setup.wave1Type === "honoo" ? "#ff4500" : "#00b4d8",
   });
   // GC2 役割 @20。
-  out.push({
-    iconKey: p.gc2Role as IconKey,
-    applySec: 20,
-    resolveSec: gc2Sec,
-    color: roleColor(p.gc2Role),
-  });
+  pushRole(p.gc2Role, 20, gc2Sec);
   // wave2 @24。
   out.push({
     iconKey: setup.wave2Type as IconKey,
@@ -224,6 +230,12 @@ function preloadImages(onLoad: () => void) {
  * ========================================================== */
 
 const BOSS_RADIUS = 25;
+/**
+ * 外周2体（8時=つなみ/ほのお、4時=グランドクロス）が消える秒。
+ * 参照 sim.html: GC3 解決 → assignGimmickDebuffs(3)@32 → VANISHED@34。
+ * これ以降は中央ボスのみ残り、最終フェーズの外周エクスデス（分断ボス）に引き継ぐ。
+ */
+const SUB_BOSS_VANISH_SEC = 34;
 const CENTER_BOSS = { x: CENTER.x, y: CENTER.y, color: "#9b5de5" };
 const SUB_BOSSES = [
   {
@@ -829,7 +841,12 @@ function subBossCast(
     candidates.push({ name: "ほのお", sec: honooSec, len: 8 });
     candidates.push({ name: "つなみ", sec: tsunamiSec, len: 8 });
   } else {
-    // 役割解決（早=51 / 遅=74 / 魔眼=57,79）。名前は出さず進捗のみ。
+    // 4時サブボス: グランドクロス（役割デバフ assignGimmickDebuffs）を gc1/gc2/gc3 で詠唱。
+    // 参照 bosses[2] が役割デバフ（水圧縮/雷/加速度爆弾/魔眼）を割り当てる詠唱を行う。
+    for (const k of ["gc1", "gc2", "gc3"] as const) {
+      candidates.push({ name: "グランドクロス", sec: CENTER_GC_SEC[k], len: 8 });
+    }
+    // 役割/魔眼の解決（早=51 / 遅=74 / 魔眼=57,79）。名前は出さず進捗のみ。
     for (const k of ["early", "juso1", "late", "juso2"] as MechanicKey[]) {
       const req = requiredAction(setup, seat, k);
       if (req.kind === "none") continue;
@@ -856,6 +873,9 @@ function drawBosses(
 ) {
   const bossList = [CENTER_BOSS, ...SUB_BOSSES];
   bossList.forEach((boss, index) => {
+    // 参照 sim.html: GC3 後（wave3 消失）、外周2体は消える（中央のみ残る）。
+    //   if (currentWave === 3 && isSubBossesVanished && index > 0) return;
+    if (index > 0 && elapsed >= SUB_BOSS_VANISH_SEC) return;
     // ボス本体。
     ctx.beginPath();
     ctx.arc(boss.x, boss.y, BOSS_RADIUS, 0, Math.PI * 2);
@@ -1021,12 +1041,43 @@ function drawTarget(
     }
     case "look":
     case "hide":
+      drawEyeTelegraph(ctx, req.kind);
+      break;
     case "stop":
     case "move":
     case "none":
     default:
       break;
   }
+}
+
+/**
+ * 魔眼（視線）予告: 中央ボスから視線が出ることを示すマーカーと、
+ * 「見る／見ない」の指示を中央上部に描く。参照 魔眼 解決（juso1=57 / juso2=79）。
+ */
+function drawEyeTelegraph(ctx: CanvasRenderingContext2D, kind: "look" | "hide") {
+  ctx.save();
+  // 中央ボスの視線マーカー（赤い眼の輪）。
+  ctx.beginPath();
+  ctx.arc(CENTER.x, CENTER.y, BOSS_RADIUS + 10, 0, Math.PI * 2);
+  ctx.strokeStyle = "rgba(255,51,51,0.8)";
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  const img = imgCache.shisen;
+  const size = 26;
+  if (loadedCache.shisen && img) {
+    ctx.drawImage(img, CENTER.x - size / 2, CENTER.y - BOSS_RADIUS - 30 - size, size, size);
+  }
+  // 指示テキスト。
+  const label = kind === "hide" ? "見ない（背を向ける）" : "見る（向く）";
+  ctx.font = "bold 16px sans-serif";
+  ctx.textAlign = "center";
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = "#000";
+  ctx.strokeText(label, CENTER.x, CENTER.y - BOSS_RADIUS - 14);
+  ctx.fillStyle = kind === "hide" ? "#ff9f9f" : "#ffe08a";
+  ctx.fillText(label, CENTER.x, CENTER.y - BOSS_RADIUS - 14);
+  ctx.restore();
 }
 
 /** GC3 分断面（参照 drawWave3SplitAoE: ボスへ translate→中心向き rotate、pink=+側 / blue=-側）+ 安全側強調。 */

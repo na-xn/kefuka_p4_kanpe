@@ -169,6 +169,39 @@ describe("requiredAction mapping", () => {
     expect(sawJuso).toBe(true);
     expect(sawBomb).toBe(true);
   });
+
+  it("加速度系(視線/無職)の席は必ず env(早/遅)で加速弾(止/動)を解決する", () => {
+    // 参照 SET2 = BOMB(+EYE)。視線でも無職でも加速弾は env チェックで解決する。
+    for (let seat = 0; seat < 8; seat++) {
+      const p = setup.players.find((pl) => pl.seat === seat)!;
+      const isAccel = (r: string) => r === "shisen" || r === "mushoku";
+      if (!isAccel(p.gc1Role) && !isAccel(p.gc2Role)) continue;
+      const early = requiredAction(setup, seat, "early");
+      const late = requiredAction(setup, seat, "late");
+      const bombAt = [early, late].filter((r) => r.kind === "stop" || r.kind === "move");
+      // 加速度系の席はちょうど1回 env で爆弾を解決する。
+      expect(bombAt.length).toBe(1);
+    }
+  });
+
+  it("視線(shisen)の席は爆弾(env)と魔眼(juso)の両方を解決する — 視線だけにならない", () => {
+    // 参照: 視線プレイヤーのバグ「視線だけついて加速度がつかない」の回帰防止。
+    for (let seat = 0; seat < 8; seat++) {
+      const p = setup.players.find((pl) => pl.seat === seat)!;
+      const hasShisen = p.gc1Role === "shisen" || p.gc2Role === "shisen";
+      if (!hasShisen) continue;
+      const envBomb = ["early", "late"].some((k) => {
+        const r = requiredAction(setup, seat, k as "early" | "late");
+        return r.kind === "stop" || r.kind === "move";
+      });
+      const jusoEye = ["juso1", "juso2"].some((k) => {
+        const r = requiredAction(setup, seat, k as "juso1" | "juso2");
+        return r.kind === "look" || r.kind === "hide";
+      });
+      expect(envBomb).toBe(true);
+      expect(jusoEye).toBe(true);
+    }
+  });
 });
 
 describe("evaluate pass/fail", () => {
