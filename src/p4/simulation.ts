@@ -22,12 +22,22 @@ export type WaveType = "honoo" | "tsunami";
 /** ロール: タンク/ヒラ(TH, 席0-3) / DPS(席4-7)。 */
 export type Role = "TH" | "DPS";
 
+/** ジョブ枠: タンク(席0-1) / ヒラ(席2-3) / DPS(席4-7)。 */
+export type Job = "tank" | "healer" | "dps";
+
+/** 席番号からジョブ枠を決定的に返す（tank=0-1 / healer=2-3 / dps=4-7）。 */
+export function seatJob(seat: number): Job {
+  return seat < 2 ? "tank" : seat < 4 ? "healer" : "dps";
+}
+
 /** 1プレイヤーの GC1〜GC3 役割割当。 */
 export type PlayerAssignment = {
   /** 席番号 0..7（一意）。 */
   seat: number;
   /** ロール（席0-3=TH / 席4-7=DPS、シャッフルに依らず決定的）。 */
   role: Role;
+  /** ジョブ枠（席0-1=tank / 席2-3=healer / 席4-7=dps、決定的）。 */
+  job: Job;
   gc1Role: GcRole;
   gc2Role: GcRole;
   gc3Role: Gc3Role;
@@ -206,9 +216,12 @@ export function generateSim(rng: () => number = Math.random): SimSetup {
 
   const players: PlayerAssignment[] = [];
   for (let seat = 0; seat < 8; seat++) {
+    const job = seatJob(seat);
+    const role: Role = job === "dps" ? "DPS" : "TH";
     players.push({
       seat,
-      role: seat < 4 ? "TH" : "DPS",
+      role,
+      job,
       gc1Role: gc1Roles[seat],
       gc2Role: gc2Roles[seat],
       gc3Role: gc3Roles[seat],

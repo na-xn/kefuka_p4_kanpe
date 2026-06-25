@@ -25,6 +25,41 @@ export type RosterEntry = {
 export const MAX_SEATS = 8;
 
 /**
+ * ジョブ枠: タンク(席0-1) / ヒラ(席2-3) / DPS(席4-7)。
+ * src/p4/simulation.ts の Job のミラー（worker は src を import しない）。
+ */
+export type Job = "tank" | "healer" | "dps";
+
+/** 席番号からジョブ枠を決定的に返す（tank=0-1 / healer=2-3 / dps=4-7）。 */
+export function seatJob(seat: number): Job {
+  return seat < 2 ? "tank" : seat < 4 ? "healer" : "dps";
+}
+
+/** ジョブ枠ごとの席レンジ（lowestFreeSeatForRole 用）。 */
+const ROLE_RANGES: Record<Job, number[]> = {
+  tank: [0, 1],
+  healer: [2, 3],
+  dps: [4, 5, 6, 7],
+};
+
+/**
+ * 占有済み席集合から、指定ジョブ枠のレンジ内で空いている最小の席番号を返す。
+ * レンジ内が満席、または未知のロールなら null。
+ */
+export function lowestFreeSeatForRole(
+  taken: Iterable<number>,
+  role: Job,
+): number | null {
+  const range = ROLE_RANGES[role];
+  if (!range) return null;
+  const set = new Set(taken);
+  for (const s of range) {
+    if (!set.has(s)) return s;
+  }
+  return null;
+}
+
+/**
  * 占有済み席集合から、空いている最小の席番号を返す。
  * 満席（8席すべて占有）なら null。
  */

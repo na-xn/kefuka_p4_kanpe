@@ -3,6 +3,7 @@ import { INITIAL_MIN } from "@/components/p4/MinimumMode";
 import {
   generateSim,
   toMinState,
+  seatJob,
   type GcRole,
   type Gc3Role,
   type Gc3Scar,
@@ -208,5 +209,39 @@ describe("toMinState", () => {
       const ms = toMinState(setup, seat);
       expect(Object.keys(ms).sort()).toEqual(expected);
     }
+  });
+});
+
+describe("PlayerAssignment job field", () => {
+  it("each player has the correct job for their seat", () => {
+    const setup = generateSim(mulberry32(12345));
+    const players = setup.players;
+
+    // 2 tanks, 2 healers, 4 dps
+    const tanks = players.filter((p) => p.job === "tank");
+    const healers = players.filter((p) => p.job === "healer");
+    const dps = players.filter((p) => p.job === "dps");
+    expect(tanks).toHaveLength(2);
+    expect(healers).toHaveLength(2);
+    expect(dps).toHaveLength(4);
+
+    // tank seats are {0,1}, healer {2,3}, dps {4,5,6,7}
+    expect(new Set(tanks.map((p) => p.seat))).toEqual(new Set([0, 1]));
+    expect(new Set(healers.map((p) => p.seat))).toEqual(new Set([2, 3]));
+    expect(new Set(dps.map((p) => p.seat))).toEqual(new Set([4, 5, 6, 7]));
+
+    // role↔job consistency
+    for (const p of players) {
+      expect(p.role).toBe(p.job === "dps" ? "DPS" : "TH");
+    }
+  });
+
+  it("seatJob helper returns correct job for each seat", () => {
+    expect(seatJob(0)).toBe("tank");
+    expect(seatJob(1)).toBe("tank");
+    expect(seatJob(2)).toBe("healer");
+    expect(seatJob(3)).toBe("healer");
+    expect(seatJob(4)).toBe("dps");
+    expect(seatJob(7)).toBe("dps");
   });
 });

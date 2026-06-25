@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   lowestFreeSeat,
+  lowestFreeSeatForRole,
   hostSeat,
   isHostSeat,
   buildRoster,
@@ -113,5 +114,34 @@ describe("buildRoster", () => {
 describe("MAX_SEATS", () => {
   it("is 8", () => {
     expect(MAX_SEATS).toBe(8);
+  });
+});
+
+describe("lowestFreeSeatForRole", () => {
+  it("tank range: empty → 0, [0] taken → 1, [0,1] taken → null", () => {
+    expect(lowestFreeSeatForRole([], "tank")).toBe(0);
+    expect(lowestFreeSeatForRole([0], "tank")).toBe(1);
+    expect(lowestFreeSeatForRole([0, 1], "tank")).toBeNull();
+  });
+
+  it("healer range: empty → 2, [2] taken → 3, [2,3] taken → null", () => {
+    expect(lowestFreeSeatForRole([], "healer")).toBe(2);
+    expect(lowestFreeSeatForRole([2], "healer")).toBe(3);
+    expect(lowestFreeSeatForRole([2, 3], "healer")).toBeNull();
+  });
+
+  it("dps range: empty → 4, [4,5,6] taken → 7, [4,5,6,7] taken → null", () => {
+    expect(lowestFreeSeatForRole([], "dps")).toBe(4);
+    expect(lowestFreeSeatForRole([4, 5, 6], "dps")).toBe(7);
+    expect(lowestFreeSeatForRole([4, 5, 6, 7], "dps")).toBeNull();
+  });
+
+  it("ranges are independent: tank full does not affect healer or dps", () => {
+    expect(lowestFreeSeatForRole([0, 1], "healer")).toBe(2);
+    expect(lowestFreeSeatForRole([0, 1], "dps")).toBe(4);
+  });
+
+  it("unknown role returns null gracefully", () => {
+    expect(lowestFreeSeatForRole([], "unknown" as any)).toBeNull();
   });
 });

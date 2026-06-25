@@ -11,7 +11,9 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { SimSetup } from "@/p4/simulation";
+import type { SimSetup, Job } from "@/p4/simulation";
+
+export type { Job } from "@/p4/simulation";
 
 /** Tauri ランタイム内か（web origin を持たないため WS の host を固定する）。 */
 const IS_TAURI =
@@ -59,8 +61,15 @@ export type SeatSlot =
   | { seat: number; occupied: true; name: string; isHost: boolean; isMe: boolean }
   | { seat: number; occupied: false };
 
+/** プレイ種別（カンペ練習 / 操作プレイ）。ホストの選択が全員へ配信される。 */
+export type PlayKind = "kanpe" | "play";
+
 /** start 受信ペイロード。 */
-export type StartPayload = { setup: SimSetup; startInMs: number };
+export type StartPayload = {
+  setup: SimSetup;
+  startInMs: number;
+  kind: PlayKind;
+};
 
 /** useSession の戻り値。 */
 export type SessionApi = {
@@ -69,10 +78,10 @@ export type SessionApi = {
   isHost: boolean;
   /** 常に 8 件（占有 or NPC）。席昇順。 */
   roster: SeatSlot[];
-  connect: (sessionId: string, name: string) => void;
+  connect: (sessionId: string, name: string, role: Job) => void;
   disconnect: () => void;
   /** ホスト専用: お題開始を全員へ送る。 */
-  sendStart: (setup: SimSetup, startInMs: number) => void;
+  sendStart: (setup: SimSetup, startInMs: number, kind: PlayKind) => void;
   /** ホスト専用: ロビーへ戻すリセットを全員へ送る。 */
   sendReset: () => void;
   /**
@@ -131,6 +140,7 @@ export function useSession(callbacks: SessionCallbacks = {}): SessionApi {
 
   const wsRef = useRef<WebSocket | null>(null);
   const nameRef = useRef<string>("");
+  const roleRef = useRef<Job>("dps");
   // コールバックは最新を ref で参照（再接続を誘発させない）。
   const cbRef = useRef<SessionCallbacks>(callbacks);
   cbRef.current = callbacks;
@@ -154,7 +164,7 @@ export function useSession(callbacks: SessionCallbacks = {}): SessionApi {
     setRoster([]);
   }, []);
 
-  const connect = useCallback((sessionId: string, name: string) => {
+  const connect = useCallback((sessionId: string, name: string, role: Job) => {
     // 既存接続があれば閉じる。
     if (wsRef.current) {
       try {
@@ -170,6 +180,7 @@ export function useSession(callbacks: SessionCallbacks = {}): SessionApi {
     setIsHost(false);
     setRoster([]);
     nameRef.current = name;
+    roleRef.current = role;
 
     let ws: WebSocket;
     try {
@@ -181,7 +192,13 @@ export function useSession(callbacks: SessionCallbacks = {}): SessionApi {
     wsRef.current = ws;
 
     ws.onopen = () => {
-      ws.send(JSON.stringify({ t: "join", name: nameRef.current }));
+      ws.send(
+        JSON.stringify({
+          t: "join",
+          name: nameRef.current,
+          role: roleRef.current,
+        }),
+      );
     };
 
     ws.onmessage = (ev) => {
@@ -219,6 +236,7 @@ export function useSession(callbacks: SessionCallbacks = {}): SessionApi {
           cbRef.current.onStart?.({
             setup: msg.setup as SimSetup,
             startInMs: (msg.startInMs as number) ?? 3000,
+            kind: (msg.kind as PlayKind) ?? "kanpe",
           });
           break;
         }
@@ -253,12 +271,15 @@ export function useSession(callbacks: SessionCallbacks = {}): SessionApi {
     };
   }, []);
 
-  const sendStart = useCallback((setup: SimSetup, startInMs: number) => {
-    const ws = wsRef.current;
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ t: "start", setup, startInMs }));
-    }
-  }, []);
+  const sendStart = useCallback(
+    (setup: SimSetup, startInMs: number, kind: PlayKind) => {
+      const ws = wsRef.current;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ t: "start", setup, startInMs, kind }));
+      }
+    },
+    [],
+  );
 
   const sendReset = useCallback(() => {
     const ws = wsRef.current;

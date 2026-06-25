@@ -14,8 +14,13 @@
  */
 
 import { DurableObject } from "cloudflare:workers";
-import { lowestFreeSeat, hostSeat, buildRoster, parsePos } from "./room-logic";
-import type { Seat } from "./room-logic";
+import {
+  lowestFreeSeatForRole,
+  hostSeat,
+  buildRoster,
+  parsePos,
+} from "./room-logic";
+import type { Seat, Job } from "./room-logic";
 
 export interface Env {
   ASSETS: Fetcher;
@@ -112,10 +117,18 @@ export class SessionRoom extends DurableObject<Env> {
     if (msg.t === "join") {
       // 既に席を持っているなら無視（多重 join）。
       if (att) return;
+      // 選択ロール（tank/healer/dps）。クライアントは常に有効値を送るが、
+      // 不正値は満席扱い（席を割り当てない）で防御する。
+      const role = msg.role;
+      const validRole =
+        role === "tank" || role === "healer" || role === "dps"
+          ? (role as Job)
+          : null;
       const taken = this.takenSeats().map((s) => s.seat);
-      const seat = lowestFreeSeat(taken);
+      const seat =
+        validRole === null ? null : lowestFreeSeatForRole(taken, validRole);
       if (seat === null) {
-        // 満席 → 拒否して閉じる。
+        // そのロール枠が満席（または不正ロール） → 拒否して閉じる。
         ws.send(JSON.stringify({ t: "full" }));
         ws.close(1013, "session full");
         return;
@@ -136,7 +149,12 @@ export class SessionRoom extends DurableObject<Env> {
     if (msg.t === "start") {
       // ホスト（最小席）のみ。
       if (hostSeat(this.takenSeats().map((s) => s.seat)) !== att.seat) return;
-      this.broadcast({ t: "start", setup: msg.setup, startInMs: msg.startInMs });
+      this.broadcast({
+        t: "start",
+        setup: msg.setup,
+        startInMs: msg.startInMs,
+        kind: msg.kind,
+      });
       return;
     }
 

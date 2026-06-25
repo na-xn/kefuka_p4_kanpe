@@ -133,14 +133,14 @@ describe("buildAnswerTimeline", () => {
         blizzaga: { truth: "shin", blizzardPattern: 0 },
       },
       players: [
-        { seat: 0, role: "TH", gc1Role: "mizu", gc2Role: "shisen", gc3Role, gc3Scar },
-        { seat: 1, role: "TH", gc1Role: "rai",  gc2Role: "mushoku", gc3Role: "aragan", gc3Scar: "seija" },
-        { seat: 2, role: "TH", gc1Role: "shisen", gc2Role: "mizu", gc3Role: "aragan", gc3Scar: "seija" },
-        { seat: 3, role: "TH", gc1Role: "mushoku", gc2Role: "rai", gc3Role: "aragan", gc3Scar: "seija" },
-        { seat: 4, role: "DPS", gc1Role: "mizu", gc2Role: "shisen", gc3Role: "shi", gc3Scar: "shisha" },
-        { seat: 5, role: "DPS", gc1Role: "rai",  gc2Role: "mushoku", gc3Role: "shi", gc3Scar: "shisha" },
-        { seat: 6, role: "DPS", gc1Role: "shisen", gc2Role: "mizu", gc3Role: "shi", gc3Scar: "shisha" },
-        { seat: 7, role: "DPS", gc1Role: "mushoku", gc2Role: "rai", gc3Role: "shi", gc3Scar: "shisha" },
+        { seat: 0, role: "TH", job: "tank", gc1Role: "mizu", gc2Role: "shisen", gc3Role, gc3Scar },
+        { seat: 1, role: "TH", job: "tank", gc1Role: "rai",  gc2Role: "mushoku", gc3Role: "aragan", gc3Scar: "seija" },
+        { seat: 2, role: "TH", job: "healer", gc1Role: "shisen", gc2Role: "mizu", gc3Role: "aragan", gc3Scar: "seija" },
+        { seat: 3, role: "TH", job: "healer", gc1Role: "mushoku", gc2Role: "rai", gc3Role: "aragan", gc3Scar: "seija" },
+        { seat: 4, role: "DPS", job: "dps", gc1Role: "mizu", gc2Role: "shisen", gc3Role: "shi", gc3Scar: "shisha" },
+        { seat: 5, role: "DPS", job: "dps", gc1Role: "rai",  gc2Role: "mushoku", gc3Role: "shi", gc3Scar: "shisha" },
+        { seat: 6, role: "DPS", job: "dps", gc1Role: "shisen", gc2Role: "mizu", gc3Role: "shi", gc3Scar: "shisha" },
+        { seat: 7, role: "DPS", job: "dps", gc1Role: "mushoku", gc2Role: "rai", gc3Role: "shi", gc3Scar: "shisha" },
       ],
     };
   }

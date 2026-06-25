@@ -19,8 +19,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { MinimumMode, INITIAL_MIN } from "@/components/p4/MinimumMode";
 import type { MinState } from "@/components/p4/MinimumMode";
-import { generateSim, toMinState } from "@/p4/simulation";
-import type { SimSetup } from "@/p4/simulation";
+import { generateSim, toMinState, seatJob } from "@/p4/simulation";
+import type { SimSetup, Job } from "@/p4/simulation";
 import {
   buildRevealSchedule,
   truthLabel,
@@ -32,7 +32,7 @@ import type { FieldCompare } from "@/p4/simCompare";
 import { buildAnswerTimeline } from "@/p4/timeline";
 import type { AnswerRow } from "@/p4/timeline";
 import { useSession, setOverlayPassive } from "@/p4/session";
-import type { SessionApi, SeatSlot } from "@/p4/session";
+import type { SessionApi, SeatSlot, PlayKind } from "@/p4/session";
 
 /**
  * Tauri デスクトップで、active の間だけウィンドウをフォーカス可能にする
@@ -445,6 +445,15 @@ function KanpeRunner() {
  * セッション(8人)
  * ========================================================== */
 
+/** ジョブ枠のメタ（アイコン・ラベル・席数）。 */
+const JOB_META: Record<Job, { label: string; icon: string; slots: number }> = {
+  tank: { label: "Tank", icon: "/icon/TankRole.png", slots: 2 },
+  healer: { label: "Healer", icon: "/icon/HealerRole.png", slots: 2 },
+  dps: { label: "DPS", icon: "/icon/DPSRole.png", slots: 4 },
+};
+
+const JOB_ORDER: Job[] = ["tank", "healer", "dps"];
+
 // セッションのプレイロールは「共有・永続化」要件のみ（トップのトグルが担う）。
 // セッション席は mySeat のままで、ロール由来の席変更は後フェーズで対応する。
 function SessionRunner(_props: { playRole: PlayRole }) {
@@ -453,23 +462,42 @@ function SessionRunner(_props: { playRole: PlayRole }) {
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [phase, setPhase] = useState<"idle" | "playing" | "process">("idle");
   const [inputMode, setInputMode] = useState<InputMode>(loadInputMode);
+  // 受信したプレイ種別（ホストの選択が配信される）。
+  const [runKind, setRunKind] = useState<PlayKind>("kanpe");
+  // ロビーでホストが選ぶプレイ種別（kanpe/play）。
+  const [sessionKind, setSessionKind] = useState<PlayKind>("kanpe");
+  // 参加時に選ぶジョブ枠（tank/healer/dps）。
+  const [selectedJob, setSelectedJob] = useState<Job>("dps");
 
   const changeInputMode = (m: InputMode) => {
     setInputMode(m);
     saveInputMode(m);
   };
 
+  // 他席の実位置（seat → {x,y,fx,fy}）。ミュータブルに更新し PlayArena は毎フレーム参照。
+  const posMapRef = useRef<Map<number, { x: number; y: number; fx: number; fy: number }>>(
+    new Map(),
+  );
+  // 自席 pos の送信スロットル（~12Hz）。
+  const lastSentRef = useRef(0);
+
   // start 受信: 各クライアントが受信時刻 + startInMs を開始時刻とする（簡易同期）。
   const session = useSession({
-    onStart: ({ setup: s, startInMs }) => {
+    onStart: ({ setup: s, startInMs, kind }) => {
       setSetup(s);
       setStartedAt(Date.now() + startInMs);
       setPhase("playing");
+      setRunKind(kind);
+      posMapRef.current.clear();
     },
     onReset: () => {
       setSetup(null);
       setStartedAt(null);
       setPhase("idle");
+      posMapRef.current.clear();
+    },
+    onPos: ({ seat, x, y, fx, fy }) => {
+      posMapRef.current.set(seat, { x, y, fx, fy });
     },
   });
 
@@ -478,9 +506,20 @@ function SessionRunner(_props: { playRole: PlayRole }) {
   const [name, setName] = useState("");
 
   const joined = session.status === "joined";
+  const playing = phase !== "idle";
 
-  // 未参加（セッションID/名前の入力画面）の間だけフォーカス可能に（デスクトップ）。
-  useOverlayFocus(!joined);
+  // フォーカス: 未参加（ID入力）か、操作プレイ中（キー操作が要る）の間だけ可能に。
+  useOverlayFocus(!joined || (playing && runKind === "play"));
+
+  // ロスター変化で、もう占有していない席の実位置を掃除する。
+  useEffect(() => {
+    const occ = new Set(
+      session.roster.filter((s) => s.occupied).map((s) => s.seat),
+    );
+    for (const k of [...posMapRef.current.keys()]) {
+      if (!occ.has(k)) posMapRef.current.delete(k);
+    }
+  }, [session.roster]);
 
   // 未接続 or 練習が始まっていない → ロビー。
   if (!joined || phase === "idle" || setup == null || startedAt == null) {
@@ -491,10 +530,13 @@ function SessionRunner(_props: { playRole: PlayRole }) {
         setSessionId={setSessionId}
         name={name}
         setName={setName}
+        selectedJob={selectedJob}
+        setSelectedJob={setSelectedJob}
+        sessionKind={sessionKind}
+        setSessionKind={setSessionKind}
         onStart={() => {
           // ホストのみ: お題生成して 3秒リードで全員へ送る（onStart で各自開始）。
-          const s = generateSim();
-          session.sendStart(s, 3000);
+          session.sendStart(generateSim(), 3000, sessionKind);
         }}
         inputMode={inputMode}
         onChangeInputMode={changeInputMode}
@@ -505,6 +547,34 @@ function SessionRunner(_props: { playRole: PlayRole }) {
   // mySeat は joined 時に必ず存在。
   const seat = session.mySeat ?? 0;
 
+  // 操作プレイ: PlayArena でセッション相乗り。
+  if (runKind === "play") {
+    const occSet = new Set(
+      session.roster.filter((s) => s.occupied).map((s) => s.seat),
+    );
+    const throttledSend = (x: number, y: number, fx: number, fy: number) => {
+      const t = Date.now();
+      if (t - lastSentRef.current < 80) return;
+      lastSentRef.current = t;
+      session.sendPos(x, y, fx, fy);
+    };
+    return (
+      <div className="flex flex-col gap-2">
+        <SessionStatusBar session={session} />
+        <PlayArena
+          setup={setup}
+          seat={seat}
+          startAt={startedAt}
+          remotePositions={posMapRef.current}
+          occupiedSeats={occSet}
+          onLocalPos={throttledSend}
+          onNewTopic={session.isHost ? () => session.sendReset() : undefined}
+        />
+      </div>
+    );
+  }
+
+  // カンペ練習: 従来どおり PracticeRun。
   return (
     <div className="flex flex-col gap-2">
       <SessionStatusBar session={session} />
@@ -528,6 +598,77 @@ function SessionRunner(_props: { playRole: PlayRole }) {
   );
 }
 
+/** 参加前のジョブ枠ピッカー（Tank/Healer/DPS をアイコン付きで選ぶ）。 */
+function JobPicker({
+  selected,
+  onChange,
+}: {
+  selected: Job;
+  onChange: (j: Job) => void;
+}) {
+  return (
+    <div className="flex w-full gap-1.5">
+      {JOB_ORDER.map((j) => {
+        const meta = JOB_META[j];
+        const active = selected === j;
+        return (
+          <button
+            key={j}
+            type="button"
+            onClick={() => onChange(j)}
+            className={`flex flex-1 flex-col items-center gap-1 rounded-md border px-2 py-2 text-xs font-bold transition-colors ${
+              active
+                ? "border-primary bg-primary/10 text-foreground"
+                : "bg-card/40 text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <img
+              src={meta.icon}
+              alt=""
+              className="h-6 w-6"
+              draggable={false}
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).style.display = "none";
+              }}
+            />
+            <span>{meta.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** ロビー内: カンペ練習 / 操作プレイ の切替（ホストのみ操作可）。 */
+function SessionKindPicker({
+  kind,
+  onChange,
+}: {
+  kind: PlayKind;
+  onChange: (k: PlayKind) => void;
+}) {
+  return (
+    <div className="flex justify-center">
+      <div className="flex rounded-lg border overflow-hidden">
+        {(["kanpe", "play"] as PlayKind[]).map((k) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => onChange(k)}
+            className={`px-4 py-1.5 text-xs font-bold transition-colors ${
+              kind === k
+                ? "bg-primary text-primary-foreground"
+                : "bg-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {k === "kanpe" ? "カンペ練習" : "操作プレイ"}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /** セッションのロビー（接続前 + ロスター待機）。 */
 function SessionLobby({
   session,
@@ -535,6 +676,10 @@ function SessionLobby({
   setSessionId,
   name,
   setName,
+  selectedJob,
+  setSelectedJob,
+  sessionKind,
+  setSessionKind,
   onStart,
   inputMode,
   onChangeInputMode,
@@ -544,6 +689,10 @@ function SessionLobby({
   setSessionId: (s: string) => void;
   name: string;
   setName: (s: string) => void;
+  selectedJob: Job;
+  setSelectedJob: (j: Job) => void;
+  sessionKind: PlayKind;
+  setSessionKind: (k: PlayKind) => void;
   onStart: () => void;
   inputMode: InputMode;
   onChangeInputMode: (m: InputMode) => void;
@@ -574,17 +723,23 @@ function SessionLobby({
             placeholder="名前"
             className="rounded-md border bg-background px-2 py-2 text-sm text-foreground"
           />
+          <p className="px-0.5 text-[11px] font-bold text-muted-foreground">
+            ロール選択
+          </p>
+          <JobPicker selected={selectedJob} onChange={setSelectedJob} />
           <Button
             variant="default"
             className="h-11 w-full text-sm font-bold"
             disabled={!sessionId.trim() || !name.trim() || connecting}
-            onClick={() => session.connect(sessionId.trim(), name.trim() || "Player")}
+            onClick={() =>
+              session.connect(sessionId.trim(), name.trim() || "Player", selectedJob)
+            }
           >
             <Wifi className="size-4" /> {connecting ? "接続中…" : "参加"}
           </Button>
           {session.status === "full" && (
             <p className="text-center text-[11px] text-destructive">
-              満席です（8人）。別のIDで試してください。
+              {JOB_META[selectedJob].label}枠は満席です。別のロール/IDで試してください。
             </p>
           )}
           {session.status === "error" && (
@@ -601,9 +756,23 @@ function SessionLobby({
   return (
     <div className="flex flex-col gap-2 py-2">
       <SessionStatusBar session={session} />
-      <InputModeToggle mode={inputMode} onChange={onChangeInputMode} compact />
+      {session.isHost ? (
+        <div className="flex flex-col items-center gap-1">
+          <p className="text-[11px] font-bold text-muted-foreground">
+            プレイ種別（ホスト）
+          </p>
+          <SessionKindPicker kind={sessionKind} onChange={setSessionKind} />
+        </div>
+      ) : (
+        <p className="px-2 text-center text-[11px] text-muted-foreground">
+          プレイ種別はホストが選びます。
+        </p>
+      )}
+      {sessionKind === "kanpe" && (
+        <InputModeToggle mode={inputMode} onChange={onChangeInputMode} compact />
+      )}
       <p className="px-0.5 text-[11px] font-bold text-muted-foreground">参加者（8席）</p>
-      <RosterList roster={session.roster} />
+      <GroupedRoster roster={session.roster} />
       {session.isHost ? (
         <Button
           variant="default"
@@ -645,45 +814,77 @@ function SessionStatusBar({ session }: { session: SessionApi }) {
   );
 }
 
-/** 8席ロスター表示（占有/NPC・★ホスト・あなた）。 */
-function RosterList({ roster }: { roster: SeatSlot[] }) {
+/** ロスターをジョブ枠（Tank 2 / Healer 2 / DPS 4）でグループ表示。 */
+function GroupedRoster({ roster }: { roster: SeatSlot[] }) {
   return (
-    <div className="grid grid-cols-2 gap-1">
-      {roster.map((slot) => (
-        <div
-          key={slot.seat}
-          className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] ${
-            slot.occupied && slot.isMe
-              ? "border-primary bg-primary/10"
-              : "bg-card/40"
-          }`}
-        >
-          <span className="w-8 shrink-0 font-bold tabular-nums text-muted-foreground">
-            席{slot.seat + 1}
-          </span>
-          {slot.occupied ? (
-            <>
-              {slot.isHost ? (
-                <Crown className="size-3.5 shrink-0 text-amber-500" />
-              ) : (
-                <User className="size-3.5 shrink-0 text-muted-foreground" />
-              )}
-              <span className="min-w-0 flex-1 truncate font-bold text-foreground">
-                {slot.name}
+    <div className="flex flex-col gap-1.5">
+      {JOB_ORDER.map((job) => {
+        const meta = JOB_META[job];
+        const slots = roster.filter((s) => seatJob(s.seat) === job);
+        const filled = slots.filter((s) => s.occupied).length;
+        return (
+          <div key={job} className="flex flex-col gap-1">
+            <div className="flex items-center gap-1.5 px-0.5">
+              <img
+                src={meta.icon}
+                alt=""
+                className="h-4 w-4"
+                draggable={false}
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).style.display = "none";
+                }}
+              />
+              <span className="text-[11px] font-bold text-foreground">
+                {meta.label}
               </span>
-              {slot.isMe && (
-                <span className="shrink-0 rounded bg-primary px-1 py-0.5 text-[9px] font-bold text-primary-foreground">
-                  あなた
-                </span>
-              )}
-            </>
+              <span className="text-[10px] tabular-nums text-muted-foreground">
+                {filled}/{meta.slots}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-1">
+              {slots.map((slot) => (
+                <RosterSlot key={slot.seat} slot={slot} />
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** ロスター1スロット（占有/NPC・★ホスト・あなた）。 */
+function RosterSlot({ slot }: { slot: SeatSlot }) {
+  return (
+    <div
+      className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] ${
+        slot.occupied && slot.isMe ? "border-primary bg-primary/10" : "bg-card/40"
+      }`}
+    >
+      <span className="w-8 shrink-0 font-bold tabular-nums text-muted-foreground">
+        席{slot.seat + 1}
+      </span>
+      {slot.occupied ? (
+        <>
+          {slot.isHost ? (
+            <Crown className="size-3.5 shrink-0 text-amber-500" />
           ) : (
-            <span className="min-w-0 flex-1 truncate text-muted-foreground/70">
-              NPC（空席）
+            <User className="size-3.5 shrink-0 text-muted-foreground" />
+          )}
+          <span className="min-w-0 flex-1 truncate font-bold text-foreground">
+            {slot.name}
+          </span>
+          {slot.isMe && (
+            <span className="shrink-0 rounded bg-primary px-1 py-0.5 text-[9px] font-bold text-primary-foreground">
+              あなた
             </span>
           )}
-        </div>
-      ))}
+        </>
+      ) : (
+        <span className="min-w-0 flex-1 truncate text-muted-foreground/70">
+          NPC（空席）
+        </span>
+      )}
     </div>
   );
 }
