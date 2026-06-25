@@ -255,18 +255,23 @@ describe("視線陣形：南北隊形 + look/hide 規約", () => {
     expect(tested).toBeGreaterThan(0);
   });
 
-  it("t=57 / t=79 で TH は北(y<center) / DPS は南(y>center)", () => {
-    for (const t of [57, 79] as const) {
-      for (const seat of ALL_SEATS) {
-        const { pos } = npcState(setup, seat, t);
-        const role = setup.players[seat].role;
-        if (role === "TH") {
-          expect(pos.y, `seat ${seat} TH t=${t}`).toBeLessThan(CENTER.y);
-        } else {
-          expect(pos.y, `seat ${seat} DPS t=${t}`).toBeGreaterThan(CENTER.y);
-        }
-      }
+  it("t=79（2回目視線・縦隊形）は TH 北(y<center) / DPS 南(y>center)", () => {
+    for (const seat of ALL_SEATS) {
+      const { pos } = npcState(setup, seat, 79);
+      const role = setup.players[seat].role;
+      if (role === "TH") expect(pos.y, `seat ${seat} TH`).toBeLessThan(CENTER.y);
+      else expect(pos.y, `seat ${seat} DPS`).toBeGreaterThan(CENTER.y);
     }
+  });
+
+  it("t=57（1回目視線・サンダガ安置レーン）は TH が DPS より北側（相対）", () => {
+    // juso1 は雷十字の安置レーン（対角）に沿うため厳密な y<center ではないが、
+    // TH=-u 側 / DPS=+u 側（u は南向き正規化）なので TH 群は DPS 群より必ず北にいる。
+    const ys = (role: "TH" | "DPS") =>
+      ALL_SEATS.filter((s) => setup.players[s].role === role).map((s) => npcState(setup, s, 57).pos.y);
+    const thMaxY = Math.max(...ys("TH"));
+    const dpsMinY = Math.min(...ys("DPS"));
+    expect(thMaxY, "TH 群は DPS 群より北側").toBeLessThan(dpsMinY);
   });
 
   it("視線持ちは同ロールの視線無し席より中央に近い（陣形の内/外）", () => {

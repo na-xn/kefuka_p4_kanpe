@@ -63,8 +63,6 @@ const GC3_OFFSET = 110;
 const GRAND_CROSS_SEC = { gc1: 4, gc2: 16, gc3: 28 } as const;
 /** centerSafeNear の広域スキャン上限（グランドクロス退避用）。 */
 const SCAN_BIG = ARENA_RADIUS - PLAYER_RADIUS;
-/** サンダガ退避のスキャン上限（陣形からの最大ずれ。雷十字の安全レーンまで届く広さ）。 */
-const SANDAGA_SCAN = 170;
 /** ブリザガ退避のスキャン上限（判定ゾーン内に必ず収める）。 */
 const BLIZZARD_SCAN = ZONE_RADIUS - PLAYER_RADIUS - 6;
 
@@ -188,6 +186,66 @@ export function gazeFormationSpot(setup: SimSetup, seat: number, key: "juso1" | 
 }
 
 /**
+ * 1回目視線（juso1=57）の陣形スポット。
+ *
+ * 2回目視線（gazeFormationSpot）と「視線持ち=内 / 無し=外・TH=北 / DPS=南」の
+ * 構造は完全に同じだが、同時刻に解決するサンダガ（雷十字）の「安置直線」に沿って、
+ * かつ中央に最も近い安置帯に配置する。雷十字の安置は対角レーン（rotX または rotY が
+ * 一定の向き）に連続するので、その軸 u に沿って並べれば全員が安置に収まる。
+ *
+ *  - u: 安置レーンの軸（pattern<2 → (1,1) / それ以外 → (1,-1)）。y≥0（南向き）に正規化。
+ *  - A: 中央に最も近い安置アンカー（perp 方向にスキャンして発見）。
+ *  - 各席: A ± u·radial（視線持ち=GAZE_INNER で中央寄り / 無し=GAZE_OUTER）。
+ *         TH=-u(北側) / DPS=+u(南側)。perp 方向に控えめな扇で重なり回避（安置帯内）。
+ */
+function gazeFormationSpotJuso1(setup: SimSetup, seat: number): Point {
+  const player = setup.players.find((p) => p.seat === seat);
+  if (!player) throw new Error(`seat ${seat} not found`);
+  const sd = centerIndex(setup)["sandaga"];
+  if (!sd) return gazeFormationSpot(setup, seat, "juso1");
+  const params = sd.params;
+
+  // 安置レーン軸 u（rotX/rotY が一定＝安置が連続する向き）。南向き(y≥0)に正規化。
+  let u = unit(params.thunderPattern < 2 ? { x: 1, y: 1 } : { x: 1, y: -1 });
+  if (u.y < 0) u = { x: -u.x, y: -u.y };
+  const perp = { x: -u.y, y: u.x };
+
+  // 安置アンカー A：perp（レーン横断）方向に sample し、中央に最も近い安置サンプルを
+  // 見つけ、その連続安置区間 [dL,dR] の「中央」に A を置く（帯の縁ではなく中心に置くこと
+  // で、後段の扇(fan)で帯からはみ出して被弾するのを防ぐ）。安置は perp 座標だけで決まる
+  // ので、A と同じ perp 座標なら u 方向に幾ら動いても安置に留まる。
+  const perpSafe = (d: number): boolean =>
+    centerAoeSafeGeometry({ x: CENTER.x + perp.x * d, y: CENTER.y + perp.y * d }, params, "thunder");
+  const STEP = 4;
+  const RANGE = 264;
+  let near: number | null = null;
+  for (let d = 0; d <= RANGE; d += STEP) {
+    if (perpSafe(d)) { near = d; break; }
+    if (perpSafe(-d)) { near = -d; break; }
+  }
+  let A: Point = { x: CENTER.x, y: CENTER.y };
+  if (near !== null) {
+    let dL = near;
+    let dR = near;
+    while (dL - STEP >= -RANGE && perpSafe(dL - STEP)) dL -= STEP;
+    while (dR + STEP <= RANGE && perpSafe(dR + STEP)) dR += STEP;
+    const dMid = (dL + dR) / 2;
+    A = { x: CENTER.x + perp.x * dMid, y: CENTER.y + perp.y * dMid };
+  }
+
+  const req = requiredAction(setup, seat, "juso1");
+  const hasGaze = req.kind === "look" || req.kind === "hide";
+  const radial = hasGaze ? GAZE_INNER : GAZE_OUTER;
+  const along = player.role === "TH" ? -1 : 1; // TH=北(-u) / DPS=南(+u)。
+  const groupIdx = player.role === "TH" ? seat : seat - 4;
+  const fan = (groupIdx - 1.5) * GAZE_FAN * 0.5; // perp 方向の扇（安置帯内に収める控えめ幅）。
+  return clampToArena({
+    x: A.x + u.x * along * radial + perp.x * fan,
+    y: A.y + u.y * along * radial + perp.y * fan,
+  });
+}
+
+/**
  * 席 seat の、機構 key における目標点を返す（目標が無い＝kind:"none" は null）。
  *
  * - stack/filler/spread: ロール別カーディナル（早=exdeathZones / 遅=ZONES）。
@@ -236,15 +294,10 @@ export function npcTarget(setup: SimSetup, seat: number, key: MechanicKey): Poin
     }
     case "look":
     case "hide": {
-      // 視線陣形（juso1/juso2）。juso1(=57) はサンダガ雷十字と同時刻なので避ける。
-      const jusoKey = key === "juso1" ? "juso1" : "juso2";
-      const spot = gazeFormationSpot(setup, seat, jusoKey);
-      if (jusoKey === "juso1") {
-        const idx = centerIndex(setup);
-        const sd = idx["sandaga"];
-        if (sd) return centerSafeNear(spot, sd.params, "thunder", SANDAGA_SCAN);
-      }
-      return spot;
+      // 視線陣形。juso1(=57) はサンダガ雷十字の安置レーンに沿った陣形、juso2(=79) は素の縦隊形。
+      return key === "juso1"
+        ? gazeFormationSpotJuso1(setup, seat)
+        : gazeFormationSpot(setup, seat, "juso2");
     }
     case "aoe":
       // つなみ/ほのお（波）の設置は「必ず中心で」行う（中央に集合して AoE を置く）。
@@ -264,13 +317,8 @@ export function npcTarget(setup: SimSetup, seat: number, key: MechanicKey): Poin
  * juso1 はサンダガ雷十字を避ける。
  */
 function gazeFillSpot(setup: SimSetup, seat: number, key: "juso1" | "juso2"): Point {
-  const spot = gazeFormationSpot(setup, seat, key);
-  if (key === "juso1") {
-    const idx = centerIndex(setup);
-    const sd = idx["sandaga"];
-    if (sd) return centerSafeNear(spot, sd.params, "thunder", SANDAGA_SCAN);
-  }
-  return spot;
+  // juso1 はサンダガ安置レーンに沿った陣形、juso2 は素の縦隊形。視線無し席も同じ隊形に加わる。
+  return key === "juso1" ? gazeFormationSpotJuso1(setup, seat) : gazeFormationSpot(setup, seat, "juso2");
 }
 
 /**

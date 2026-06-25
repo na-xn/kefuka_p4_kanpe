@@ -95,6 +95,8 @@ const LOCAL_POS_INTERVAL_MS = 1000 / 12;
 const NPC_RADIUS = PLAYER_RADIUS * 0.7;
 /** NPC ドットの不透明度（人間ドットより薄く）。 */
 const NPC_ALPHA = 0.8;
+/** 他席デバフを「発動した瞬間」に点滅表示する秒数（常時表示は邪魔なので一瞬だけ）。 */
+const NPC_DEBUFF_FLASH = 0.8;
 /** TH 席（0..3）の冷色フィル。 */
 const NPC_FILL_TH = "#5aa9e6";
 /** DPS 席（4..7）の暖色フィル。 */
@@ -1012,11 +1014,12 @@ function drawOtherSeats(
     }
     ctx.restore();
 
-    // この席が「いま保有しているデバフ」をアイコン/ドットの上に小さく並べる。
-    // 各 NPC も自分のデバフを持ち、それ前提で動いていることを可視化する
-    // （位置・移動・視線・色はすべて requiredAction＝この席のデバフから導出）。
+    // 他席（NPC / 他プレイヤー）のデバフは常時表示せず「発動した瞬間だけ一瞬」点滅させる。
+    // 各機構の解決秒（= そのデバフが発動する瞬間）から NPC_DEBUFF_FLASH 秒だけアイコンを出す
+    // （常時表示は視界の邪魔になるため）。位置・移動・視線・色は引き続き各席のデバフ
+    // （requiredAction）から導出され、NPC はそれ前提で動いている。
     const nDebuffs = buildDebuffs(setup, s).filter(
-      (d) => elapsed >= d.applySec && elapsed < d.resolveSec + 0.5,
+      (d) => elapsed >= d.resolveSec && elapsed < d.resolveSec + NPC_DEBUFF_FLASH,
     );
     if (nDebuffs.length > 0) {
       const dsz = 14;
