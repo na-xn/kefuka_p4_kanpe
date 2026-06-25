@@ -70,11 +70,19 @@ const CAST_LEN = 7;
 
 /**
  * 中央ボス AoE の解決秒。
- * GC1 中央サンダガ/ブリザガ @53s、GC2 中央 @76s（参照フローに沿わせた値）。
- * 約6秒前から低アルファで予告し、解決秒で高アルファ → 直後にクリア。
+ *
+ * 参照 sim.html では、中央ボス（boss[0], ~4s 詠唱）が完了した瞬間に
+ * `checkSafety()` で十字（サンダガ）+ 象限（ブリザガ）を判定する。これは
+ * GC/波フェーズの「最中・序盤」に各 GC ごと1回ずつ早期に解決され、
+ * エクスデス（46s）より前に動作する。役割デバフは 8/16/24/32/40 で付与される。
+ *
+ * これに合わせ、GC1 中央 AoE を ≈12s、GC2 中央 AoE を ≈28s に置く。
+ * 各々 CAST_LEN(7s) 前から詠唱バーが満ち、CENTER_LEAD(6s) 前から低アルファで
+ * AoE を予告、解決秒で高アルファ → 直後にクリアする。これにより最初の ~40s
+ * のあいだ十字/象限避けが能動的に働き、詠唱バーも序盤から動く（参照と同じ）。
  */
-const CENTER_GC1_SEC = 53;
-const CENTER_GC2_SEC = 76;
+const CENTER_GC1_SEC = 12;
+const CENTER_GC2_SEC = 28;
 const CENTER_LEAD = 6;
 
 /** 中央 AoE の擬似機構キー（HUD/結果には MECH_ORDER とは別に集計）。 */
@@ -633,23 +641,10 @@ function draw(
   ctx.strokeStyle = "#555";
   ctx.stroke();
 
-  // --- ゾーンヒント（h12/h3/h6/h9） ---
-  const zoneLabels: Record<string, string> = { h12: "12", h3: "3", h6: "6", h9: "9" };
-  for (const [k, z] of Object.entries(ZONES)) {
-    ctx.beginPath();
-    ctx.arc(z.x, z.y, ZONE_RADIUS, 0, Math.PI * 2);
-    ctx.setLineDash([6, 6]);
-    ctx.strokeStyle = "rgba(170,170,190,0.28)";
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle = "rgba(170,170,190,0.45)";
-    ctx.font = "bold 22px sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(zoneLabels[k], z.x, z.y);
-  }
-  ctx.textBaseline = "alphabetic";
+  // --- ABCD ウェイマーク（A=12時/北, B=3時/東, C=6時/南, D=9時/西） ---
+  // 旧来の破線ゾーン円・時計ラベルは廃止し、各ゾーン中心に文字バッジを描く。
+  // ヒット判定（ZONE_RADIUS）は arena.ts 側のまま不変。
+  drawWaymarks(ctx);
 
   // --- 中央ボス AoE（サンダガ十字 + ブリザガ象限） ---
   const center = activeCenter(elapsed);
@@ -712,6 +707,47 @@ function draw(
   ctx.fillText(`戦闘経過時間: ${Math.floor(elapsed)}秒`, 24, 44);
 }
 
+/**
+ * ABCD ウェイマークマーカー。標準 FFXIV レイアウト:
+ *   A=12時(北, h12)赤 / B=3時(東, h3)黄 / C=6時(南, h6)青 / D=9時(西, h9)紫。
+ * 各ゾーン中心に塗りつぶしの文字バッジを描画する（破線円・時計ラベルは廃止）。
+ */
+const WAYMARKS: { zone: keyof typeof ZONES; letter: string; color: string }[] = [
+  { zone: "h12", letter: "A", color: "#e63946" }, // 赤
+  { zone: "h3", letter: "B", color: "#ffd400" }, // 黄
+  { zone: "h6", letter: "C", color: "#3a86ff" }, // 青
+  { zone: "h9", letter: "D", color: "#9b5de5" }, // 紫
+];
+
+function drawWaymarks(ctx: CanvasRenderingContext2D) {
+  const r = 22;
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  for (const { zone, letter, color } of WAYMARKS) {
+    const z = ZONES[zone];
+    // 塗りバッジ。
+    ctx.beginPath();
+    ctx.arc(z.x, z.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.globalAlpha = 0.85;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = "rgba(255,255,255,0.9)";
+    ctx.stroke();
+    // 文字。
+    ctx.font = "bold 26px sans-serif";
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = "rgba(0,0,0,0.55)";
+    ctx.strokeText(letter, z.x, z.y + 1);
+    ctx.fillStyle = "#fff";
+    ctx.fillText(letter, z.x, z.y + 1);
+  }
+  ctx.restore();
+  ctx.textBaseline = "alphabetic";
+}
+
 /** サンダガ雷ストリップ（参照 drawThundergaAoELayer: ±PI/4 回転、w=175）。 */
 function drawThunderLayer(ctx: CanvasRenderingContext2D, pattern: number, alpha: number) {
   ctx.save();
@@ -768,10 +804,15 @@ function drawBosses(
   // 次に来る解決秒（elapsed より大きい最小の秒）。無ければ null（待機）。
   const nextSec = allSecs.find((s) => s > elapsed) ?? null;
   // 次の解決に対するキャスト進捗（ウィンドウ前は null）。
-  const genericProg: number | null =
+  let genericProg: number | null =
     nextSec == null || elapsed < nextSec - CAST_LEN
       ? null
       : Math.min(1, Math.max(0, (elapsed - (nextSec - CAST_LEN)) / CAST_LEN));
+  // 参照では 3 体とも t=0 から詠唱している。序盤（GC/波フェーズ, 最初の中央 AoE 前）は
+  // バーを空にせず、CAST_LEN 周期のループ詠唱で外周ボスのバーを常時動かす。
+  if (genericProg == null && elapsed < CENTER_GC1_SEC) {
+    genericProg = (elapsed % CAST_LEN) / CAST_LEN;
+  }
 
   const bossList = [CENTER_BOSS, ...SUB_BOSSES];
   bossList.forEach((boss, index) => {
@@ -801,12 +842,26 @@ function drawBosses(
     const barY = boss.y - BOSS_RADIUS - 25;
     let progColor = "#ffaa00";
     let prog: number | null = genericProg;
-    if (index === 0 && center) {
-      // 中央ボスは中央 AoE 進行中のみ、その解決へ向けたキャストを表示。
-      const sec = center === "centerGc1" ? CENTER_GC1_SEC : CENTER_GC2_SEC;
+    if (index === 0) {
+      // 中央ボスは中央 AoE 解決へ向けてキャスト（参照: boss[0] は t=0 から詠唱）。
+      // GC ウィンドウ中はその解決秒へ向け満タンに。直前の最初の GC1 までは
+      // CENTER_GC1 を目標に序盤からバーを満ちさせる。
+      const sec =
+        center === "centerGc2"
+          ? CENTER_GC2_SEC
+          : center === "centerGc1"
+            ? CENTER_GC1_SEC
+            : elapsed < CENTER_GC1_SEC
+              ? CENTER_GC1_SEC
+              : elapsed < CENTER_GC2_SEC
+                ? CENTER_GC2_SEC
+                : null;
       prog =
-        elapsed < sec - CAST_LEN
-          ? null
+        sec == null || elapsed < sec - CAST_LEN
+          ? sec != null
+            ? // ウィンドウ前でもループ詠唱で動かす（空にしない）。
+              (elapsed % CAST_LEN) / CAST_LEN
+            : null
           : Math.min(1, Math.max(0, (elapsed - (sec - CAST_LEN)) / CAST_LEN));
       progColor = "#bf55ec";
     }
