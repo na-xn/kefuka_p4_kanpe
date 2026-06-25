@@ -31,8 +31,19 @@ import { compareMinState } from "@/p4/simCompare";
 import type { FieldCompare } from "@/p4/simCompare";
 import { buildAnswerTimeline } from "@/p4/timeline";
 import type { AnswerRow } from "@/p4/timeline";
-import { useSession } from "@/p4/session";
+import { useSession, setOverlayPassive } from "@/p4/session";
 import type { SessionApi, SeatSlot } from "@/p4/session";
+
+/**
+ * Tauri デスクトップで、active の間だけウィンドウをフォーカス可能にする
+ * （操作プレイ中・セッションID入力画面のみ）。アンマウント時はオーバーレイへ戻す。
+ */
+function useOverlayFocus(active: boolean) {
+  useEffect(() => {
+    setOverlayPassive(!active);
+    return () => setOverlayPassive(true);
+  }, [active]);
+}
 import { PlayArena } from "@/components/p4/PlayArena";
 
 /**
@@ -161,6 +172,8 @@ function SoloKindPicker({
 
 /** ソロ・操作プレイ: 円形アリーナでドットを動かして機構を処理する。 */
 function PlayRunner() {
+  // 操作プレイ中はキー操作のためフォーカス可能にする（デスクトップ）。
+  useOverlayFocus(true);
   const [setup, setSetup] = useState<SimSetup | null>(null);
   const [startAt, setStartAt] = useState<number | null>(null);
   // プレイヤーが自分で書き込むカンペ（解答データから自動補完しない）。
@@ -319,6 +332,9 @@ function SessionRunner() {
   const [name, setName] = useState("");
 
   const joined = session.status === "joined";
+
+  // 未参加（セッションID/名前の入力画面）の間だけフォーカス可能に（デスクトップ）。
+  useOverlayFocus(!joined);
 
   // 未接続 or 練習が始まっていない → ロビー。
   if (!joined || phase === "idle" || setup == null || startedAt == null) {

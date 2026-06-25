@@ -20,6 +20,18 @@ const IS_TAURI =
 /** Tauri（デスクトップ）版が接続する本番ホスト。web は location.host を使う。 */
 const TAURI_WS_HOST = "kefuka-p4-kanpe.na-xn.app";
 
+/**
+ * Tauri デスクトップで WS_EX_NOACTIVATE を切り替える。
+ * passive=false でフォーカス可能（テキスト入力・キー操作用）、true でオーバーレイ（非アクティブ）に戻す。
+ * web では no-op。
+ */
+export function setOverlayPassive(passive: boolean): void {
+  if (!IS_TAURI) return;
+  import("@tauri-apps/api/core")
+    .then(({ invoke }) => invoke("set_overlay_passive", { passive }))
+    .catch(() => {});
+}
+
 /** セッションIDから WebSocket URL を組み立てる。 */
 export function wsUrlFor(sessionId: string): string {
   const id = encodeURIComponent(sessionId);
