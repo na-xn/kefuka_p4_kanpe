@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Play,
   RotateCcw,
@@ -43,6 +43,23 @@ function useOverlayFocus(active: boolean) {
     setOverlayPassive(!active);
     return () => setOverlayPassive(true);
   }, [active]);
+}
+
+/** md(768px)以上の幅か（PC=横並び＋ドラッグ比率 / モバイル=縦積みの切替）。 */
+function useIsWide() {
+  const [wide, setWide] = useState(
+    typeof window !== "undefined" && window.matchMedia
+      ? window.matchMedia("(min-width: 768px)").matches
+      : true,
+  );
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(min-width: 768px)");
+    const on = () => setWide(mq.matches);
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  return wide;
 }
 import { PlayArena } from "@/components/p4/PlayArena";
 
@@ -256,6 +273,40 @@ function PlayRunner({ playRole }: { playRole: PlayRole }) {
     setStartAt(Date.now());
   };
 
+  // PC: アリーナとカンペ入力の比率（アリーナ %）をドラッグ仕切りで調整。
+  const isWide = useIsWide();
+  const rowRef = useRef<HTMLDivElement | null>(null);
+  const pctRef = useRef(62);
+  const dragging = useRef(false);
+  const [arenaPct, setArenaPct] = useState(() => {
+    const v = Number(localStorage.getItem("playArenaPct"));
+    const pct = v >= 30 && v <= 85 ? v : 62;
+    pctRef.current = pct;
+    return pct;
+  });
+  const onSplitDown = (e: React.PointerEvent) => {
+    dragging.current = true;
+    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+  };
+  const onSplitMove = (e: React.PointerEvent) => {
+    if (!dragging.current || !rowRef.current) return;
+    const rect = rowRef.current.getBoundingClientRect();
+    const pct = Math.max(30, Math.min(85, ((e.clientX - rect.left) / rect.width) * 100));
+    pctRef.current = pct;
+    setArenaPct(pct);
+  };
+  const onSplitUp = () => {
+    if (!dragging.current) return;
+    dragging.current = false;
+    try {
+      localStorage.setItem("playArenaPct", String(Math.round(pctRef.current)));
+    } catch {
+      // ignore
+    }
+  };
+  const setMin = (id: string, v: string) =>
+    setMinState((s) => ({ ...s, [id]: v }));
+
   if (!setup || startAt == null) {
     return (
       <div className="flex flex-col items-center gap-3 py-6">
@@ -281,34 +332,43 @@ function PlayRunner({ playRole }: { playRole: PlayRole }) {
           <RotateCcw /> 新しいお題
         </Button>
       </div>
-      {/* 広い画面では アリーナ（大・左）とカンペ入力（細・右）を横並び、狭い/モバイルでは縦積み。
-          サンダガ/ブリザガより下の導出タイムラインは下部全幅へ分離する。 */}
-      <div className="flex flex-col gap-2 md:flex-row">
-        {/* 左カラム: アリーナ（大きく伸びる。canvas はコンテナにスケール）。 */}
-        <div className="min-w-0 flex-1">
+      {isWide ? (
+        <>
+          {/* PC: アリーナ｜ドラッグ仕切り｜カンペ入力（比率可変）。導出タイムラインは下部全幅。 */}
+          <div ref={rowRef} className="flex items-stretch">
+            <div className="min-w-0" style={{ width: `${arenaPct}%` }}>
+              <PlayArena setup={setup} seat={seat} startAt={startAt} onNewTopic={start} />
+            </div>
+            <div
+              onPointerDown={onSplitDown}
+              onPointerMove={onSplitMove}
+              onPointerUp={onSplitUp}
+              title="ドラッグでアリーナとカンペの比率を調整"
+              className="mx-1 w-1.5 shrink-0 cursor-col-resize self-stretch rounded bg-border transition-colors hover:bg-primary"
+            />
+            <div className="min-w-0 overflow-hidden" style={{ width: `${100 - arenaPct}%` }}>
+              <p className="px-0.5 pb-1 text-[10px] font-semibold text-muted-foreground">
+                カンペ入力（デバフが付いたら入力）
+              </p>
+              <MinimumMode view="input" value={minState} set={setMin} />
+            </div>
+          </div>
+          <div className="border-t pt-2">
+            <MinimumMode view="timeline" value={minState} set={setMin} />
+          </div>
+        </>
+      ) : (
+        <>
+          {/* モバイル: アリーナの下にカンペ（入力＋導出タイムライン＝従来の下部全表示）。 */}
           <PlayArena setup={setup} seat={seat} startAt={startAt} onNewTopic={start} />
-        </div>
-        {/* 右カラム: 自分で書き込むカンペ「入力」のみ（細幅固定。アリーナのキー/ポインタ操作とは独立）。
-            導出タイムラインは下部に分離するので view="input"。 */}
-        <div className="shrink-0 border-t pt-2 md:w-[230px] md:basis-[230px] md:border-l md:border-t-0 md:pl-2 md:pt-0">
-          <p className="px-0.5 pb-1 text-[10px] font-semibold text-muted-foreground">
-            カンペ入力（デバフが付いたら入力）
-          </p>
-          <MinimumMode
-            view="input"
-            value={minState}
-            set={(id, v) => setMinState((s) => ({ ...s, [id]: v }))}
-          />
-        </div>
-      </div>
-      {/* 下部全幅: サンダガ/ブリザガより下の導出処理タイムライン。 */}
-      <div className="border-t pt-2">
-        <MinimumMode
-          view="timeline"
-          value={minState}
-          set={(id, v) => setMinState((s) => ({ ...s, [id]: v }))}
-        />
-      </div>
+          <div className="border-t pt-2">
+            <p className="px-0.5 pb-1 text-[10px] font-semibold text-muted-foreground">
+              カンペ入力（デバフが付いたら入力）
+            </p>
+            <MinimumMode view="full" value={minState} set={setMin} />
+          </div>
+        </>
+      )}
     </div>
   );
 }
