@@ -481,6 +481,9 @@ function ResolvedRow({ item }: { item: AnswerRow }) {
 }
 
 /** リビール1行（アイコン＋見出し＋ラベル＋真偽＋カウントダウン）。 */
+/** デバフ残り秒の表示。60s 以上は分表記(1m)で、59 になってから秒カウントダウン。 */
+const fmtRemain = (s: number) => (s >= 60 ? `${Math.floor(s / 60)}m` : `${s}s`);
+
 function RevealCard({ row, elapsed }: { row: RevealRow; elapsed: number }) {
   const remaining =
     row.resolveSec != null
@@ -491,13 +494,15 @@ function RevealCard({ row, elapsed }: { row: RevealRow; elapsed: number }) {
       <img src={row.icon} alt="" className="h-6 w-auto shrink-0 rounded-[2px]" draggable={false} />
       <div className="flex min-w-0 flex-1 flex-col">
         <span className="text-[10px] font-semibold text-muted-foreground">{row.caption}</span>
-        <span className="truncate text-xs font-bold text-foreground">{row.label}</span>
-      </div>
-      {remaining != null && (
-        <span className="shrink-0 tabular-nums text-[10px] text-muted-foreground">
-          ⏱ {remaining}s
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className="truncate text-xs font-bold text-foreground">{row.label}</span>
+          {remaining != null && (
+            <span className="shrink-0 tabular-nums text-[10px] text-muted-foreground">
+              ⏱ {fmtRemain(remaining)}
+            </span>
+          )}
         </span>
-      )}
+      </div>
       {row.truth && (
         <span
           className={`shrink-0 rounded-md px-2 py-0.5 text-center text-xs font-bold ${
