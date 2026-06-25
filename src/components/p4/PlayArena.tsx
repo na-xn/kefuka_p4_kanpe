@@ -1012,6 +1012,41 @@ function drawOtherSeats(
     }
     ctx.restore();
 
+    // この席が「いま保有しているデバフ」をアイコン/ドットの上に小さく並べる。
+    // 各 NPC も自分のデバフを持ち、それ前提で動いていることを可視化する
+    // （位置・移動・視線・色はすべて requiredAction＝この席のデバフから導出）。
+    const nDebuffs = buildDebuffs(setup, s).filter(
+      (d) => elapsed >= d.applySec && elapsed < d.resolveSec + 0.5,
+    );
+    if (nDebuffs.length > 0) {
+      const dsz = 14;
+      const dgap = 16;
+      const rowW = nDebuffs.length * dgap;
+      const dx0 = x - rowW / 2 + (dgap - dsz) / 2;
+      const dy = y - iconSize / 2 - dsz - 4;
+      ctx.save();
+      ctx.globalAlpha = NPC_ALPHA;
+      nDebuffs.forEach((d, di) => {
+        const dx = dx0 + di * dgap;
+        const dimg = imgCache[d.iconKey];
+        if (loadedCache[d.iconKey] && dimg) {
+          ctx.drawImage(dimg, dx, dy, dsz, dsz);
+        } else {
+          ctx.fillStyle = d.color;
+          ctx.fillRect(dx, dy, dsz, dsz);
+        }
+        // 真偽バッジ（真/偽）をアイコン左上に小さく重ねる（保有していれば）。
+        if (d.truth) {
+          const shin = d.truth === "shin";
+          const bk: IconKey = shin ? "truth" : "fake";
+          const bimg = imgCache[bk];
+          const bs = 8;
+          if (loadedCache[bk] && bimg) ctx.drawImage(bimg, dx - bs / 2, dy - bs / 2, bs, bs);
+        }
+      });
+      ctx.restore();
+    }
+
     // 席番号ラベル（seat+1）をアイコン/ドットの下に小さく。
     ctx.save();
     ctx.globalAlpha = NPC_ALPHA;

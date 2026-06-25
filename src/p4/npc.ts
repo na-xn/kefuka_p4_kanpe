@@ -52,6 +52,8 @@ type Waypoint = { time: number; target: Point };
 
 /** PlayArena の LEAD_IN（目標へ向かい始める先読み秒）と一致させる。 */
 const LEAD_IN = 8;
+/** 解決の何秒前に正解位置へ到達して静止するか（テレグラフ中に「棒立ち」で待つ）。 */
+const SETTLE = 1.5;
 /** seatHome のリング半径（中心から離して重ならせない）。 */
 const HOME_RADIUS = 150;
 /** GC3 分断線からの離れ幅（色側に明確に立つ）。 */
@@ -244,8 +246,10 @@ export function npcTarget(setup: SimSetup, seat: number, key: MechanicKey): Poin
       }
       return spot;
     }
-    // AoE/単発移動・停止/none: 位置は採点外。重ならない home を使う。
     case "aoe":
+      // つなみ/ほのお（波）の設置は「必ず中心で」行う（中央に集合して AoE を置く）。
+      return { x: CENTER.x, y: CENTER.y };
+    // 単発移動・停止/none: 位置は採点外。重ならない home を使う。
     case "stop":
     case "move":
       return seatHome(seat);
@@ -314,8 +318,9 @@ function buildWaypoints(setup: SimSetup, seat: number): Waypoint[] {
 /**
  * waypoint 列から elapsed 時点の位置を求める。
  * - 最初の waypoint 時刻より前 → seatHome。
- * - 区間 (a@ta, b@tb) で elapsed < tb-LEAD_IN なら a の目標で待機。
- *   それ以降は [tb-LEAD_IN, tb] で a→b を補間し tb までに到達。
+ * - 区間 (a@ta, b@tb): elapsed < tb-LEAD_IN なら a の目標で待機。
+ *   それ以降は [tb-LEAD_IN, tb-SETTLE] で a→b を補間し、解決の SETTLE 秒前に到達して
+ *   そこから tb まで静止（＝テレグラフ中は正解位置に「棒立ち」で待機し、回避を明示する）。
  * - 最後の waypoint 以降は最後の目標で待機。
  */
 function posAt(wps: Waypoint[], elapsed: number): Point {
@@ -326,8 +331,10 @@ function posAt(wps: Waypoint[], elapsed: number): Point {
     if (elapsed >= a.time && elapsed <= b.time) {
       const startMove = b.time - LEAD_IN;
       if (elapsed <= startMove) return a.target;
-      const span = b.time - startMove;
-      const t = span <= 1e-9 ? 1 : Math.min(1, Math.max(0, (elapsed - startMove) / span));
+      // 解決(tb)の SETTLE 秒前には到達して以後は静止（テレグラフ中に正解位置で待つ）。
+      const arrive = Math.max(startMove + 1e-3, b.time - SETTLE);
+      if (elapsed >= arrive) return b.target;
+      const t = Math.min(1, Math.max(0, (elapsed - startMove) / (arrive - startMove)));
       return lerp(a.target, b.target, t);
     }
   }
