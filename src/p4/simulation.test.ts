@@ -46,6 +46,15 @@ describe("generateSim composition", () => {
     }
   });
 
+  it("role is deterministic: seats 0-3 TH / 4-7 DPS, independent of shuffles", () => {
+    for (const seed of SEEDS) {
+      const setup = generateSim(mulberry32(seed));
+      for (const p of setup.players) {
+        expect(p.role).toBe(p.seat < 4 ? "TH" : "DPS");
+      }
+    }
+  });
+
   it("gc3Scar always 4 seija / 4 shisha, each player has a valid scar", () => {
     for (const seed of SEEDS) {
       const setup = generateSim(mulberry32(seed));

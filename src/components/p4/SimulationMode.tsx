@@ -79,16 +79,81 @@ function saveInputMode(m: InputMode) {
   }
 }
 
+/** プレイするロール（TH=席0相当 / DPS=席4相当）。ソロ/セッション共通で永続化。 */
+type PlayRole = "TH" | "DPS";
+
+const PLAY_ROLE_KEY = "playRole";
+
+function loadPlayRole(): PlayRole {
+  try {
+    const v = localStorage.getItem(PLAY_ROLE_KEY);
+    if (v === "TH" || v === "DPS") return v;
+  } catch {
+    // ignore
+  }
+  return "TH";
+}
+
+function savePlayRole(r: PlayRole) {
+  try {
+    localStorage.setItem(PLAY_ROLE_KEY, r);
+  } catch {
+    // ignore
+  }
+}
+
 type SimMode = "solo" | "session";
 
 /** 練習モードのトップ。ソロ/セッションの選択と画面切替を行う。 */
 export function SimulationMode() {
   const [mode, setMode] = useState<SimMode>("solo");
+  // プレイロール（TH/DPS）はソロ・セッション両方で共有・永続化する。
+  const [playRole, setPlayRole] = useState<PlayRole>(loadPlayRole);
+
+  const changePlayRole = (r: PlayRole) => {
+    setPlayRole(r);
+    savePlayRole(r);
+  };
 
   return (
     <div className="flex flex-col gap-2">
       <ModePicker mode={mode} onChange={setMode} />
-      {mode === "solo" ? <SoloRunner /> : <SessionRunner />}
+      <PlayRolePicker role={playRole} onChange={changePlayRole} />
+      {mode === "solo" ? (
+        <SoloRunner playRole={playRole} />
+      ) : (
+        <SessionRunner playRole={playRole} />
+      )}
+    </div>
+  );
+}
+
+/** TH/DPS のロール切替セグメント（ModePicker と同じ見た目）。 */
+function PlayRolePicker({
+  role,
+  onChange,
+}: {
+  role: PlayRole;
+  onChange: (r: PlayRole) => void;
+}) {
+  return (
+    <div className="flex justify-center">
+      <div className="flex rounded-lg border overflow-hidden">
+        {(["TH", "DPS"] as PlayRole[]).map((r) => (
+          <button
+            key={r}
+            type="button"
+            onClick={() => onChange(r)}
+            className={`px-4 py-1.5 text-xs font-bold transition-colors ${
+              role === r
+                ? "bg-primary text-primary-foreground"
+                : "bg-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {r}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -129,13 +194,13 @@ function ModePicker({
 
 type SoloKind = "kanpe" | "play";
 
-function SoloRunner() {
+function SoloRunner({ playRole }: { playRole: PlayRole }) {
   const [soloKind, setSoloKind] = useState<SoloKind>("kanpe");
 
   return (
     <div className="flex flex-col gap-2">
       <SoloKindPicker kind={soloKind} onChange={setSoloKind} />
-      {soloKind === "kanpe" ? <KanpeRunner /> : <PlayRunner />}
+      {soloKind === "kanpe" ? <KanpeRunner /> : <PlayRunner playRole={playRole} />}
     </div>
   );
 }
@@ -171,9 +236,11 @@ function SoloKindPicker({
 }
 
 /** ソロ・操作プレイ: 円形アリーナでドットを動かして機構を処理する。 */
-function PlayRunner() {
+function PlayRunner({ playRole }: { playRole: PlayRole }) {
   // 操作プレイ中はキー操作のためフォーカス可能にする（デスクトップ）。
   useOverlayFocus(true);
+  // ロール → 席（TH=0 / DPS=4）。アリーナ判定もカンペも同じ席で扱う。
+  const seat = playRole === "TH" ? 0 : 4;
   const [setup, setSetup] = useState<SimSetup | null>(null);
   const [startAt, setStartAt] = useState<number | null>(null);
   // プレイヤーが自分で書き込むカンペ（解答データから自動補完しない）。
@@ -214,7 +281,7 @@ function PlayRunner() {
           <RotateCcw /> 新しいお題
         </Button>
       </div>
-      <PlayArena setup={setup} seat={0} startAt={startAt} onNewTopic={start} />
+      <PlayArena setup={setup} seat={seat} startAt={startAt} onNewTopic={start} />
       {/* アリーナの下にカンペ入力（自分で書き込む。アリーナのキー/ポインタ操作とは独立）。 */}
       <div className="border-t pt-2">
         <p className="px-0.5 pb-1 text-[10px] font-semibold text-muted-foreground">
@@ -301,7 +368,9 @@ function KanpeRunner() {
  * セッション(8人)
  * ========================================================== */
 
-function SessionRunner() {
+// セッションのプレイロールは「共有・永続化」要件のみ（トップのトグルが担う）。
+// セッション席は mySeat のままで、ロール由来の席変更は後フェーズで対応する。
+function SessionRunner(_props: { playRole: PlayRole }) {
   // セッション中の練習状態。
   const [setup, setSetup] = useState<SimSetup | null>(null);
   const [startedAt, setStartedAt] = useState<number | null>(null);

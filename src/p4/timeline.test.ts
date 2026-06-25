@@ -133,14 +133,14 @@ describe("buildAnswerTimeline", () => {
         blizzaga: { truth: "shin", blizzardPattern: 0 },
       },
       players: [
-        { seat: 0, gc1Role: "mizu", gc2Role: "shisen", gc3Role, gc3Scar },
-        { seat: 1, gc1Role: "rai",  gc2Role: "mushoku", gc3Role: "aragan", gc3Scar: "seija" },
-        { seat: 2, gc1Role: "shisen", gc2Role: "mizu", gc3Role: "aragan", gc3Scar: "seija" },
-        { seat: 3, gc1Role: "mushoku", gc2Role: "rai", gc3Role: "aragan", gc3Scar: "seija" },
-        { seat: 4, gc1Role: "mizu", gc2Role: "shisen", gc3Role: "shi", gc3Scar: "shisha" },
-        { seat: 5, gc1Role: "rai",  gc2Role: "mushoku", gc3Role: "shi", gc3Scar: "shisha" },
-        { seat: 6, gc1Role: "shisen", gc2Role: "mizu", gc3Role: "shi", gc3Scar: "shisha" },
-        { seat: 7, gc1Role: "mushoku", gc2Role: "rai", gc3Role: "shi", gc3Scar: "shisha" },
+        { seat: 0, role: "TH", gc1Role: "mizu", gc2Role: "shisen", gc3Role, gc3Scar },
+        { seat: 1, role: "TH", gc1Role: "rai",  gc2Role: "mushoku", gc3Role: "aragan", gc3Scar: "seija" },
+        { seat: 2, role: "TH", gc1Role: "shisen", gc2Role: "mizu", gc3Role: "aragan", gc3Scar: "seija" },
+        { seat: 3, role: "TH", gc1Role: "mushoku", gc2Role: "rai", gc3Role: "aragan", gc3Scar: "seija" },
+        { seat: 4, role: "DPS", gc1Role: "mizu", gc2Role: "shisen", gc3Role: "shi", gc3Scar: "shisha" },
+        { seat: 5, role: "DPS", gc1Role: "rai",  gc2Role: "mushoku", gc3Role: "shi", gc3Scar: "shisha" },
+        { seat: 6, role: "DPS", gc1Role: "shisen", gc2Role: "mizu", gc3Role: "shi", gc3Scar: "shisha" },
+        { seat: 7, role: "DPS", gc1Role: "mushoku", gc2Role: "rai", gc3Role: "shi", gc3Scar: "shisha" },
       ],
     };
   }

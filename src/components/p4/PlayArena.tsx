@@ -22,6 +22,7 @@ import {
   END_SEC,
   mechanicResolveSec,
   exdeathZones,
+  evaluateRoleWater,
   type MechanicKey,
   type Point,
   type RequiredAction,
@@ -294,9 +295,16 @@ export function PlayArena({ setup, seat = 0, startAt, onResult, onNewTopic }: Pr
 
   // HUD 用クロック（粗いティック）。
   const [clock, setClock] = useState(0);
-  const [dead, setDead] = useState(false);
   // タイムライン終了（elapsed >= END_SEC）。クロック凍結 + 終了状態表示。
   const [finished, setFinished] = useState(false);
+
+  // 被弾ログ（非ブロッキング）。失敗ごとに1件追加し、プレイは止めない。
+  const [deathLog, setDeathLog] = useState<{ sec: number; mechanic: string; reason: string }[]>([]);
+  const deathLogRef = useRef(deathLog);
+  deathLogRef.current = deathLog;
+  const pushDeath = useCallback((sec: number, mechanic: string, reason: string) => {
+    setDeathLog((log) => [...log, { sec, mechanic, reason }]);
+  }, []);
 
   // setup が変わったらリセット。
   useEffect(() => {
@@ -304,7 +312,7 @@ export function PlayArena({ setup, seat = 0, startAt, onResult, onNewTopic }: Pr
     aoeOrigin.current = {};
     centerJudged.current = {};
     setResults({});
-    setDead(false);
+    setDeathLog([]);
     setFinished(false);
   }, [setup, seat]);
 
@@ -314,7 +322,7 @@ export function PlayArena({ setup, seat = 0, startAt, onResult, onNewTopic }: Pr
     aoeOrigin.current = {};
     centerJudged.current = {};
     setResults({});
-    setDead(false);
+    setDeathLog([]);
     setFinished(false);
   }, []);
 
@@ -396,6 +404,8 @@ export function PlayArena({ setup, seat = 0, startAt, onResult, onNewTopic }: Pr
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     const SPEED = 4;
+    // 席のロール（TH/DPS）。水雷/フィラーのロール別カーディナル判定に使う。
+    const playerRole = setup.players.find((p) => p.seat === seat)?.role ?? "TH";
     let raf = 0;
 
     const loop = () => {
@@ -404,7 +414,8 @@ export function PlayArena({ setup, seat = 0, startAt, onResult, onNewTopic }: Pr
       let dy = 0;
       let movedThisFrame = false;
 
-      if (!pl.dead) {
+      // 被弾しても止まらない（非ブロッキング）。常に移動・採点を続ける。
+      {
         const k = keys.current;
         if (k["w"] || k["arrowup"]) {
           pl.y -= SPEED;
@@ -489,22 +500,27 @@ export function PlayArena({ setup, seat = 0, startAt, onResult, onNewTopic }: Pr
           // 1回目（早 t=51）の水雷/フィラー処理はエクスデス方向を北として散会基準を回す。
           // 2回目（遅 t=74）は固定マーカー（標準 ZONES）。
           const zones = key === "early" ? exdeathZones(setup.gc3BossAngle) : ZONES;
-          const r = evaluate(
-            req,
-            { x: pl.x, y: pl.y },
-            { x: pl.lastDx, y: pl.lastDy },
-            moving,
-            aoeOrigin.current[key],
-            boss,
-            zones,
-          );
+          let r: { ok: boolean; reason: string };
+          if (req.kind === "stack" || req.kind === "filler" || req.kind === "spread") {
+            // ロール別の単一カーディナル判定（A=北/B=東/C=南/D=西）。
+            const isStack = req.kind !== "spread";
+            r = evaluateRoleWater(playerRole, isStack, { x: pl.x, y: pl.y }, zones);
+          } else {
+            r = evaluate(
+              req,
+              { x: pl.x, y: pl.y },
+              { x: pl.lastDx, y: pl.lastDy },
+              moving,
+              aoeOrigin.current[key],
+              boss,
+              zones,
+            );
+          }
           const res: PlayResult = { key, ok: r.ok, reason: r.reason, label: req.label };
           setResults((prev) => ({ ...prev, [key]: res }));
           onResult?.(res);
-          if (!r.ok && !pl.dead) {
-            pl.dead = true;
-            pl.deadReason = `${MECH_NAME[key]}: ${r.reason}`;
-            setDead(true);
+          if (!r.ok) {
+            pushDeath(Math.floor(elapsed), MECH_NAME[key], r.reason);
           }
         }
       }
@@ -517,15 +533,14 @@ export function PlayArena({ setup, seat = 0, startAt, onResult, onNewTopic }: Pr
         if (elapsed >= cr.resolveSec && !centerJudged.current[cr.instance]) {
           centerJudged.current[cr.instance] = true;
           const safe = centerAoeSafeGeometry({ x: pl.x, y: pl.y }, cr.params, cr.geometry);
-          if (!safe && !pl.dead) {
-            pl.dead = true;
-            pl.deadReason =
+          if (!safe) {
+            const label =
               cr.geometry === "thunder"
-                ? "中央ボス サンダガ 被弾!"
+                ? "中央ボス サンダガ"
                 : cr.geometry === "blizzard"
-                  ? "中央ボス ブリザガ 被弾!"
-                  : "中央ボス AoE 被弾!";
-            setDead(true);
+                  ? "中央ボス ブリザガ"
+                  : "中央ボス AoE";
+            pushDeath(Math.floor(elapsed), label, "被弾!");
           }
         }
       }
@@ -570,6 +585,17 @@ export function PlayArena({ setup, seat = 0, startAt, onResult, onNewTopic }: Pr
         </span>
       </div>
 
+      {/* 被弾ログ（プレイ中の控えめな表示: 件数 + 直近の原因）。 */}
+      {deathLog.length > 0 && !finished && (
+        <div className="px-0.5 text-[10px] text-destructive">
+          <span className="font-bold">被弾 {deathLog.length}</span>
+          <span className="ml-1.5 text-muted-foreground">
+            直近: t={deathLog[deathLog.length - 1].sec} {deathLog[deathLog.length - 1].mechanic}:{" "}
+            {deathLog[deathLog.length - 1].reason}
+          </span>
+        </div>
+      )}
+
       <div
         ref={wrapRef}
         className="relative mx-auto w-full max-w-[480px] select-none"
@@ -581,26 +607,26 @@ export function PlayArena({ setup, seat = 0, startAt, onResult, onNewTopic }: Pr
           height={ARENA_SIZE}
           className="block h-auto w-full rounded-lg border"
         />
-        {dead && !finished && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-lg bg-black/55 text-center">
-            <p className="text-sm font-bold text-red-400">死亡</p>
-            <p className="max-w-[80%] text-xs text-white">{player.current.deadReason}</p>
-            <button
-              type="button"
-              onClick={restart}
-              className="mt-1 rounded-md bg-primary px-4 py-1.5 text-xs font-bold text-primary-foreground"
-            >
-              もう一度
-            </button>
-          </div>
-        )}
         {finished && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-lg bg-black/65 text-center">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 overflow-y-auto rounded-lg bg-black/65 px-3 py-4 text-center">
             <p className="text-sm font-bold text-foreground text-white">タイムライン終了</p>
             <p className="text-xs text-white">
               <span className="text-green-400 font-bold">✓{passCount}</span>{" "}
               <span className="text-red-400 font-bold">✗{failCount}</span>
             </p>
+            {deathLog.length > 0 && (
+              <div className="flex max-h-[45%] w-full max-w-[90%] flex-col gap-0.5 overflow-y-auto rounded-md bg-black/40 p-2 text-left">
+                <p className="pb-0.5 text-[10px] font-bold text-red-300">
+                  被弾ログ（{deathLog.length}）
+                </p>
+                {deathLog.map((d, i) => (
+                  <p key={i} className="text-[11px] leading-snug text-white">
+                    <span className="tabular-nums text-red-300">t={d.sec}</span> {d.mechanic}:{" "}
+                    {d.reason}
+                  </p>
+                ))}
+              </div>
+            )}
             <div className="mt-1 flex gap-2">
               <button
                 type="button"

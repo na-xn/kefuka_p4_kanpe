@@ -19,10 +19,15 @@ export type Gc3Scar = "seija" | "shisha";
 /** 波状攻撃の属性: 炎(ほのお) / 水(つなみ)。 */
 export type WaveType = "honoo" | "tsunami";
 
+/** ロール: タンク/ヒラ(TH, 席0-3) / DPS(席4-7)。 */
+export type Role = "TH" | "DPS";
+
 /** 1プレイヤーの GC1〜GC3 役割割当。 */
 export type PlayerAssignment = {
   /** 席番号 0..7（一意）。 */
   seat: number;
+  /** ロール（席0-3=TH / 席4-7=DPS、シャッフルに依らず決定的）。 */
+  role: Role;
   gc1Role: GcRole;
   gc2Role: GcRole;
   gc3Role: Gc3Role;
@@ -203,6 +208,7 @@ export function generateSim(rng: () => number = Math.random): SimSetup {
   for (let seat = 0; seat < 8; seat++) {
     players.push({
       seat,
+      role: seat < 4 ? "TH" : "DPS",
       gc1Role: gc1Roles[seat],
       gc2Role: gc2Roles[seat],
       gc3Role: gc3Roles[seat],

@@ -139,6 +139,61 @@ export function inZoneAt(p: Point, zoneCenter: Point): boolean {
 }
 
 /* ============================================================
+ * ロール別 水雷/フィラー カーディナル（A=北 / B=東 / C=南 / D=西）
+ *
+ * 頭割り(stack/filler) / 散開(spread) の解決で、席のロール(TH/DPS)に応じて
+ * 立つべき単一のカーディナルを定める（汎用 h12/h6 ・ h3/h9 のペアではなく）。
+ *   A=北=h12, B=東=h3, C=南=h6, D=西=h9。
+ *   TH: 頭割り→A(h12) / 散開→D(h9)。
+ *   DPS: 頭割り→C(h6) / 散開→B(h3)。
+ * 1回目（早 t=51）はエクスデス北フレーム（exdeathZones）で、2回目（遅 t=74）は
+ * 固定 ZONES で判定する。
+ * ========================================================== */
+
+/** ロール + 頭割りか(isStack) → 立つべきゾーンキー。 */
+export function roleCardinal(role: "TH" | "DPS", isStack: boolean): ZoneKey {
+  if (role === "TH") return isStack ? "h12" : "h9";
+  return isStack ? "h6" : "h3";
+}
+
+/** ゾーンキー → カーディナル表示（文字 + 方角）。 */
+const CARDINAL_LABEL: Record<ZoneKey, string> = {
+  h12: "A(北)",
+  h3: "B(東)",
+  h6: "C(南)",
+  h9: "D(西)",
+};
+
+/** ロール + 頭割りか + （回転済み）ゾーンマップ → 立つべき点。 */
+export function roleCardinalPoint(
+  role: "TH" | "DPS",
+  isStack: boolean,
+  zones: Record<ZoneKey, Point> = ZONES,
+): Point {
+  return zones[roleCardinal(role, isStack)];
+}
+
+/**
+ * ロール別の水雷/フィラー判定。指定カーディナル（単一）に居れば合格。
+ *
+ * @param role    席ロール（TH/DPS）。
+ * @param isStack 頭割り(true) / 散開(false)。
+ * @param p       プレイヤー位置。
+ * @param zones   ゾーンマップ（早=exdeathZones、遅=ZONES）。
+ */
+export function evaluateRoleWater(
+  role: "TH" | "DPS",
+  isStack: boolean,
+  p: Point,
+  zones: Record<ZoneKey, Point> = ZONES,
+): { ok: boolean; reason: string } {
+  const key = roleCardinal(role, isStack);
+  if (inZoneAt(p, zones[key])) return { ok: true, reason: "" };
+  const verb = isStack ? "頭割り" : "散開";
+  return { ok: false, reason: `${verb}: ${CARDINAL_LABEL[key]} に居ません` };
+}
+
+/* ============================================================
  * 視線（魔眼）
  * ========================================================== */
 
