@@ -1,5 +1,16 @@
 import { useEffect, useRef, useState } from "react";
-import { Play, RotateCcw, FastForward, Gauge, CheckCircle, XCircle } from "lucide-react";
+import {
+  Play,
+  RotateCcw,
+  FastForward,
+  Gauge,
+  CheckCircle,
+  XCircle,
+  Zap,
+  Snowflake,
+  Users,
+  Eye,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MinimumMode, INITIAL_MIN } from "@/components/p4/MinimumMode";
 import type { MinState } from "@/components/p4/MinimumMode";
@@ -13,6 +24,8 @@ import {
 import type { RevealRow } from "@/p4/simSchedule";
 import { compareMinState } from "@/p4/simCompare";
 import type { FieldCompare } from "@/p4/simCompare";
+import { buildTimeline, itemRevealSec } from "@/p4/timeline";
+import type { Item } from "@/p4/timeline";
 
 /**
  * 練習モード（シミュレーション）。ソロ用・バックエンドなし。
@@ -58,6 +71,8 @@ export function SimulationMode() {
   const [inputMode, setInputMode] = useState<InputMode>(loadInputMode);
   /** 答え合わせ結果（manual モードで「答え合わせ」ボタン後にセット）。 */
   const [compareResult, setCompareResult] = useState<FieldCompare[] | null>(null);
+  /** 「答えを全部表示」スキップ（処理フェーズで全行を即時開示）。 */
+  const [revealAll, setRevealAll] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const stop = () => {
@@ -68,9 +83,9 @@ export function SimulationMode() {
   };
   useEffect(() => stop, []);
 
-  // playing 中は startedAt を基準に ~5x/秒 で経過秒を刻む。
+  // playing / process を通して startedAt を基準に経過秒を刻み続ける（50で止めない）。
   useEffect(() => {
-    if (phase !== "playing" || startedAt == null) return;
+    if ((phase !== "playing" && phase !== "process") || startedAt == null) return;
     const id = setInterval(() => {
       setNow((Date.now() - startedAt) / 1000);
     }, 200);
@@ -88,8 +103,9 @@ export function SimulationMode() {
     stop();
     const s = generateSim();
     setSetup(s);
-    setMinState(INITIAL_MIN);
+    setMinState({ ...INITIAL_MIN });
     setCompareResult(null);
+    setRevealAll(false);
     const t0 = Date.now();
     setStartedAt(t0);
     setNow(0);
@@ -102,33 +118,37 @@ export function SimulationMode() {
     setSetup(null);
     setStartedAt(null);
     setNow(0);
-    setMinState(INITIAL_MIN);
+    setMinState({ ...INITIAL_MIN });
     setCompareResult(null);
+    setRevealAll(false);
     setPhase("idle");
   };
 
-  /** 処理フェーズへ。タイマー停止。auto なら MinState を自動充填、manual なら空欄のまま。 */
-  const toProcess = (s: SimSetup) => {
-    stop();
-    if (inputMode === "auto") {
-      setMinState(toMinState(s, 0));
-    } else {
-      setMinState({ ...INITIAL_MIN });
-      setCompareResult(null);
-    }
+  /** 処理フェーズへ。クロックは止めない（解決リストが実時間で順次開示）。 */
+  const toProcess = () => {
+    setRevealAll(false);
     setPhase("process");
   };
 
   // speed を反映した経過秒（リビール/しきい値判定に使う）。
   const elapsed = now * speed;
 
-  // playing 中、t=PROCESS_AT_SEC を超えたら自動で処理フェーズへ。
+  // playing 中、t=PROCESS_AT_SEC を超えたら自動で処理フェーズへ（クロックは継続）。
   useEffect(() => {
     if (phase === "playing" && setup && elapsed >= PROCESS_AT_SEC) {
-      toProcess(setup);
+      toProcess();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, setup, elapsed]);
+
+  /** 「処理へスキップ」: クロックを処理開始時刻(51秒)へ進めて処理フェーズへ。 */
+  const skipToProcess = () => {
+    if (startedAt != null) {
+      // elapsed = (now*speed) なので、startedAt を巻き戻して elapsed=51 を作る。
+      setStartedAt(Date.now() - (PROCESS_AT_SEC + 1) * 1000 / speed);
+    }
+    toProcess();
+  };
 
   // --- アイドル ---
   if (phase === "idle" || !setup) {
@@ -153,32 +173,53 @@ export function SimulationMode() {
 
   const schedule = buildRevealSchedule(setup);
 
-  // --- 処理フェーズ（解決ビュー） ---
+  // --- 処理フェーズ（読み取り専用・解決リストを実時間で順次開示） ---
   if (phase === "process") {
     const correct = toMinState(setup, 0);
+    // 真偽反転した結果（処理順タイムライン）。これが「正解の処理一覧」。
+    const resolved = buildTimeline(correct);
+    // itemRevealSec → phase で安定ソート。
+    const ordered = [...resolved].sort((a, b) => {
+      const sa = itemRevealSec(a);
+      const sb = itemRevealSec(b);
+      return sa !== sb ? sa - sb : a.phase - b.phase;
+    });
+    const revealed = ordered.filter(
+      (it) => revealAll || elapsed >= itemRevealSec(it),
+    );
+    const upcoming = ordered.find(
+      (it) => !revealAll && elapsed < itemRevealSec(it),
+    );
+    const allShown = revealed.length === ordered.length;
+
+    const mmP = Math.floor(elapsed / 60);
+    const ssP = Math.floor(elapsed % 60);
 
     const handleCompare = () => {
       setCompareResult(compareMinState(minState, correct));
     };
 
-    const handleFillCorrect = () => {
-      setMinState(correct);
-      setCompareResult(compareMinState(correct, correct));
-    };
-
-    const handleRetry = () => {
-      setMinState({ ...INITIAL_MIN });
-      setCompareResult(null);
-    };
-
     return (
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between px-0.5">
-          <span className="text-xs font-bold text-muted-foreground">処理タイムライン</span>
+          <span className="text-xs font-bold text-muted-foreground">処理タイムライン（解決）</span>
           <Button variant="default" size="xs" onClick={start}>
             <RotateCcw /> 新しいお題
           </Button>
         </div>
+
+        {/* 経過クロック + 次の開示ヒント */}
+        <div className="flex items-center justify-between px-0.5">
+          <span className="inline-flex items-center gap-1 text-xs font-bold tabular-nums text-foreground">
+            <Gauge className="size-3.5 shrink-0" />
+            {mmP}:{String(ssP).padStart(2, "0")}
+          </span>
+          <span className="text-[10px] text-muted-foreground">
+            {speed}x ・ {revealed.length}/{ordered.length}
+            {upcoming && ` ・ 次 ${itemRevealSec(upcoming)}s`}
+          </span>
+        </div>
+
         {/* 割当サマリ（コンパクト） */}
         <div className="flex flex-wrap gap-1.5">
           {schedule.map((r) => (
@@ -186,12 +227,30 @@ export function SimulationMode() {
           ))}
         </div>
         <div className="border-t" />
-        <MinimumMode
-          value={minState}
-          set={(id, v) => setMinState((s) => ({ ...s, [id]: v }))}
-        />
 
-        {/* manual モード専用: 答え合わせ + 結果パネル */}
+        {/* 読み取り専用の解決アイテム（実時間で順次開示） */}
+        <div className="flex flex-col gap-1.5">
+          {revealed.length === 0 ? (
+            <p className="px-2 py-3 text-center text-xs text-muted-foreground">
+              処理開始… 各アクションが処理時刻に順番に開示されます。
+            </p>
+          ) : (
+            revealed.map((it) => <ResolvedRow key={it.key} item={it} />)
+          )}
+        </div>
+
+        {/* 「答えを全部表示」スキップ */}
+        {!allShown && (
+          <Button
+            variant="secondary"
+            className="h-10 w-full text-sm font-bold"
+            onClick={() => setRevealAll(true)}
+          >
+            <FastForward className="size-4" /> 答えを全部表示
+          </Button>
+        )}
+
+        {/* manual モード専用: 付与フェーズの入力を採点する答え合わせ */}
         {inputMode === "manual" && (
           <div className="flex flex-col gap-2">
             <div className="border-t" />
@@ -206,29 +265,13 @@ export function SimulationMode() {
             ) : (
               <>
                 <ComparePanel results={compareResult} />
-                <div className="flex gap-2">
-                  <Button
-                    variant="secondary"
-                    className="h-10 flex-1 text-sm font-bold"
-                    onClick={handleFillCorrect}
-                  >
-                    正解を入れる
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="h-10 flex-1 text-sm font-bold"
-                    onClick={handleRetry}
-                  >
-                    もう一度
-                  </Button>
-                  <Button
-                    variant="default"
-                    className="h-10 flex-1 text-sm font-bold"
-                    onClick={start}
-                  >
-                    <RotateCcw className="size-4" /> 新しいお題
-                  </Button>
-                </div>
+                <Button
+                  variant="default"
+                  className="h-10 w-full text-sm font-bold"
+                  onClick={start}
+                >
+                  <RotateCcw className="size-4" /> 新しいお題
+                </Button>
               </>
             )}
           </div>
@@ -276,9 +319,23 @@ export function SimulationMode() {
         )}
       </div>
 
+      {/* manual モード: 付与フェーズ中に編集可能なカンペ入力（ポチポチ用） */}
+      {inputMode === "manual" && (
+        <>
+          <div className="border-t" />
+          <p className="px-0.5 text-[10px] font-semibold text-muted-foreground">
+            カンペ入力（デバフが付いたら入力）
+          </p>
+          <MinimumMode
+            value={minState}
+            set={(id, v) => setMinState((s) => ({ ...s, [id]: v }))}
+          />
+        </>
+      )}
+
       {/* 操作 */}
       <div className="mt-1 flex items-center gap-2">
-        <Button variant="secondary" className="h-11 flex-1 text-sm font-bold" onClick={() => toProcess(setup)}>
+        <Button variant="secondary" className="h-11 flex-1 text-sm font-bold" onClick={skipToProcess}>
           <FastForward className="size-4" /> 処理へスキップ
         </Button>
         <Button variant="destructive" size="icon" className="h-11 w-11" onClick={reset} aria-label="新しいお題">
@@ -397,6 +454,34 @@ function SpeedToggle({ speed, setSpeed }: { speed: number; setSpeed: (s: number)
           {s}x
         </button>
       ))}
+    </div>
+  );
+}
+
+/** 処理フェーズの解決1行（読み取り専用）。デバフアイコン＋行動テキスト。
+ * MinimumMode の TimelineRow と同じアイコン描画方針。 */
+function ResolvedRow({ item }: { item: Item }) {
+  return (
+    <div className="flex items-center gap-2 rounded-md border bg-card/40 px-2 py-1.5">
+      <span className="flex min-w-6 shrink-0 items-center justify-center gap-0.5">
+        {item.icon ? (
+          <img src={item.icon} alt="" className="h-5 w-auto rounded-[2px]" draggable={false} />
+        ) : item.lucide === "zap" ? (
+          <Zap className="size-5" />
+        ) : item.lucide === "snow" ? (
+          <Snowflake className="size-5" />
+        ) : item.lucide === "users" ? (
+          <Users className="size-5" />
+        ) : (
+          <Eye className="size-5" />
+        )}
+        {item.extraIcon && (
+          <img src={item.extraIcon} alt="" className="h-5 w-auto rounded-[2px]" draggable={false} />
+        )}
+      </span>
+      <span className="min-w-0 flex-1 truncate text-left text-xs font-bold text-foreground">
+        {item.text || "—"}
+      </span>
     </div>
   );
 }
