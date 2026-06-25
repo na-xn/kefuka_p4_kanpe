@@ -253,6 +253,29 @@ export function centerAoeSafe(p: Point, params: CenterAoeParams): boolean {
   return !(hitBlizzard || hitThunder);
 }
 
+/**
+ * ジオメトリ種別を考慮した中央 AoE 安全判定。
+ *
+ * - "cross"（グランドクロス）: サンダガ十字 + ブリザガ象限の両面（= centerAoeSafe）。
+ * - "thunder"（単発サンダガ）: 雷十字のみで判定（象限は無視）。参照 checkThundergaSafety。
+ * - "blizzard"（単発ブリザガ）: 象限のみで判定（雷十字は無視）。参照 checkBlizzagaSafety。
+ */
+export function centerAoeSafeGeometry(
+  p: Point,
+  params: CenterAoeParams,
+  geometry: "cross" | "thunder" | "blizzard",
+): boolean {
+  if (geometry === "thunder") {
+    const inThunder = inThunderStrip(p, params.thunderPattern);
+    return !(params.sandagaShin ? inThunder : !inThunder);
+  }
+  if (geometry === "blizzard") {
+    const inBlizzard = inBlizzardQuadrant(p, params.blizzardPattern);
+    return !(params.blizzagaShin ? inBlizzard : !inBlizzard);
+  }
+  return centerAoeSafe(p, params);
+}
+
 /* ============================================================
  * 席視点の「要求アクション」マッピング
  * ========================================================== */
@@ -269,7 +292,7 @@ export type MechanicKey =
 
 /** 各機構の解決秒（sim クロック・1x 基準）。 */
 export const MECHANIC_SEC: Record<MechanicKey, number> = {
-  gc3: 46,
+  gc3: 41,
   early: 51,
   juso1: 57,
   honoo: 62,

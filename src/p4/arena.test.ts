@@ -19,6 +19,7 @@ import {
   inThunderStrip,
   inBlizzardQuadrant,
   centerAoeSafe,
+  centerAoeSafeGeometry,
   THUNDER_STRIP_W,
   type Point,
 } from "@/p4/arena";
@@ -303,5 +304,49 @@ describe("center AoE geometry (サンダガ/ブリザガ)", () => {
         blizzagaShin: false,
       }),
     ).toBe(true);
+  });
+
+  it("centerAoeSafeGeometry thunder: 雷十字のみ判定（象限は無視）", () => {
+    // 雷十字内 / shin → 被弾（unsafe）。象限は無視されるので blizzard 設定は影響しない。
+    const inThunder: Point = { x: 700, y: 400 };
+    expect(inThunderStrip(inThunder, 0)).toBe(true);
+    const params = {
+      thunderPattern: 0,
+      blizzardPattern: 0,
+      sandagaShin: true,
+      blizzagaShin: true, // この面が誤って効くなら結果が変わる。
+    };
+    expect(centerAoeSafeGeometry(inThunder, params, "thunder")).toBe(false);
+    // 雷十字外 / shin → 安全（象限内でも thunder 判定では無視）。
+    const inBlizzOnly: Point = { x: 500, y: 300 }; // px>0, py<0 → 象限0内、雷十字外
+    expect(inThunderStrip(inBlizzOnly, 0)).toBe(false);
+    expect(centerAoeSafeGeometry(inBlizzOnly, params, "thunder")).toBe(true);
+  });
+
+  it("centerAoeSafeGeometry blizzard: 象限のみ判定（雷十字は無視）", () => {
+    const inBlizz: Point = { x: 500, y: 300 }; // 象限0内
+    expect(inBlizzardQuadrant(inBlizz, 0)).toBe(true);
+    const params = {
+      thunderPattern: 0,
+      blizzardPattern: 0,
+      sandagaShin: true, // 無視される。
+      blizzagaShin: true,
+    };
+    expect(centerAoeSafeGeometry(inBlizz, params, "blizzard")).toBe(false);
+    // 象限外 → 安全。
+    const outBlizz: Point = { x: 500, y: 500 }; // 象限1側
+    expect(inBlizzardQuadrant(outBlizz, 0)).toBe(false);
+    expect(centerAoeSafeGeometry(outBlizz, params, "blizzard")).toBe(true);
+  });
+
+  it("centerAoeSafeGeometry cross は centerAoeSafe と一致", () => {
+    const p: Point = { x: 700, y: 400 };
+    const params = {
+      thunderPattern: 0,
+      blizzardPattern: 0,
+      sandagaShin: true,
+      blizzagaShin: false,
+    };
+    expect(centerAoeSafeGeometry(p, params, "cross")).toBe(centerAoeSafe(p, params));
   });
 });

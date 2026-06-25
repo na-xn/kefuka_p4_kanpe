@@ -17,12 +17,20 @@ import {
   gc3BossPos,
   requiredAction,
   evaluate,
-  centerAoeSafe,
+  centerAoeSafeGeometry,
   MECHANIC_SEC,
   type MechanicKey,
   type Point,
   type RequiredAction,
 } from "@/p4/arena";
+import {
+  MECH_ORDER,
+  activeCenterCast,
+  castProgress,
+  centerResolutions,
+  centerTruths,
+  type CenterCast,
+} from "@/p4/playTimeline";
 
 /**
  * 操作プレイ・アリーナ。
@@ -51,42 +59,17 @@ type Props = {
 
 /** 機構の表示名。 */
 const MECH_NAME: Record<MechanicKey, string> = {
-  gc3: "GC3 分断",
+  gc3: "エクスデス分断",
   early: "早 水雷/加速度",
-  juso1: "視線①",
+  juso1: "魔眼①",
   honoo: "ほのお/つなみ",
   late: "遅 水雷/加速度",
-  juso2: "視線②",
+  juso2: "魔眼②",
   tsunami: "つなみ",
 };
 
-const MECH_ORDER: MechanicKey[] = ["gc3", "early", "juso1", "honoo", "late", "juso2", "tsunami"];
-
 /** 機構の解決前リードイン秒（事前にターゲットを描画して予告する）。 */
 const LEAD_IN = 8;
-
-/** キャストバーの長さ（秒）。解決の約7秒前にキャスト開始し、解決秒で満タン。 */
-const CAST_LEN = 7;
-
-/**
- * 中央ボス AoE の解決秒。
- *
- * 参照 sim.html では、中央ボス（boss[0], ~4s 詠唱）が完了した瞬間に
- * `checkSafety()` で十字（サンダガ）+ 象限（ブリザガ）を判定する。これは
- * GC/波フェーズの「最中・序盤」に各 GC ごと1回ずつ早期に解決され、
- * エクスデス（46s）より前に動作する。役割デバフは 8/16/24/32/40 で付与される。
- *
- * これに合わせ、GC1 中央 AoE を ≈12s、GC2 中央 AoE を ≈28s に置く。
- * 各々 CAST_LEN(7s) 前から詠唱バーが満ち、CENTER_LEAD(6s) 前から低アルファで
- * AoE を予告、解決秒で高アルファ → 直後にクリアする。これにより最初の ~40s
- * のあいだ十字/象限避けが能動的に働き、詠唱バーも序盤から動く（参照と同じ）。
- */
-const CENTER_GC1_SEC = 12;
-const CENTER_GC2_SEC = 28;
-const CENTER_LEAD = 6;
-
-/** 中央 AoE の擬似機構キー（HUD/結果には MECH_ORDER とは別に集計）。 */
-type CenterKey = "centerGc1" | "centerGc2";
 
 /* ============================================================
  * デバフアイコン定義（席視点の保有デバフ）
@@ -159,6 +142,10 @@ function buildDebuffs(setup: SimSetup, seat: number): DebuffEntry[] {
     return "#ffcc00"; // mushoku
   };
 
+  // 付与秒は参照 assignGimmickDebuffs / assign11BossDebuff のボス詠唱完了時刻に一致:
+  //   GC1 役割 @8（assignGimmickDebuffs(1)）, wave1 @12（assign11BossDebuff(1)）,
+  //   GC2 役割 @20（assignGimmickDebuffs(2)）, wave2 @24（assign11BossDebuff(2)）,
+  //   GC3 役割+傷 @32（assignGimmickDebuffs(3) wave3 分岐）。
   // GC1 役割 @8。
   out.push({
     iconKey: p.gc1Role as IconKey,
@@ -166,53 +153,42 @@ function buildDebuffs(setup: SimSetup, seat: number): DebuffEntry[] {
     resolveSec: gc1Sec,
     color: roleColor(p.gc1Role),
   });
-  // wave1 @16（honoo/tsunami）。
+  // wave1 @12（honoo/tsunami）。
   out.push({
     iconKey: setup.wave1Type as IconKey,
-    applySec: 16,
+    applySec: 12,
     resolveSec: setup.wave1Type === "honoo" ? MECHANIC_SEC.honoo : MECHANIC_SEC.tsunami,
     color: setup.wave1Type === "honoo" ? "#ff4500" : "#00b4d8",
   });
-  // GC2 役割 @24。
+  // GC2 役割 @20。
   out.push({
     iconKey: p.gc2Role as IconKey,
-    applySec: 24,
+    applySec: 20,
     resolveSec: gc2Sec,
     color: roleColor(p.gc2Role),
   });
-  // wave2 @32。
+  // wave2 @24。
   out.push({
     iconKey: setup.wave2Type as IconKey,
-    applySec: 32,
+    applySec: 24,
     resolveSec: setup.wave2Type === "honoo" ? MECHANIC_SEC.honoo : MECHANIC_SEC.tsunami,
     color: setup.wave2Type === "honoo" ? "#ff4500" : "#00b4d8",
   });
-  // GC3 役割 + 傷 @40。
+  // GC3 役割 + 傷 @32。
   out.push({
     iconKey: p.gc3Role as IconKey,
-    applySec: 40,
+    applySec: 32,
     resolveSec: MECHANIC_SEC.gc3,
     color: p.gc3Role === "aragan" ? "#00f5d4" : "#ff4444",
   });
   out.push({
     iconKey: p.gc3Scar as IconKey,
-    applySec: 40,
+    applySec: 32,
     resolveSec: MECHANIC_SEC.gc3,
     color: p.gc3Scar === "seija" ? "#ff69b4" : "#00b4d8",
   });
 
   return out;
-}
-
-/** 現在の GC ウィンドウに応じた中央 AoE パラメータ。 */
-function centerParams(setup: SimSetup, which: CenterKey) {
-  const g = which === "centerGc1" ? setup.centerAoE.gc1 : setup.centerAoE.gc2;
-  return {
-    thunderPattern: g.thunderPattern,
-    blizzardPattern: g.blizzardPattern,
-    sandagaShin: g.sandagaTruth === "shin",
-    blizzagaShin: g.blizzagaTruth === "shin",
-  };
 }
 
 /* ============================================================
@@ -294,7 +270,7 @@ export function PlayArena({ setup, seat = 0, startAt, onResult }: Props) {
   resultsRef.current = results;
 
   // 中央 AoE 判定済みフラグ（ref で十分）。
-  const centerJudged = useRef<Record<CenterKey, boolean>>({ centerGc1: false, centerGc2: false });
+  const centerJudged = useRef<Record<string, boolean>>({});
 
   // AoE 原点（波を「置いた」瞬間のプレイヤー位置）。リードイン開始時に確定。
   const aoeOrigin = useRef<Partial<Record<MechanicKey, Point>>>({});
@@ -311,7 +287,7 @@ export function PlayArena({ setup, seat = 0, startAt, onResult }: Props) {
   useEffect(() => {
     player.current = { x: 400, y: 550, lastDx: 0, lastDy: -1, dead: false, deadReason: "" };
     aoeOrigin.current = {};
-    centerJudged.current = { centerGc1: false, centerGc2: false };
+    centerJudged.current = {};
     setResults({});
     setDead(false);
   }, [setup, seat]);
@@ -320,7 +296,7 @@ export function PlayArena({ setup, seat = 0, startAt, onResult }: Props) {
     startRef.current = Date.now();
     player.current = { x: 400, y: 550, lastDx: 0, lastDy: -1, dead: false, deadReason: "" };
     aoeOrigin.current = {};
-    centerJudged.current = { centerGc1: false, centerGc2: false };
+    centerJudged.current = {};
     setResults({});
     setDead(false);
   }, []);
@@ -503,15 +479,22 @@ export function PlayArena({ setup, seat = 0, startAt, onResult }: Props) {
         }
       }
 
-      // --- 中央ボス AoE 判定（GC1@53 / GC2@76）---
-      for (const ck of ["centerGc1", "centerGc2"] as CenterKey[]) {
-        const sec = ck === "centerGc1" ? CENTER_GC1_SEC : CENTER_GC2_SEC;
-        if (elapsed >= sec && !centerJudged.current[ck]) {
-          centerJudged.current[ck] = true;
-          const safe = centerAoeSafe({ x: pl.x, y: pl.y }, centerParams(setup, ck));
+      // --- 中央ボス AoE 判定 ---
+      // 参照 checkSafety / checkThundergaSafety / checkBlizzagaSafety:
+      //   グランドクロス gc1@4 / gc2@16 / gc3@28（雷十字+象限の両面）、
+      //   単発サンダガ@57（雷十字のみ）、単発ブリザガ@74（象限のみ）。
+      for (const cr of centerResolutions(setup)) {
+        if (elapsed >= cr.resolveSec && !centerJudged.current[cr.instance]) {
+          centerJudged.current[cr.instance] = true;
+          const safe = centerAoeSafeGeometry({ x: pl.x, y: pl.y }, cr.params, cr.geometry);
           if (!safe && !pl.dead) {
             pl.dead = true;
-            pl.deadReason = "中央ボス AoE 被弾!";
+            pl.deadReason =
+              cr.geometry === "thunder"
+                ? "中央ボス サンダガ 被弾!"
+                : cr.geometry === "blizzard"
+                  ? "中央ボス ブリザガ 被弾!"
+                  : "中央ボス AoE 被弾!";
             setDead(true);
           }
         }
@@ -614,13 +597,6 @@ export function PlayArena({ setup, seat = 0, startAt, onResult }: Props) {
  * 描画
  * ========================================================== */
 
-/** どの中央 GC ウィンドウか（無ければ null）。 */
-function activeCenter(elapsed: number): CenterKey | null {
-  if (elapsed >= CENTER_GC1_SEC - CENTER_LEAD && elapsed < CENTER_GC1_SEC + 1.5) return "centerGc1";
-  if (elapsed >= CENTER_GC2_SEC - CENTER_LEAD && elapsed < CENTER_GC2_SEC + 1.5) return "centerGc2";
-  return null;
-}
-
 function draw(
   ctx: CanvasRenderingContext2D,
   setup: SimSetup,
@@ -646,17 +622,28 @@ function draw(
   // ヒット判定（ZONE_RADIUS）は arena.ts 側のまま不変。
   drawWaymarks(ctx);
 
-  // --- 中央ボス AoE（サンダガ十字 + ブリザガ象限） ---
-  const center = activeCenter(elapsed);
+  // --- 中央ボス AoE（グランドクロス十字/象限・単発サンダガ・単発ブリザガ） ---
+  // 参照: 詠唱中は低アルファ予告、解決秒で高アルファ。種別に応じて
+  //   cross=両面 / thunder=雷十字のみ / blizzard=象限のみ を描く。
+  const center: CenterCast | null = activeCenterCast(elapsed);
   if (center) {
-    const g = center === "centerGc1" ? setup.centerAoE.gc1 : setup.centerAoE.gc2;
-    const sec = center === "centerGc1" ? CENTER_GC1_SEC : CENTER_GC2_SEC;
-    // リードインは低アルファ、解決秒で高アルファ。
-    const resolving = elapsed >= sec;
-    const aBlz = resolving ? 0.45 : 0.12;
-    const aThn = resolving ? 0.45 : 0.12;
-    drawBlizzardLayer(ctx, g.blizzardPattern, aBlz);
-    drawThunderLayer(ctx, g.thunderPattern, aThn);
+    const g =
+      center.instance === "gc1" || center.instance === "gc2" || center.instance === "gc3"
+        ? setup.centerAoE[center.instance]
+        : null;
+    const resolving = elapsed >= center.resolveSec;
+    const alpha = resolving ? 0.45 : 0.12;
+    if (center.geometry === "cross") {
+      // 序盤グランドクロス（gc1/gc2/gc3）。最終記憶はパターンが無いので gc1 で代用。
+      const blzPat = g ? g.blizzardPattern : setup.centerAoE.gc1.blizzardPattern;
+      const thnPat = g ? g.thunderPattern : setup.centerAoE.gc1.thunderPattern;
+      drawBlizzardLayer(ctx, blzPat, alpha);
+      drawThunderLayer(ctx, thnPat, alpha);
+    } else if (center.geometry === "thunder") {
+      drawThunderLayer(ctx, setup.centerAoE.sandaga.thunderPattern, alpha);
+    } else if (center.geometry === "blizzard") {
+      drawBlizzardLayer(ctx, setup.centerAoE.blizzaga.blizzardPattern, alpha);
+    }
   }
 
   // --- 各機構のリードイン中ターゲット（寛容な予告） ---
@@ -668,7 +655,7 @@ function draw(
   }
 
   // --- ボス（中央 + 外周2体）+ キャストバー + 真偽インジケータ ---
-  drawBosses(ctx, setup, elapsed, center);
+  drawBosses(ctx, setup, seat, elapsed, center);
 
   // --- プレイヤードット ---
   if (!pl.dead) {
@@ -788,32 +775,85 @@ function drawBlizzardLayer(ctx: CanvasRenderingContext2D, pattern: number, alpha
   ctx.restore();
 }
 
+/** キャストバー1本を描画（黒地 + 進捗 + 枠 + 上にキャスト名）。 */
+function drawCastBar(
+  ctx: CanvasRenderingContext2D,
+  bx: number,
+  by: number,
+  prog: number,
+  color: string,
+  name: string,
+) {
+  const barW = 100;
+  const barH = 10;
+  const barX = bx - barW / 2;
+  const barY = by - BOSS_RADIUS - 25;
+  // キャスト名（参照: バーの上に表示）。全キャストバーが名前ラベルを描く。
+  if (name) {
+    ctx.save();
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 12px sans-serif";
+    ctx.textAlign = "center";
+    ctx.strokeStyle = "#000";
+    ctx.lineWidth = 3;
+    ctx.strokeText(name, bx, barY - 5);
+    ctx.fillText(name, bx, barY - 5);
+    ctx.restore();
+  }
+  ctx.fillStyle = "#000";
+  ctx.fillRect(barX, barY, barW, barH);
+  ctx.fillStyle = prog >= 1 ? "#ff3333" : color;
+  ctx.fillRect(barX, barY, barW * Math.min(1, Math.max(0, prog)), barH);
+  ctx.strokeStyle = "#888";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(barX, barY, barW, barH);
+}
+
+/**
+ * 外周サブボスの「次のキャスト」（名前・進捗）を返す。
+ * 参照 bosses[1] は castName=つなみ/ほのお を表示する。役割（水雷/加速度）系は
+ * 名前が明示されないので、解決へ向けたキャスト進捗のみ（名前は空）でバーを動かす。
+ */
+function subBossCast(
+  setup: SimSetup,
+  seat: number,
+  elapsed: number,
+  which: 1 | 2,
+): { name: string; prog: number } | null {
+  // 左下(=1): 波（つなみ/ほのお）担当。右下(=2): 役割（水雷/加速度/魔眼）担当。
+  const candidates: { name: string; sec: number; len: number }[] = [];
+  if (which === 1) {
+    // 波の解決（ほのお=62 / つなみ=84）。属性 → 名前。
+    const honooSec = MECHANIC_SEC.honoo;
+    const tsunamiSec = MECHANIC_SEC.tsunami;
+    candidates.push({ name: "ほのお", sec: honooSec, len: 8 });
+    candidates.push({ name: "つなみ", sec: tsunamiSec, len: 8 });
+  } else {
+    // 役割解決（早=51 / 遅=74 / 魔眼=57,79）。名前は出さず進捗のみ。
+    for (const k of ["early", "juso1", "late", "juso2"] as MechanicKey[]) {
+      const req = requiredAction(setup, seat, k);
+      if (req.kind === "none") continue;
+      candidates.push({ name: "", sec: MECHANIC_SEC[k], len: 8 });
+    }
+  }
+  // 現在キャスト窓内のもの（sec-len .. sec+1.5）で最も近いものを返す。
+  let best: { name: string; prog: number; sec: number } | null = null;
+  for (const c of candidates) {
+    if (elapsed < c.sec - c.len || elapsed > c.sec + 1.5) continue;
+    const prog = Math.min(1, Math.max(0, (elapsed - (c.sec - c.len)) / c.len));
+    if (!best || c.sec < best.sec) best = { name: c.name, prog, sec: c.sec };
+  }
+  return best ? { name: best.name, prog: best.prog } : null;
+}
+
 /** 3体のボス + キャストバー + 真偽インジケータ。 */
 function drawBosses(
   ctx: CanvasRenderingContext2D,
   setup: SimSetup,
+  seat: number,
   elapsed: number,
-  center: CenterKey | null,
+  center: CenterCast | null,
 ) {
-  // キャストバーの進捗: 次に来る機構解決へ向け、解決の CAST_LEN 秒前から 0→1 で満ちる。
-  // キャストウィンドウ外（解決の CAST_LEN 秒より前）はキャストなし（null）＝ボスは待機。
-  // 中央ボスは中央 AoE の進捗、外周ボスは波/水雷など機構解決の進捗で代用。
-  const allSecs = [...Object.values(MECHANIC_SEC), CENTER_GC1_SEC, CENTER_GC2_SEC].sort(
-    (a, b) => a - b,
-  );
-  // 次に来る解決秒（elapsed より大きい最小の秒）。無ければ null（待機）。
-  const nextSec = allSecs.find((s) => s > elapsed) ?? null;
-  // 次の解決に対するキャスト進捗（ウィンドウ前は null）。
-  let genericProg: number | null =
-    nextSec == null || elapsed < nextSec - CAST_LEN
-      ? null
-      : Math.min(1, Math.max(0, (elapsed - (nextSec - CAST_LEN)) / CAST_LEN));
-  // 参照では 3 体とも t=0 から詠唱している。序盤（GC/波フェーズ, 最初の中央 AoE 前）は
-  // バーを空にせず、CAST_LEN 周期のループ詠唱で外周ボスのバーを常時動かす。
-  if (genericProg == null && elapsed < CENTER_GC1_SEC) {
-    genericProg = (elapsed % CAST_LEN) / CAST_LEN;
-  }
-
   const bossList = [CENTER_BOSS, ...SUB_BOSSES];
   bossList.forEach((boss, index) => {
     // ボス本体。
@@ -829,51 +869,20 @@ function drawBosses(
     if (index === 0) {
       drawCenterTruthRings(ctx, boss.x, boss.y, setup, center);
     } else {
-      // 外周ボス: GC1/GC2 真偽（参照 sub-boss currentEffect）。簡易に gc1/gc2Truth を表示。
+      // 外周ボス: GC1/GC2 真偽（参照 sub-boss currentEffect）。
       const truth: Truth = index === 1 ? setup.gc1Truth : setup.gc2Truth;
       drawSubBossRing(ctx, boss.x, boss.y, truth);
     }
 
-    // キャストバー（参照: barW=100, barH=10, y=boss.y-bossRadius-25）。
-    // キャストウィンドウ外（prog == null）はバーを描かない＝ボスは待機。
-    const barW = 100;
-    const barH = 10;
-    const barX = boss.x - barW / 2;
-    const barY = boss.y - BOSS_RADIUS - 25;
-    let progColor = "#ffaa00";
-    let prog: number | null = genericProg;
+    // キャストバー（名前ラベル付き）。
     if (index === 0) {
-      // 中央ボスは中央 AoE 解決へ向けてキャスト（参照: boss[0] は t=0 から詠唱）。
-      // GC ウィンドウ中はその解決秒へ向け満タンに。直前の最初の GC1 までは
-      // CENTER_GC1 を目標に序盤からバーを満ちさせる。
-      const sec =
-        center === "centerGc2"
-          ? CENTER_GC2_SEC
-          : center === "centerGc1"
-            ? CENTER_GC1_SEC
-            : elapsed < CENTER_GC1_SEC
-              ? CENTER_GC1_SEC
-              : elapsed < CENTER_GC2_SEC
-                ? CENTER_GC2_SEC
-                : null;
-      prog =
-        sec == null || elapsed < sec - CAST_LEN
-          ? sec != null
-            ? // ウィンドウ前でもループ詠唱で動かす（空にしない）。
-              (elapsed % CAST_LEN) / CAST_LEN
-            : null
-          : Math.min(1, Math.max(0, (elapsed - (sec - CAST_LEN)) / CAST_LEN));
-      progColor = "#bf55ec";
-    }
-    if (prog != null) {
-      ctx.fillStyle = "#000";
-      ctx.fillRect(barX, barY, barW, barH);
-      if (prog >= 1) progColor = "#ff3333";
-      ctx.fillStyle = progColor;
-      ctx.fillRect(barX, barY, barW * prog, barH);
-      ctx.strokeStyle = "#888";
-      ctx.lineWidth = 1;
-      ctx.strokeRect(barX, barY, barW, barH);
+      // 中央ボス: アクティブな中央キャスト（グランドクロス/サンダガ/ブリザガ/記憶）。
+      if (center) {
+        drawCastBar(ctx, boss.x, boss.y, castProgress(elapsed, center), "#bf55ec", center.name);
+      }
+    } else {
+      const sc = subBossCast(setup, seat, elapsed, index as 1 | 2);
+      if (sc) drawCastBar(ctx, boss.x, boss.y, sc.prog, "#ffaa00", sc.name);
     }
   });
 }
@@ -913,35 +922,32 @@ function drawTruthEllipse(
   ctx.restore();
 }
 
-/** 中央ボスの真偽（GC ウィンドウ中はサンダガ/ブリザガ、それ以外は GC1/GC2 のサンダガ/ブリザガ）。 */
+/**
+ * 中央ボスの真偽リング（上=サンダガ / 下=ブリザガ）。
+ *
+ * アクティブな中央キャストの instance に対応する実際の真偽
+ * （setup.centerAoE.<instance>.sandagaTruth/blizzagaTruth ほか）を読む。
+ * 単発サンダガ時は上リングのみ / 単発ブリザガ時は下リングのみを表示する。
+ * いずれもアクティブでない（center==null）ときは直近の GC1 を既定表示。
+ * ※ ハードコードの「偽(うそ)」固定ではなく、必ず実データを反映する（バグ修正）。
+ */
 function drawCenterTruthRings(
   ctx: CanvasRenderingContext2D,
   bx: number,
   by: number,
   setup: SimSetup,
-  center: CenterKey | null,
+  center: CenterCast | null,
 ) {
-  const g =
-    center === "centerGc2"
-      ? setup.centerAoE.gc2
-      : setup.centerAoE.gc1; // 既定/GC1 表示。
-  // 上=サンダガ（紫系）、下=ブリザガ（青系）。
-  drawTruthEllipse(
-    ctx,
-    bx,
-    by - 25,
-    "rgba(138, 43, 226, 0.4)",
-    "#bf55ec",
-    g.sandagaTruth === "shin",
-  );
-  drawTruthEllipse(
-    ctx,
-    bx,
-    by + 45,
-    "rgba(0, 180, 216, 0.4)",
-    "#00b4d8",
-    g.blizzagaTruth === "shin",
-  );
+  const instance = center?.instance ?? "gc1";
+  const t = centerTruths(setup, instance);
+  // 上=サンダガ（紫系）。該当面があるときのみ描く。
+  if (t.sandaga !== null) {
+    drawTruthEllipse(ctx, bx, by - 25, "rgba(138, 43, 226, 0.4)", "#bf55ec", t.sandaga);
+  }
+  // 下=ブリザガ（青系）。
+  if (t.blizzaga !== null) {
+    drawTruthEllipse(ctx, bx, by + 45, "rgba(0, 180, 216, 0.4)", "#00b4d8", t.blizzaga);
+  }
 }
 
 /** 外周ボスの真偽リング（参照 sub-boss）。 */

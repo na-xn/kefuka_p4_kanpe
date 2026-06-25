@@ -110,6 +110,9 @@ describe("simSchedule", () => {
       centerAoE: {
         gc1: { sandagaTruth: "shin", blizzagaTruth: "shin", thunderPattern: 0, blizzardPattern: 0 },
         gc2: { sandagaTruth: "shin", blizzagaTruth: "shin", thunderPattern: 0, blizzardPattern: 0 },
+        gc3: { sandagaTruth: "shin", blizzagaTruth: "shin", thunderPattern: 0, blizzardPattern: 0 },
+        sandaga: { truth: "shin", thunderPattern: 0 },
+        blizzaga: { truth: "shin", blizzardPattern: 0 },
       },
       players: [
         { seat: 0, gc1Role: "mizu", gc2Role: "shisen", gc3Role: "aragan", gc3Scar: "seija" },
@@ -144,6 +147,9 @@ describe("simSchedule", () => {
       centerAoE: {
         gc1: { sandagaTruth: "shin", blizzagaTruth: "shin", thunderPattern: 0, blizzardPattern: 0 },
         gc2: { sandagaTruth: "shin", blizzagaTruth: "shin", thunderPattern: 0, blizzardPattern: 0 },
+        gc3: { sandagaTruth: "shin", blizzagaTruth: "shin", thunderPattern: 0, blizzardPattern: 0 },
+        sandaga: { truth: "shin", thunderPattern: 0 },
+        blizzaga: { truth: "shin", blizzardPattern: 0 },
       },
       players: [
         { seat: 0, gc1Role: "mizu", gc2Role: "shisen", gc3Role: "aragan", gc3Scar: "seija" },
@@ -188,6 +194,9 @@ describe("simSchedule", () => {
       centerAoE: {
         gc1: { sandagaTruth: "shin", blizzagaTruth: "shin", thunderPattern: 0, blizzardPattern: 0 },
         gc2: { sandagaTruth: "shin", blizzagaTruth: "shin", thunderPattern: 0, blizzardPattern: 0 },
+        gc3: { sandagaTruth: "shin", blizzagaTruth: "shin", thunderPattern: 0, blizzardPattern: 0 },
+        sandaga: { truth: "shin", thunderPattern: 0 },
+        blizzaga: { truth: "shin", blizzardPattern: 0 },
       },
       players: [
         { seat: 0, gc1Role: "shisen", gc2Role: "mizu", gc3Role: "aragan", gc3Scar: "seija" },
@@ -239,6 +248,9 @@ describe("simSchedule", () => {
       centerAoE: {
         gc1: { sandagaTruth: "shin", blizzagaTruth: "shin", thunderPattern: 0, blizzardPattern: 0 },
         gc2: { sandagaTruth: "shin", blizzagaTruth: "shin", thunderPattern: 0, blizzardPattern: 0 },
+        gc3: { sandagaTruth: "shin", blizzagaTruth: "shin", thunderPattern: 0, blizzardPattern: 0 },
+        sandaga: { truth: "shin", thunderPattern: 0 },
+        blizzaga: { truth: "shin", blizzardPattern: 0 },
       },
       players: [
         { seat: 0, gc1Role: "mushoku", gc2Role: "mizu", gc3Role: "aragan", gc3Scar: "seija" },

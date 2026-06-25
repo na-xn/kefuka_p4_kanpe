@@ -78,6 +78,23 @@ export type SimSetup = {
       thunderPattern: number;
       blizzardPattern: number;
     };
+    /** 3回目の中央グランドクロス（t=28 解決）。 */
+    gc3: {
+      sandagaTruth: Truth;
+      blizzagaTruth: Truth;
+      thunderPattern: number;
+      blizzardPattern: number;
+    };
+    /** mid-fight 単発の中央サンダガ（雷十字, t=53→57 解決）。 */
+    sandaga: {
+      truth: Truth;
+      thunderPattern: number;
+    };
+    /** mid-fight 単発の中央ブリザガ（象限, t=70→74 解決）。 */
+    blizzaga: {
+      truth: Truth;
+      blizzardPattern: number;
+    };
   };
   /** 8人分の割当（seat 0..7）。 */
   players: PlayerAssignment[];
@@ -210,6 +227,24 @@ export function generateSim(rng: () => number = Math.random): SimSetup {
       sandagaTruth: randTruth(rng),
       blizzagaTruth: randTruth(rng),
       thunderPattern: Math.floor(rng() * 4),
+      blizzardPattern: Math.floor(rng() * 2),
+    },
+    // GC3（3回目の中央グランドクロス, t=28 解決）。決定性を崩さないため
+    // gc1/gc2 の rng() 呼び出しの「後」に同順で追加する。
+    gc3: {
+      sandagaTruth: randTruth(rng),
+      blizzagaTruth: randTruth(rng),
+      thunderPattern: Math.floor(rng() * 4),
+      blizzardPattern: Math.floor(rng() * 2),
+    },
+    // mid-fight 単発の中央サンダガ（雷十字, t=53→57）。参照 thunderga_Gimmick。
+    sandaga: {
+      truth: randTruth(rng),
+      thunderPattern: Math.floor(rng() * 4),
+    },
+    // mid-fight 単発の中央ブリザガ（象限, t=70→74）。参照 blizzaga_Gimmick。
+    blizzaga: {
+      truth: randTruth(rng),
       blizzardPattern: Math.floor(rng() * 2),
     },
   };

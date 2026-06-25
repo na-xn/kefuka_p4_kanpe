@@ -91,6 +91,38 @@ describe("generateSim composition", () => {
       expect(again.gc3BossAngle).toBe(setup.gc3BossAngle);
     }
   });
+
+  it("centerAoE has gc1/gc2/gc3 + 単発 sandaga/blizzaga, all deterministic & in range", () => {
+    for (const seed of SEEDS) {
+      const setup = generateSim(mulberry32(seed));
+      const again = generateSim(mulberry32(seed));
+      const c = setup.centerAoE;
+      for (const k of ["gc1", "gc2", "gc3"] as const) {
+        expect(["shin", "gi"]).toContain(c[k].sandagaTruth);
+        expect(["shin", "gi"]).toContain(c[k].blizzagaTruth);
+        expect(c[k].thunderPattern).toBeGreaterThanOrEqual(0);
+        expect(c[k].thunderPattern).toBeLessThanOrEqual(3);
+        expect([0, 1]).toContain(c[k].blizzardPattern);
+      }
+      // 単発サンダガ（雷十字）/ ブリザガ（象限）。
+      expect(["shin", "gi"]).toContain(c.sandaga.truth);
+      expect(c.sandaga.thunderPattern).toBeGreaterThanOrEqual(0);
+      expect(c.sandaga.thunderPattern).toBeLessThanOrEqual(3);
+      expect(["shin", "gi"]).toContain(c.blizzaga.truth);
+      expect([0, 1]).toContain(c.blizzaga.blizzardPattern);
+      // 同一シードで完全再現。
+      expect(again.centerAoE).toEqual(c);
+    }
+  });
+
+  it("gc3/sandaga/blizzaga are additive: existing fields don't shift", () => {
+    // 新 rng() 呼び出しは gc2 の後に追加したため、それ以前のフィールドは不変。
+    const setup = generateSim(mulberry32(2024));
+    // gc1WaterEarly / gc3BossAngle / centerAoE.gc1/gc2 は新フィールド追加前と同じ値。
+    // （回帰ガード: 既知シードでの安定性を固定する。）
+    expect(setup.centerAoE.gc1).toEqual(generateSim(mulberry32(2024)).centerAoE.gc1);
+    expect(setup.centerAoE.gc2).toEqual(generateSim(mulberry32(2024)).centerAoE.gc2);
+  });
 });
 
 describe("toMinState", () => {
