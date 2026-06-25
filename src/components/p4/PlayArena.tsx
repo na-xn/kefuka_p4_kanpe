@@ -18,11 +18,11 @@ import {
   evaluate,
   centerAoeSafeGeometry,
   MECHANIC_SEC,
-  WAVE_DETONATE_DELAY,
   END_SEC,
   mechanicResolveSec,
   exdeathZones,
-  evaluateRoleWater,
+  roleCardinalPoint,
+  ZONE_RADIUS,
   type MechanicKey,
   type Point,
   type RequiredAction,
@@ -79,6 +79,13 @@ const MECH_NAME: Record<MechanicKey, string> = {
 
 /** 機構の解決前リードイン秒（事前にターゲットを描画して予告する）。 */
 const LEAD_IN = 8;
+
+/**
+ * つなみ/ほのお AoE の「着弾フラッシュ」表示秒。
+ * 設置→起爆の間は AoE 形状を一切描かず（テレグラフしない）、
+ * 起爆秒（mechanicResolveSec）から AOE_FLASH_DURATION 秒だけ短く点滅表示する。
+ */
+const AOE_FLASH_DURATION = 0.5;
 
 /* ============================================================
  * デバフアイコン定義（席視点の保有デバフ）
@@ -519,30 +526,20 @@ export function PlayArena({ setup, seat = 0, startAt, onResult, onNewTopic }: Pr
           // 1回目（早 t=51）の水雷/フィラー処理はエクスデス方向を北として散会基準を回す。
           // 2回目（遅 t=74）は固定マーカー（標準 ZONES）。
           const zones = key === "early" ? exdeathZones(setup.gc3BossAngle) : ZONES;
-          let r: { ok: boolean; reason: string };
-          if (req.kind === "stack" || req.kind === "filler" || req.kind === "spread") {
-            // ロール別の単一カーディナル判定（A=北/B=東/C=南/D=西）。
-            const isStack = req.kind !== "spread";
-            r = evaluateRoleWater(playerRole, isStack, { x: pl.x, y: pl.y }, zones);
-            // 同 env スロットで加速弾(止/動)が水雷に合体しているなら、位置に加えて移動も判定。
-            // 位置か移動のどちらかが誤りなら不合格（カンペ buildTimeline の「頭割り・止まる」等）。
-            if (r.ok && req.move) {
-              if (req.move === "stop" && moving)
-                r = { ok: false, reason: "加速度爆弾: 止まっていない！" };
-              else if (req.move === "move" && !moving)
-                r = { ok: false, reason: "加速度爆弾: 動いていない！" };
-            }
-          } else {
-            r = evaluate(
-              req,
-              { x: pl.x, y: pl.y },
-              { x: pl.lastDx, y: pl.lastDy },
-              moving,
-              aoeOrigin.current[key],
-              boss,
-              zones,
-            );
-          }
+          // 水雷/フィラー(stack/filler/spread)は evaluate に席ロールを渡し、
+          // ロール別の単一カーディナル(TH=A/D, DPS=C/B)で判定する。
+          // ロールを渡すことで「頭割りは h12 でも h6 でも合格」という旧来のロール非依存
+          // 判定（DPS が TH カーディナルに立っても通る本バグ）を確実に排除する。
+          const r = evaluate(
+            req,
+            { x: pl.x, y: pl.y },
+            { x: pl.lastDx, y: pl.lastDy },
+            moving,
+            aoeOrigin.current[key],
+            boss,
+            zones,
+            playerRole,
+          );
           const res: PlayResult = { key, ok: r.ok, reason: r.reason, label: req.label };
           setResults((prev) => ({ ...prev, [key]: res }));
           onResult?.(res);
@@ -759,17 +756,24 @@ function draw(
   // 視線はその足元から全方向に発射される。視線担当でなければ中央ボスが源。
   const isGazeSource = toMinState(setup, seat).shisen === "yes";
   const gazeSource: Point = isGazeSource ? { x: pl.x, y: pl.y } : CENTER;
+  // 席のロール（TH/DPS）。頭割り/散開の正解カーディナルハイライトに使う。
+  const playerRole = setup.players.find((p) => p.seat === seat)?.role ?? "TH";
   for (const key of MECH_ORDER) {
     const sec = MECHANIC_SEC[key];
     const req = requiredAction(setup, seat, key);
     if (req.kind === "aoe") {
-      // つなみ/ほのお: 参照どおり「設置(sec)→起爆(sec+3)」の間だけ AoE 予告を出す。
-      // 設置前は足元位置が未確定なので何も描かない（正解の置き場所を先出ししない）。
-      if (elapsed < sec || elapsed > sec + WAVE_DETONATE_DELAY + 1.5) continue;
+      // つなみ/ほのお: テレグラフはしない（設置→起爆の間は AoE 形状を描かない）。
+      // 着弾（起爆）の瞬間だけ短くフラッシュ表示する。
+      // 起爆・死亡判定は mechanicResolveSec(key)=設置秒+WAVE_DETONATE_DELAY。
+      // 描画ウィンドウ = [resolveSec, resolveSec + AOE_FLASH_DURATION]。
+      const resolveSec = mechanicResolveSec(key);
+      if (elapsed < resolveSec || elapsed > resolveSec + AOE_FLASH_DURATION) continue;
     } else {
       if (elapsed < sec - LEAD_IN || elapsed > sec + 1.5) continue;
     }
-    drawTarget(ctx, req, key, setup, origins, gazeSource);
+    // 1回目（早 t=51）の水雷/フィラーはエクスデス北フレーム、2回目（遅 t=74）は固定 ZONES。
+    const zones = key === "early" ? exdeathZones(setup.gc3BossAngle) : ZONES;
+    drawTarget(ctx, req, key, setup, origins, gazeSource, playerRole, zones);
   }
 
   // --- ボス（中央 + 外周2体）+ キャストバー + 真偽インジケータ ---
@@ -1098,18 +1102,41 @@ function drawTarget(
   origins: Partial<Record<MechanicKey, Point>>,
   /** 視線（魔眼）の発射源。視線担当席なら席本人の足元、そうでなければ中央ボス。 */
   gazeSource: Point = CENTER,
+  /** 席のロール（TH/DPS）。頭割り/散開の正解カーディナルハイライトに使う。 */
+  playerRole: "TH" | "DPS" = "TH",
+  /** 位置ゾーン中心（早=exdeathZones / 遅=ZONES）。正解カーディナル算出に使う。 */
+  zones: Record<keyof typeof ZONES, Point> = ZONES,
 ) {
   const danger = "rgba(255,69,0,0.30)";
   const dangerEdge = "#ff4500";
 
   switch (req.kind) {
-    // 練習: 散開(散会)/頭割り/フィラーの「正解の安全ゾーン」は表示しない。
-    // プレイヤー自身が ABCD ウェイマークを手掛かりに正しい位置を判断する。
-    // （参照では正解ハイライトを出さない。デバフ + 解決が来ること自体は他 UI で示す。）
+    // 頭割り(stack/filler)/散開(spread) の「正解の安全ゾーン」を一時的に表示する。
+    // （位置確認のため再有効化: 席ロールの単一カーディナル TH=A/D・DPS=C/B をハイライト。）
+    // 早(t=51)は exdeathZones、遅(t=74)は固定 ZONES に基づく正解点に円を描く。
     case "stack":
     case "filler":
-    case "spread":
+    case "spread": {
+      const isStack = req.kind !== "spread";
+      const target = roleCardinalPoint(playerRole, isStack, zones);
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(target.x, target.y, ZONE_RADIUS, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(0,224,192,0.18)";
+      ctx.fill();
+      ctx.lineWidth = 3;
+      ctx.setLineDash([10, 6]);
+      ctx.strokeStyle = "rgba(0,224,192,0.85)";
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // 中心マーカー。
+      ctx.beginPath();
+      ctx.arc(target.x, target.y, 6, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(0,224,192,0.95)";
+      ctx.fill();
+      ctx.restore();
       break;
+    }
     case "aoe": {
       const o = origins[key] ?? CENTER;
       ctx.save();

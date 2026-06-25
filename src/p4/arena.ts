@@ -604,22 +604,39 @@ export function evaluate(
    * 1回目（早 t=51）の水雷処理では exdeathZones(gc3BossAngle) を渡してエクスデス北で判定する。
    */
   zones: Record<ZoneKey, Point> = ZONES,
+  /**
+   * 席のロール（TH/DPS）。stack/filler/spread の水雷/フィラー位置判定は
+   * ロール別の単一カーディナル（TH 頭割り=A(h12)/散開=D(h9)・DPS 頭割り=C(h6)/散開=B(h3)）で行う。
+   * これを指定しないと「頭割りは h12 でも h6 でも合格」という旧来のロール非依存判定になり、
+   * DPS が TH カーディナルに立っても通ってしまう（本バグの原因）。指定すれば必ずロール別判定。
+   */
+  role?: "TH" | "DPS",
 ): { ok: boolean; reason: string } {
   switch (req.kind) {
     case "none":
       return { ok: true, reason: "" };
     case "stack":
-    case "filler": {
+    case "filler":
+    case "spread": {
+      // ロール指定時は必ずロール別カーディナル判定（TH/DPS で立つ場所が違う）。
+      if (role) {
+        const isStack = req.kind !== "spread";
+        const rw = evaluateRoleWater(role, isStack, p, zones);
+        if (!rw.ok) return rw;
+        return evaluateMove(req, moving);
+      }
+      // ロール非指定（旧来のテスト互換）: ロール非依存の寛容判定。
+      if (req.kind === "spread") {
+        if (!inZoneAt(p, zones.h3) && !inZoneAt(p, zones.h9))
+          return { ok: false, reason: "散開位置（3時/9時）から外れています" };
+        return evaluateMove(req, moving);
+      }
       if (!inZoneAt(p, zones.h12) && !inZoneAt(p, zones.h6))
         return { ok: false, reason: "頭割り位置（12時/6時）から外れています" };
       if (inZoneAt(p, zones.h3) || inZoneAt(p, zones.h9))
         return { ok: false, reason: "頭割りタイミングで 3時/9時 に入っています" };
       return evaluateMove(req, moving);
     }
-    case "spread":
-      if (!inZoneAt(p, zones.h3) && !inZoneAt(p, zones.h9))
-        return { ok: false, reason: "散開位置（3時/9時）から外れています" };
-      return evaluateMove(req, moving);
     case "stop":
       if (moving) return { ok: false, reason: "加速度爆弾: 止まっていない！" };
       return { ok: true, reason: "" };

@@ -36,6 +36,7 @@ import {
   roleCardinalPoint,
   evaluateRoleWater,
   type Point,
+  type RequiredAction,
 } from "@/p4/arena";
 import { generateSim, toMinState, type SimSetup } from "@/p4/simulation";
 
@@ -658,5 +659,76 @@ describe("ロール別 水雷/フィラー カーディナル", () => {
     // 固定点で遅は合格、早(回転)は不合格。
     expect(evaluateRoleWater(role, isStack, latePt).ok).toBe(true);
     expect(evaluateRoleWater(role, isStack, latePt, zones).ok).toBe(false);
+  });
+});
+
+describe("evaluate(role): ロール別水雷判定（PlayArena 採点パス回帰）", () => {
+  // ロールを渡さない旧来の寛容判定（互換）。
+  it("ロール未指定: 頭割りは h12/h6 どちらでも合格（旧来のロール非依存）", () => {
+    const stack: RequiredAction = { kind: "stack", label: "頭割り" };
+    expect(evaluate(stack, ZONES.h12, { x: 0, y: -1 }, false).ok).toBe(true);
+    expect(evaluate(stack, ZONES.h6, { x: 0, y: -1 }, false).ok).toBe(true);
+  });
+
+  // ロール指定: TH/DPS で立つ場所が必ず分かれる（本バグの修正点）。
+  it("TH: 頭割りは A(h12) のみ合格・DPS の C(h6) では不合格", () => {
+    const stack: RequiredAction = { kind: "stack", label: "頭割り" };
+    expect(evaluate(stack, ZONES.h12, { x: 0, y: -1 }, false, undefined, undefined, ZONES, "TH").ok).toBe(true);
+    expect(evaluate(stack, ZONES.h6, { x: 0, y: -1 }, false, undefined, undefined, ZONES, "TH").ok).toBe(false);
+  });
+
+  it("DPS: 頭割りは C(h6) のみ合格・TH の A(h12) では不合格（=報告バグ）", () => {
+    const stack: RequiredAction = { kind: "stack", label: "頭割り" };
+    // 報告バグの再現と封じ込め: DPS が TH 水雷位置(h12)に立っても合格しない。
+    expect(evaluate(stack, ZONES.h12, { x: 0, y: -1 }, false, undefined, undefined, ZONES, "DPS").ok).toBe(false);
+    expect(evaluate(stack, ZONES.h6, { x: 0, y: -1 }, false, undefined, undefined, ZONES, "DPS").ok).toBe(true);
+  });
+
+  it("filler(頭割り集合) もロール別に分かれる", () => {
+    const filler: RequiredAction = { kind: "filler", label: "頭割り（集合）" };
+    expect(evaluate(filler, ZONES.h6, { x: 0, y: -1 }, false, undefined, undefined, ZONES, "DPS").ok).toBe(true);
+    expect(evaluate(filler, ZONES.h12, { x: 0, y: -1 }, false, undefined, undefined, ZONES, "DPS").ok).toBe(false);
+  });
+
+  it("spread もロール別: TH=D(h9) / DPS=B(h3)", () => {
+    const spread: RequiredAction = { kind: "spread", label: "散開" };
+    expect(evaluate(spread, ZONES.h9, { x: 0, y: -1 }, false, undefined, undefined, ZONES, "TH").ok).toBe(true);
+    expect(evaluate(spread, ZONES.h3, { x: 0, y: -1 }, false, undefined, undefined, ZONES, "TH").ok).toBe(false);
+    expect(evaluate(spread, ZONES.h3, { x: 0, y: -1 }, false, undefined, undefined, ZONES, "DPS").ok).toBe(true);
+    expect(evaluate(spread, ZONES.h9, { x: 0, y: -1 }, false, undefined, undefined, ZONES, "DPS").ok).toBe(false);
+  });
+
+  it("ロール別 + 加速弾合体(req.move): 位置が正しくても止/動が誤りなら不合格", () => {
+    const stackMove: RequiredAction = { kind: "stack", label: "頭割り・止まる", move: "stop" };
+    // DPS が C(h6) に正しく立っていても、移動中(moving=true)なら停止要求に不合格。
+    expect(evaluate(stackMove, ZONES.h6, { x: 0, y: -1 }, true, undefined, undefined, ZONES, "DPS").ok).toBe(false);
+    expect(evaluate(stackMove, ZONES.h6, { x: 0, y: -1 }, false, undefined, undefined, ZONES, "DPS").ok).toBe(true);
+  });
+
+  // PlayArena の採点パスを忠実に再現: requiredAction → evaluate(zones, role)。
+  // TH(席0) / DPS(席4) × 早(exdeathZones)/遅(ZONES) で、自ロール正解は合格・他ロールは不合格。
+  it("PlayArena 採点パス: 席0=TH / 席4=DPS が自ロール正解のみ合格（早/遅とも）", () => {
+    const stillDir = { x: 0, y: -1 };
+    for (let s = 0; s < 30; s++) {
+      const setup = generateSim(mulberry32(s + 1));
+      for (const seat of [0, 4] as const) {
+        const myRole = setup.players.find((p) => p.seat === seat)!.role;
+        const otherRole = myRole === "TH" ? "DPS" : "TH";
+        for (const key of ["early", "late"] as const) {
+          const req = requiredAction(setup, seat, key);
+          if (req.kind !== "stack" && req.kind !== "filler" && req.kind !== "spread") continue;
+          const isStack = req.kind !== "spread";
+          const zones = key === "early" ? exdeathZones(setup.gc3BossAngle) : ZONES;
+          const myPt = roleCardinalPoint(myRole, isStack, zones);
+          const otherPt = roleCardinalPoint(otherRole, isStack, zones);
+          // 加速弾が合体しているなら移動要求を満たす moving を選ぶ（"move"→true / "stop"→false）。
+          const moving = req.move === "move";
+          // 自ロール正解カーディナル + 正しい移動状態では合格。
+          expect(evaluate(req, myPt, stillDir, moving, undefined, undefined, zones, myRole).ok).toBe(true);
+          // 他ロールのカーディナルでは不合格（DPS が TH 水雷位置に立っても通らない）。
+          expect(evaluate(req, otherPt, stillDir, moving, undefined, undefined, zones, myRole).ok).toBe(false);
+        }
+      }
+    }
   });
 });
