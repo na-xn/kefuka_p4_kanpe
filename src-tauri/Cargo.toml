@@ -1,6 +1,6 @@
 [package]
 name = "p4-kanpe"
-version = "0.9.9"
+version = "0.10.0"
 description = "絶妖星乱舞 P4 真偽判定カンペ"
 authors = ["you"]
 edition = "2021"
