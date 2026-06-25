@@ -964,13 +964,15 @@ function drawBosses(
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    // 真偽インジケータ。
+    // 真偽インジケータ。中央は中央AoEの真偽、外周は「いま詠唱している機構」の真偽。
     if (index === 0) {
       drawCenterTruthRings(ctx, boss.x, boss.y, setup, center, elapsed);
     } else {
-      // 外周ボス: GC1/GC2 真偽（参照 sub-boss currentEffect）。
-      const truth: Truth = index === 1 ? setup.gc1Truth : setup.gc2Truth;
-      drawSubBossRing(ctx, boss.x, boss.y, truth);
+      // 外周ボス: 現在の詠唱に対応する真偽（デバフバッジと一致させる）。
+      //   8時(index1, つなみ/ほのお): [4,12)=wave1Truth / [16,24)=wave2Truth。
+      //   4時(index2, グランドクロス): [0,8)=gc1Truth / [12,20)=gc2Truth（GC3 は色真偽なし）。
+      const truth = subBossTruth(setup, elapsed, index as 1 | 2);
+      if (truth) drawSubBossRing(ctx, boss.x, boss.y, truth);
     }
 
     // キャストバー（名前ラベル付き）。
@@ -1058,6 +1060,23 @@ function drawCenterTruthRings(
 /** 外周ボスの真偽リング（参照 sub-boss）。 */
 function drawSubBossRing(ctx: CanvasRenderingContext2D, bx: number, by: number, truth: Truth) {
   drawTruthEllipse(ctx, bx, by, "rgba(0, 180, 216, 0.35)", "#00f5d4", truth === "shin");
+}
+
+/**
+ * 外周ボスが「いま詠唱している機構」の真偽。詠唱中以外は null。
+ * デバフバッジ（setup 由来）と完全に一致させ、ボス表示の食い違いをなくす。
+ *  - index1（8時 つなみ/ほのお）: 詠唱 [4,12)=wave1Truth / [16,24)=wave2Truth。
+ *  - index2（4時 グランドクロス）: 詠唱 [0,8)=gc1Truth / [12,20)=gc2Truth（GC3 は色真偽なし→null）。
+ */
+function subBossTruth(setup: SimSetup, elapsed: number, index: 1 | 2): Truth | null {
+  if (index === 1) {
+    if (elapsed >= 4 && elapsed < 12) return setup.wave1Truth;
+    if (elapsed >= 16 && elapsed < 24) return setup.wave2Truth;
+    return null;
+  }
+  if (elapsed >= 0 && elapsed < 8) return setup.gc1Truth;
+  if (elapsed >= 12 && elapsed < 20) return setup.gc2Truth;
+  return null;
 }
 
 /** ある機構の「正しい場所/形」を半透明で予告描画。 */
