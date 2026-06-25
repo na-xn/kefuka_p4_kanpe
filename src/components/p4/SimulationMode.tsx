@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import {
   Play,
   RotateCcw,
@@ -226,6 +226,94 @@ function SoloKindPicker({
   );
 }
 
+/** 操作プレイの共有レイアウト（アリーナ＋カンペ入力＋導出タイムライン）。ソロ/セッション共通。 */
+function PlayLayout({
+  arena,
+  minState,
+  setMin,
+  topControl,
+}: {
+  arena: ReactNode;
+  minState: MinState;
+  setMin: (id: string, v: string) => void;
+  topControl?: ReactNode;
+}) {
+  // PC: アリーナとカンペ入力の比率（アリーナ %）をドラッグ仕切りで調整。
+  const isWide = useIsWide();
+  const rowRef = useRef<HTMLDivElement | null>(null);
+  const pctRef = useRef(62);
+  const dragging = useRef(false);
+  const [arenaPct, setArenaPct] = useState(() => {
+    const v = Number(localStorage.getItem("playArenaPct"));
+    const pct = v >= 30 && v <= 85 ? v : 62;
+    pctRef.current = pct;
+    return pct;
+  });
+  const onSplitDown = (e: React.PointerEvent) => {
+    dragging.current = true;
+    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+  };
+  const onSplitMove = (e: React.PointerEvent) => {
+    if (!dragging.current || !rowRef.current) return;
+    const rect = rowRef.current.getBoundingClientRect();
+    const pct = Math.max(30, Math.min(85, ((e.clientX - rect.left) / rect.width) * 100));
+    pctRef.current = pct;
+    setArenaPct(pct);
+  };
+  const onSplitUp = () => {
+    if (!dragging.current) return;
+    dragging.current = false;
+    try {
+      localStorage.setItem("playArenaPct", String(Math.round(pctRef.current)));
+    } catch {
+      // ignore
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-2">
+      {topControl && <div className="flex justify-end">{topControl}</div>}
+      {isWide ? (
+        <>
+          {/* PC: アリーナ｜ドラッグ仕切り｜カンペ入力（比率可変）。導出タイムラインは下部全幅。 */}
+          <div ref={rowRef} className="flex items-stretch">
+            <div className="min-w-0" style={{ width: `${arenaPct}%` }}>
+              {arena}
+            </div>
+            <div
+              onPointerDown={onSplitDown}
+              onPointerMove={onSplitMove}
+              onPointerUp={onSplitUp}
+              title="ドラッグでアリーナとカンペの比率を調整"
+              className="mx-1 w-1.5 shrink-0 cursor-col-resize self-stretch rounded bg-border transition-colors hover:bg-primary"
+            />
+            <div className="min-w-0 overflow-hidden" style={{ width: `${100 - arenaPct}%` }}>
+              <p className="px-0.5 pb-1 text-[10px] font-semibold text-muted-foreground">
+                カンペ入力（デバフが付いたら入力）
+              </p>
+              <MinimumMode view="input" value={minState} set={setMin} />
+            </div>
+          </div>
+          <div className="border-t pt-2">
+            <MinimumMode view="timeline" value={minState} set={setMin} />
+          </div>
+        </>
+      ) : (
+        <>
+          {/* モバイル: アリーナの下にカンペ（入力＋導出タイムライン＝従来の下部全表示）。 */}
+          {arena}
+          <div className="border-t pt-2">
+            <p className="px-0.5 pb-1 text-[10px] font-semibold text-muted-foreground">
+              カンペ入力（デバフが付いたら入力）
+            </p>
+            <MinimumMode view="full" value={minState} set={setMin} />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 /** ソロ・操作プレイ: 円形アリーナでドットを動かして機構を処理する。 */
 function PlayRunner({ seat }: { seat: number }) {
   // 操作プレイ中はキー操作のためフォーカス可能にする（デスクトップ）。
@@ -264,37 +352,6 @@ function PlayRunner({ seat }: { seat: number }) {
       return next;
     });
 
-  // PC: アリーナとカンペ入力の比率（アリーナ %）をドラッグ仕切りで調整。
-  const isWide = useIsWide();
-  const rowRef = useRef<HTMLDivElement | null>(null);
-  const pctRef = useRef(62);
-  const dragging = useRef(false);
-  const [arenaPct, setArenaPct] = useState(() => {
-    const v = Number(localStorage.getItem("playArenaPct"));
-    const pct = v >= 30 && v <= 85 ? v : 62;
-    pctRef.current = pct;
-    return pct;
-  });
-  const onSplitDown = (e: React.PointerEvent) => {
-    dragging.current = true;
-    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
-  };
-  const onSplitMove = (e: React.PointerEvent) => {
-    if (!dragging.current || !rowRef.current) return;
-    const rect = rowRef.current.getBoundingClientRect();
-    const pct = Math.max(30, Math.min(85, ((e.clientX - rect.left) / rect.width) * 100));
-    pctRef.current = pct;
-    setArenaPct(pct);
-  };
-  const onSplitUp = () => {
-    if (!dragging.current) return;
-    dragging.current = false;
-    try {
-      localStorage.setItem("playArenaPct", String(Math.round(pctRef.current)));
-    } catch {
-      // ignore
-    }
-  };
   const setMin = (id: string, v: string) =>
     setMinState((s) => ({ ...s, [id]: v }));
 
@@ -317,54 +374,22 @@ function PlayRunner({ seat }: { seat: number }) {
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex justify-end gap-2">
-        <Button variant={hideNpc ? "default" : "secondary"} size="xs" onClick={toggleHideNpc}>
-          {hideNpc ? <EyeOff className="size-3.5" /> : <Users className="size-3.5" />}
-          NPC{hideNpc ? "表示" : "非表示"}
-        </Button>
-        <Button variant="default" size="xs" onClick={start}>
-          <RotateCcw /> 新しいお題
-        </Button>
-      </div>
-      {isWide ? (
-        <>
-          {/* PC: アリーナ｜ドラッグ仕切り｜カンペ入力（比率可変）。導出タイムラインは下部全幅。 */}
-          <div ref={rowRef} className="flex items-stretch">
-            <div className="min-w-0" style={{ width: `${arenaPct}%` }}>
-              <PlayArena setup={setup} seat={seat} startAt={startAt} onNewTopic={start} hideNpc={hideNpc} />
-            </div>
-            <div
-              onPointerDown={onSplitDown}
-              onPointerMove={onSplitMove}
-              onPointerUp={onSplitUp}
-              title="ドラッグでアリーナとカンペの比率を調整"
-              className="mx-1 w-1.5 shrink-0 cursor-col-resize self-stretch rounded bg-border transition-colors hover:bg-primary"
-            />
-            <div className="min-w-0 overflow-hidden" style={{ width: `${100 - arenaPct}%` }}>
-              <p className="px-0.5 pb-1 text-[10px] font-semibold text-muted-foreground">
-                カンペ入力（デバフが付いたら入力）
-              </p>
-              <MinimumMode view="input" value={minState} set={setMin} />
-            </div>
-          </div>
-          <div className="border-t pt-2">
-            <MinimumMode view="timeline" value={minState} set={setMin} />
-          </div>
-        </>
-      ) : (
-        <>
-          {/* モバイル: アリーナの下にカンペ（入力＋導出タイムライン＝従来の下部全表示）。 */}
-          <PlayArena setup={setup} seat={seat} startAt={startAt} onNewTopic={start} />
-          <div className="border-t pt-2">
-            <p className="px-0.5 pb-1 text-[10px] font-semibold text-muted-foreground">
-              カンペ入力（デバフが付いたら入力）
-            </p>
-            <MinimumMode view="full" value={minState} set={setMin} />
-          </div>
-        </>
-      )}
-    </div>
+    <PlayLayout
+      arena={<PlayArena setup={setup} seat={seat} startAt={startAt} onNewTopic={start} hideNpc={hideNpc} />}
+      minState={minState}
+      setMin={setMin}
+      topControl={
+        <div className="flex gap-2">
+          <Button variant={hideNpc ? "default" : "secondary"} size="xs" onClick={toggleHideNpc}>
+            {hideNpc ? <EyeOff className="size-3.5" /> : <Users className="size-3.5" />}
+            NPC{hideNpc ? "表示" : "非表示"}
+          </Button>
+          <Button variant="default" size="xs" onClick={start}>
+            <RotateCcw /> 新しいお題
+          </Button>
+        </div>
+      }
+    />
   );
 }
 
@@ -461,11 +486,16 @@ function SessionRunner() {
   const [sessionKind, setSessionKind] = useState<PlayKind>("kanpe");
   // 参加時に選ぶジョブ枠（tank/healer/dps）。
   const [selectedJob, setSelectedJob] = useState<Job>("dps");
+  // 操作プレイ用のカンペ入力（自分で書き込む）。
+  const [playMin, setPlayMin] = useState<MinState>({ ...INITIAL_MIN });
 
   const changeInputMode = (m: InputMode) => {
     setInputMode(m);
     saveInputMode(m);
   };
+
+  const setPlayMinField = (id: string, v: string) =>
+    setPlayMin((s) => ({ ...s, [id]: v }));
 
   // 他席の実位置（seat → {x,y,fx,fy}）。ミュータブルに更新し PlayArena は毎フレーム参照。
   const posMapRef = useRef<Map<number, { x: number; y: number; fx: number; fy: number }>>(
@@ -482,12 +512,14 @@ function SessionRunner() {
       setPhase("playing");
       setRunKind(kind);
       posMapRef.current.clear();
+      setPlayMin({ ...INITIAL_MIN });
     },
     onReset: () => {
       setSetup(null);
       setStartedAt(null);
       setPhase("idle");
       posMapRef.current.clear();
+      setPlayMin({ ...INITIAL_MIN });
     },
     onPos: ({ seat, x, y, fx, fy }) => {
       posMapRef.current.set(seat, { x, y, fx, fy });
@@ -554,14 +586,27 @@ function SessionRunner() {
     return (
       <div className="flex flex-col gap-2">
         <SessionStatusBar session={session} />
-        <PlayArena
-          setup={setup}
-          seat={seat}
-          startAt={startedAt}
-          remotePositions={posMapRef.current}
-          occupiedSeats={occSet}
-          onLocalPos={throttledSend}
-          onNewTopic={session.isHost ? () => session.sendReset() : undefined}
+        <PlayLayout
+          arena={
+            <PlayArena
+              setup={setup}
+              seat={seat}
+              startAt={startedAt}
+              remotePositions={posMapRef.current}
+              occupiedSeats={occSet}
+              onLocalPos={throttledSend}
+              onNewTopic={session.isHost ? () => session.sendReset() : undefined}
+            />
+          }
+          minState={playMin}
+          setMin={setPlayMinField}
+          topControl={
+            session.isHost ? (
+              <Button variant="default" size="xs" onClick={() => session.sendReset()}>
+                <RotateCcw /> 新しいお題
+              </Button>
+            ) : undefined
+          }
         />
       </div>
     );
