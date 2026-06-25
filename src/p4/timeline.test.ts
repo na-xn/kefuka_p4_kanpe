@@ -136,10 +136,10 @@ describe("buildAnswerTimeline", () => {
     };
   }
 
-  it("先頭行は GC3 行で sec=48", () => {
+  it("先頭行は GC3 行で sec=46", () => {
     const rows = buildAnswerTimeline(makeSetup("aragan"), 0);
     expect(rows[0].key).toBe("gc3");
-    expect(rows[0].sec).toBe(48);
+    expect(rows[0].sec).toBe(46);
   });
 
   it("gc3Role=aragan のとき aragan アイコンと「生きる」テキストを持つ", () => {

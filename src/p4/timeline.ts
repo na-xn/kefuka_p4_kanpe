@@ -179,7 +179,7 @@ export function itemRevealSec(item: Item): number {
 
 /**
  * シミュレーション練習モード用の「処理フェーズ答えタイムライン」の1行。
- * GC3 生者の傷行を先頭に含む（sec=48）。
+ * GC3 生者の傷行を先頭に含む（sec=46）。
  */
 export type AnswerRow = {
   key: string;
@@ -194,7 +194,7 @@ export type AnswerRow = {
 /**
  * 練習モード処理フェーズ全体の答えタイムラインを組み立てる。
  *
- * GC3 行（外周エクスデス → 生者の傷）を sec=48 で先頭に配置し、
+ * GC3 行（外周エクスデス → 生者の傷）を sec=46 で先頭に配置し、
  * 続いて buildTimeline(toMinState(setup, seat)) の各アイテムを
  * itemRevealSec で秒へ変換して結合。sec の昇順（同値は phase 順）でソートして返す。
  */
@@ -208,7 +208,7 @@ export function buildAnswerTimeline(setup: SimSetup, seat: number): AnswerRow[] 
 
   const gc3Row: AnswerRow = {
     key: "gc3",
-    sec: 48,
+    sec: 46,
     icon: gc3Icon,
     text: gc3Text,
   };

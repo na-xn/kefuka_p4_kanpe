@@ -53,7 +53,7 @@ describe("simSchedule", () => {
   it("labels and process threshold", () => {
     expect(truthLabel("shin")).toBe("ほんと");
     expect(truthLabel("gi")).toBe("うそ");
-    expect(PROCESS_AT_SEC).toBe(50);
+    expect(PROCESS_AT_SEC).toBe(44);
   });
 
   it("GC3 row resolveSec is null", () => {

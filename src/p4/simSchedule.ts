@@ -91,8 +91,8 @@ export function truthLabel(t: Truth): string {
   return t === "shin" ? "ほんと" : "うそ";
 }
 
-/** 処理フェーズへ自動遷移する経過秒（1x 基準）。 */
-export const PROCESS_AT_SEC = 50;
+/** 処理フェーズへ自動遷移する経過秒（1x 基準）。GC3(46s)・GC1処理(51s)より前に切替え、まとめ表示を防ぐ。 */
+export const PROCESS_AT_SEC = 44;
 
 /**
  * GC1/GC2 行の resolveSec を計算する。
