@@ -7,7 +7,6 @@ import {
   CENTER,
   ARENA_RADIUS,
   PLAYER_RADIUS,
-  ZONE_RADIUS,
   ZONES,
   AOE_CIRCLE_RADIUS,
   AOE_DONUT_INNER,
@@ -19,6 +18,8 @@ import {
   evaluate,
   centerAoeSafeGeometry,
   MECHANIC_SEC,
+  WAVE_DETONATE_DELAY,
+  mechanicResolveSec,
   type MechanicKey,
   type Point,
   type RequiredAction,
@@ -31,6 +32,7 @@ import {
   castProgress,
   centerResolutions,
   centerTruths,
+  SUB_BOSS_VANISH_SEC,
   type CenterCast,
 } from "@/p4/playTimeline";
 
@@ -231,12 +233,6 @@ function preloadImages(onLoad: () => void) {
  * ========================================================== */
 
 const BOSS_RADIUS = 25;
-/**
- * 外周2体（8時=つなみ/ほのお、4時=グランドクロス）が消える秒。
- * 参照 sim.html: GC3 解決 → assignGimmickDebuffs(3)@32 → VANISHED@34。
- * これ以降は中央ボスのみ残り、最終フェーズの外周エクスデス（分断ボス）に引き継ぐ。
- */
-const SUB_BOSS_VANISH_SEC = 34;
 const CENTER_BOSS = { x: CENTER.x, y: CENTER.y, color: "#9b5de5" };
 const SUB_BOSSES = [
   {
@@ -466,12 +462,15 @@ export function PlayArena({ setup, seat = 0, startAt, onResult }: Props) {
       for (const key of MECH_ORDER) {
         const sec = MECHANIC_SEC[key];
         const req = requiredAction(setup, seat, key);
-        // AoE 原点は「リードイン開始時」のプレイヤー位置（置き予約）。
-        if (req.kind === "aoe" && !aoeOrigin.current[key] && elapsed >= sec - LEAD_IN) {
+        // つなみ/ほのお（AoE）: 参照 processDebuffTrigger に合わせ、デバフ満了の瞬間
+        // （= sec = 設置秒）にプレイヤー位置へ AoE を「設置」する。原点はその瞬間の足元。
+        // 起爆・死亡判定は設置の WAVE_DETONATE_DELAY 秒後（= mechanicResolveSec）。
+        if (req.kind === "aoe" && !aoeOrigin.current[key] && elapsed >= sec) {
           aoeOrigin.current[key] = { x: pl.x, y: pl.y };
         }
-        // 解決秒に未判定なら採点。
-        if (elapsed >= sec && !resultsRef.current[key] && req.kind !== "none") {
+        // 死亡判定秒（つなみ/ほのおは 設置+3、それ以外は sec）に未判定なら採点。
+        const resolveSec = mechanicResolveSec(key);
+        if (elapsed >= resolveSec && !resultsRef.current[key] && req.kind !== "none") {
           const boss = gc3BossPos(setup.gc3BossAngle);
           const r = evaluate(
             req,
@@ -662,8 +661,14 @@ function draw(
   // --- 各機構のリードイン中ターゲット（寛容な予告） ---
   for (const key of MECH_ORDER) {
     const sec = MECHANIC_SEC[key];
-    if (elapsed < sec - LEAD_IN || elapsed > sec + 1.5) continue;
     const req = requiredAction(setup, seat, key);
+    if (req.kind === "aoe") {
+      // つなみ/ほのお: 参照どおり「設置(sec)→起爆(sec+3)」の間だけ AoE 予告を出す。
+      // 設置前は足元位置が未確定なので何も描かない（正解の置き場所を先出ししない）。
+      if (elapsed < sec || elapsed > sec + WAVE_DETONATE_DELAY + 1.5) continue;
+    } else {
+      if (elapsed < sec - LEAD_IN || elapsed > sec + 1.5) continue;
+    }
     drawTarget(ctx, req, key, setup, origins);
   }
 
@@ -856,9 +861,10 @@ function drawBosses(
 ) {
   const bossList = [CENTER_BOSS, ...SUB_BOSSES];
   bossList.forEach((boss, index) => {
-    // 参照 sim.html: GC3 後（wave3 消失）、外周2体は消える（中央のみ残る）。
-    //   if (currentWave === 3 && isSubBossesVanished && index > 0) return;
-    if (index > 0 && elapsed >= SUB_BOSS_VANISH_SEC) return;
+    // 参照 sim.html: 各サブボスは自分の最後の詠唱が終わると個別に消える。
+    //   boss1（index 1, 8時 つなみ/ほのお）= 2回目終了 ~24 / boss2（index 2, 4時 GC）= GC3 終了 ~32。
+    if (index === 1 && elapsed >= SUB_BOSS_VANISH_SEC.outer8) return;
+    if (index === 2 && elapsed >= SUB_BOSS_VANISH_SEC.outer4) return;
     // ボス本体。
     ctx.beginPath();
     ctx.arc(boss.x, boss.y, BOSS_RADIUS, 0, Math.PI * 2);
@@ -870,7 +876,7 @@ function drawBosses(
 
     // 真偽インジケータ。
     if (index === 0) {
-      drawCenterTruthRings(ctx, boss.x, boss.y, setup, center);
+      drawCenterTruthRings(ctx, boss.x, boss.y, setup, center, elapsed);
     } else {
       // 外周ボス: GC1/GC2 真偽（参照 sub-boss currentEffect）。
       const truth: Truth = index === 1 ? setup.gc1Truth : setup.gc2Truth;
@@ -931,8 +937,11 @@ function drawTruthEllipse(
  * アクティブな中央キャストの instance に対応する実際の真偽
  * （setup.centerAoE.<instance>.sandagaTruth/blizzagaTruth ほか）を読む。
  * 単発サンダガ時は上リングのみ / 単発ブリザガ時は下リングのみを表示する。
- * いずれもアクティブでない（center==null）ときは直近の GC1 を既定表示。
- * ※ ハードコードの「偽(うそ)」固定ではなく、必ず実データを反映する（バグ修正）。
+ *
+ * ※ 真偽インジケータは「中央 AoE が詠唱中（テレグラフ中）」のときだけ表示し、
+ *   AoE が発火（解決秒到達）した瞬間にクリアする。アイドル時（中央キャスト無し）や
+ *   解決後の余韻表示中は 真/偽 を出さない。
+ *   → GC3(28) や mid-fight サンダガ(57)/ブリザガ(74) の発火後に「偽」が残らない。
  */
 function drawCenterTruthRings(
   ctx: CanvasRenderingContext2D,
@@ -940,8 +949,11 @@ function drawCenterTruthRings(
   by: number,
   setup: SimSetup,
   center: CenterCast | null,
+  elapsed: number,
 ) {
-  const instance = center?.instance ?? "gc1";
+  // 詠唱中のみ表示。center が無い／既に解決秒に達した（余韻表示）ならクリア。
+  if (!center || elapsed >= center.resolveSec) return;
+  const instance = center.instance;
   const t = centerTruths(setup, instance);
   // 上=サンダガ（紫系）。該当面があるときのみ描く。
   if (t.sandaga !== null) {
@@ -966,30 +978,16 @@ function drawTarget(
   setup: SimSetup,
   origins: Partial<Record<MechanicKey, Point>>,
 ) {
-  const safe = "rgba(78,201,176,0.18)";
-  const safeEdge = "rgba(78,201,176,0.8)";
   const danger = "rgba(255,69,0,0.30)";
   const dangerEdge = "#ff4500";
 
-  const fillZone = (z: Point) => {
-    ctx.beginPath();
-    ctx.arc(z.x, z.y, ZONE_RADIUS, 0, Math.PI * 2);
-    ctx.fillStyle = safe;
-    ctx.fill();
-    ctx.strokeStyle = safeEdge;
-    ctx.lineWidth = 2;
-    ctx.stroke();
-  };
-
   switch (req.kind) {
+    // 練習: 散開(散会)/頭割り/フィラーの「正解の安全ゾーン」は表示しない。
+    // プレイヤー自身が ABCD ウェイマークを手掛かりに正しい位置を判断する。
+    // （参照では正解ハイライトを出さない。デバフ + 解決が来ること自体は他 UI で示す。）
     case "stack":
     case "filler":
-      fillZone(ZONES.h12);
-      fillZone(ZONES.h6);
-      break;
     case "spread":
-      fillZone(ZONES.h3);
-      fillZone(ZONES.h9);
       break;
     case "aoe": {
       const o = origins[key] ?? CENTER;
@@ -1018,13 +1016,16 @@ function drawTarget(
       break;
     }
     case "gc3": {
+      // 分断線（青/ピンクの2面）は「読むべき」機構なので表示するが、
+      // どちらが安全かの正解側ハイライトは出さない（プレイヤーが判断する）。
       const boss = gc3BossPos(setup.gc3BossAngle);
-      drawSplit(ctx, boss, req.color === "PINK" ? "PINK" : "BLUE");
+      drawSplit(ctx, boss);
       break;
     }
     case "look":
     case "hide":
-      drawEyeTelegraph(ctx, req.kind);
+      // 視線（魔眼）が来ること自体は予告するが、見る/見ないの正解は明かさない。
+      drawEyeTelegraph(ctx);
       break;
     case "stop":
     case "move":
@@ -1035,10 +1036,10 @@ function drawTarget(
 }
 
 /**
- * 魔眼（視線）予告: 中央ボスから視線が出ることを示すマーカーと、
- * 「見る／見ない」の指示を中央上部に描く。参照 魔眼 解決（juso1=57 / juso2=79）。
+ * 魔眼（視線）予告: 中央ボスから視線が来ることだけを示す。
+ * 練習なので「見る／見ない」の正解は明かさない（プレイヤーがデバフから判断する）。
  */
-function drawEyeTelegraph(ctx: CanvasRenderingContext2D, kind: "look" | "hide") {
+function drawEyeTelegraph(ctx: CanvasRenderingContext2D) {
   ctx.save();
   // 中央ボスの視線マーカー（赤い眼の輪）。
   ctx.beginPath();
@@ -1051,20 +1052,23 @@ function drawEyeTelegraph(ctx: CanvasRenderingContext2D, kind: "look" | "hide") 
   if (loadedCache.shisen && img) {
     ctx.drawImage(img, CENTER.x - size / 2, CENTER.y - BOSS_RADIUS - 30 - size, size, size);
   }
-  // 指示テキスト。
-  const label = kind === "hide" ? "見ない（背を向ける）" : "見る（向く）";
+  // 「視線」が来ることだけを示す中立ラベル（正解は出さない）。
+  const label = "視線（魔眼）";
   ctx.font = "bold 16px sans-serif";
   ctx.textAlign = "center";
   ctx.lineWidth = 4;
   ctx.strokeStyle = "#000";
   ctx.strokeText(label, CENTER.x, CENTER.y - BOSS_RADIUS - 14);
-  ctx.fillStyle = kind === "hide" ? "#ff9f9f" : "#ffe08a";
+  ctx.fillStyle = "#ffd9a0";
   ctx.fillText(label, CENTER.x, CENTER.y - BOSS_RADIUS - 14);
   ctx.restore();
 }
 
-/** GC3 分断面（参照 drawWave3SplitAoE: ボスへ translate→中心向き rotate、pink=+側 / blue=-側）+ 安全側強調。 */
-function drawSplit(ctx: CanvasRenderingContext2D, boss: Point, safeColor: "PINK" | "BLUE") {
+/**
+ * GC3 分断面（参照 drawWave3SplitAoE: ボスへ translate→中心向き rotate、pink=+側 / blue=-側）。
+ * 練習なので「安全側の強調」は出さない。2面（青/ピンク）と分断線だけを読ませる。
+ */
+function drawSplit(ctx: CanvasRenderingContext2D, boss: Point) {
   const ang = Math.atan2(CENTER.y - boss.y, CENTER.x - boss.x);
   const R = ARENA_RADIUS * 3;
 
@@ -1079,11 +1083,6 @@ function drawSplit(ctx: CanvasRenderingContext2D, boss: Point, safeColor: "PINK"
   ctx.fillRect(0, 0, R, R);
   ctx.fillStyle = "rgba(0, 180, 216, 0.20)";
   ctx.fillRect(0, -R, R, R);
-  // 安全側の強調。
-  ctx.fillStyle =
-    safeColor === "PINK" ? "rgba(255, 105, 180, 0.22)" : "rgba(0, 180, 216, 0.22)";
-  if (safeColor === "PINK") ctx.fillRect(0, 0, R, R);
-  else ctx.fillRect(0, -R, R, R);
   ctx.restore();
 
   // ボスマーカー。

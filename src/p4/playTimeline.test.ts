@@ -5,6 +5,7 @@ import {
   CENTER_BLIZZAGA,
   CENTER_CAST_LEN,
   SPLIT_SEC,
+  SUB_BOSS_VANISH_SEC,
   FINAL_MEMORY_SEC,
   MECHANIC_SEC,
   MECH_ORDER,
@@ -57,6 +58,19 @@ describe("playTimeline schedule constants (参照 sim.html 抽出)", () => {
   it("エクスデス分断 ≈41 / 最終記憶 87", () => {
     expect(SPLIT_SEC).toBe(41);
     expect(FINAL_MEMORY_SEC).toBe(87);
+  });
+  it("外周サブボスは各自の最終キャスト直後に個別退場（8時=24 / 4時=32）", () => {
+    // boss1(8時 つなみ/ほのお): 2回目(wave2[16–24]) 終了で退場。
+    expect(SUB_BOSS_VANISH_SEC.outer8).toBe(24);
+    // boss2(4時 グランドクロス): GC3[24–32] 終了で退場。
+    expect(SUB_BOSS_VANISH_SEC.outer4).toBe(32);
+    // boss1 は boss2 より先に消える（タイミングがずれている＝同時消失でない）。
+    expect(SUB_BOSS_VANISH_SEC.outer8).toBeLessThan(SUB_BOSS_VANISH_SEC.outer4);
+    // 各ボスの退場秒は対応する最終キャスト end と一致。
+    const lastEnd = (boss: string) =>
+      Math.max(...CAST_EVENTS.filter((e) => e.boss === boss).map((e) => e.end));
+    expect(SUB_BOSS_VANISH_SEC.outer8).toBe(lastEnd("outer8"));
+    expect(SUB_BOSS_VANISH_SEC.outer4).toBe(lastEnd("outer4"));
   });
   it("役割機構の解決秒（gc3=41/early=51/juso1=57/honoo=62/late=74/juso2=79/tsunami=84）", () => {
     expect(MECHANIC_SEC).toEqual({

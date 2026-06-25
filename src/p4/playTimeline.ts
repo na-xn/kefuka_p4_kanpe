@@ -197,6 +197,16 @@ export function centerGcCastStart(key: CenterGcKey): number {
   return CENTER_GC_SEC[key] - CENTER_CAST_LEN;
 }
 
+/**
+ * 外周サブボスの退場秒（各ボスの最終キャスト完了直後）。
+ *
+ * 参照 sim.html: 各サブボスは自分の最後の詠唱が終わると個別に退場する。
+ *  - outer8（8時 / つなみ・ほのお）: wave1[4–12]・wave2[16–24] を詠唱 → 2回目終了 ~24 で退場。
+ *  - outer4（4時 / グランドクロス）: GC1[0–8]・GC2[12–20]・GC3[24–32] → GC3 終了 ~32 で退場。
+ * 中央ボス（center）は退場せず残り、最終フェーズの分断ボスへ引き継ぐ。
+ */
+export const SUB_BOSS_VANISH_SEC = { outer8: 24, outer4: 32 } as const;
+
 /** wave3 分断（エクスデス）の解決秒。 */
 export const SPLIT_SEC = 41;
 /** 分断ボス詠唱の長さ（参照 wave3BossB.duration=5000）。 */

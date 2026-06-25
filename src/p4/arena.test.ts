@@ -21,6 +21,10 @@ import {
   centerAoeSafe,
   centerAoeSafeGeometry,
   THUNDER_STRIP_W,
+  MECHANIC_SEC,
+  WAVE_DETONATE_DELAY,
+  mechanicPlaceSec,
+  mechanicResolveSec,
   type Point,
 } from "@/p4/arena";
 import { generateSim, type SimSetup } from "@/p4/simulation";
@@ -381,5 +385,32 @@ describe("center AoE geometry (サンダガ/ブリザガ)", () => {
       blizzagaShin: false,
     };
     expect(centerAoeSafeGeometry(p, params, "cross")).toBe(centerAoeSafe(p, params));
+  });
+});
+
+describe("つなみ/ほのお 設置→起爆タイミング（参照 processDebuffTrigger +3000ms）", () => {
+  it("起爆遅延は 3 秒", () => {
+    expect(WAVE_DETONATE_DELAY).toBe(3);
+  });
+
+  it("設置秒はデバフ満了秒（ほのお=62 / つなみ=84）", () => {
+    expect(mechanicPlaceSec("honoo")).toBe(62);
+    expect(mechanicPlaceSec("tsunami")).toBe(84);
+    expect(mechanicPlaceSec("honoo")).toBe(MECHANIC_SEC.honoo);
+    expect(mechanicPlaceSec("tsunami")).toBe(MECHANIC_SEC.tsunami);
+  });
+
+  it("死亡判定秒は 設置+3（ほのお=65 / つなみ=87）", () => {
+    expect(mechanicResolveSec("honoo")).toBe(65);
+    expect(mechanicResolveSec("tsunami")).toBe(87);
+    expect(mechanicResolveSec("honoo")).toBe(MECHANIC_SEC.honoo + WAVE_DETONATE_DELAY);
+    expect(mechanicResolveSec("tsunami")).toBe(MECHANIC_SEC.tsunami + WAVE_DETONATE_DELAY);
+  });
+
+  it("波以外の機構は 設置=判定（即時、遅延なし）", () => {
+    for (const k of ["gc3", "early", "juso1", "late", "juso2"] as const) {
+      expect(mechanicPlaceSec(k)).toBe(MECHANIC_SEC[k]);
+      expect(mechanicResolveSec(k)).toBe(MECHANIC_SEC[k]);
+    }
   });
 });

@@ -301,6 +301,30 @@ export const MECHANIC_SEC: Record<MechanicKey, number> = {
   tsunami: 84,
 };
 
+/**
+ * つなみ/ほのお（FLAME/FLOOD）の「設置→起爆」遅延（秒）。
+ *
+ * 参照 sim.html processDebuffTrigger: デバフタイマー満了（= MECHANIC_SEC.honoo/tsunami）
+ * の瞬間にプレイヤー位置へ AoE を「設置」し、detonationTime = placeTime + 3000ms で
+ * 起爆＝被弾判定する（update ループの subBossPlacedAoEs ハンドラ）。
+ * したがって 設置 = 62(ほのお)/84(つなみ)、起爆・死亡判定 = 65/87。
+ */
+export const WAVE_DETONATE_DELAY = 3;
+
+/** ある機構の「設置秒」（つなみ/ほのお は MECHANIC_SEC、それ以外も同じ）。 */
+export function mechanicPlaceSec(key: MechanicKey): number {
+  return MECHANIC_SEC[key];
+}
+
+/**
+ * ある機構の「死亡判定秒」。
+ * つなみ/ほのお は 設置+WAVE_DETONATE_DELAY（起爆時）に判定。それ以外は設置秒で即判定。
+ */
+export function mechanicResolveSec(key: MechanicKey): number {
+  if (key === "honoo" || key === "tsunami") return MECHANIC_SEC[key] + WAVE_DETONATE_DELAY;
+  return MECHANIC_SEC[key];
+}
+
 /** 要求アクションの判定種別。 */
 export type RequiredKind = "stack" | "spread" | "filler" | "move" | "stop" | "look" | "hide" | "aoe" | "gc3" | "none";
 
