@@ -540,11 +540,13 @@ export function requiredAction(setup: SimSetup, seat: number, key: MechanicKey):
   }
 
   if (key === bombKey) {
+    // 加速度系(無職/視線)は自分の水雷が無いこのスロットで「頭割りの頭数」に入る＝filler。
+    // さらに加速弾の止/動も同時に処理する（カンペ buildTimeline の「頭割り・止まる/動く」）。
+    // 位置(filler=頭割りカーディナル)＋移動(止/動)の両方を判定する。
     const truth = (accelTruthShin ? "shin" : "gi") as "shin" | "gi";
-    const action = accel(truth) ?? "";
-    // 止まる(stop) / 動く(move)。
-    const kind: RequiredKind = action === "止まる" ? "stop" : "move";
-    return { kind, label: action };
+    const accelAction = accel(truth) ?? "";
+    const move: "stop" | "move" = accelAction === "止まる" ? "stop" : "move";
+    return { kind: "filler", label: `頭割り・${accelAction}`, move };
   }
   if (accelIsShisen) {
     // 視線（魔眼）の解決。早→juso1(57) / 遅→juso2(79)。

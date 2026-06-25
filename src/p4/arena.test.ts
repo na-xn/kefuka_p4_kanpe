@@ -195,10 +195,11 @@ describe("requiredAction mapping", () => {
     }
   });
 
-  it("a shisen seat yields look/hide at a juso slot; a mushoku seat yields move/stop at early/late", () => {
-    // find seats by role to assert mapping shape.
+  it("a shisen seat yields look/hide at a juso slot; an accel seat resolves the bomb (止/動) as a move field on a 頭割り(filler/stack/spread) position at early/late", () => {
+    // 加速度系(無職/視線)は env スロットで「頭割りの頭数に入る(filler)＋加速弾(止/動)」を同時に処理する。
+    // 加速弾は単独 stop/move kind ではなく、位置kind(filler/stack/spread)上の move フィールドで解決する。
     let sawJuso = false;
-    let sawBomb = false;
+    let sawBombMove = false;
     for (let seat = 0; seat < 8; seat++) {
       for (const k of ["juso1", "juso2"] as const) {
         const r = requiredAction(setup, seat, k);
@@ -206,11 +207,11 @@ describe("requiredAction mapping", () => {
       }
       for (const k of ["early", "late"] as const) {
         const r = requiredAction(setup, seat, k);
-        if (r.kind === "move" || r.kind === "stop") sawBomb = true;
+        if (r.move === "move" || r.move === "stop") sawBombMove = true;
       }
     }
     expect(sawJuso).toBe(true);
-    expect(sawBomb).toBe(true);
+    expect(sawBombMove).toBe(true);
   });
 
   it("加速度系(視線/無職)の席は必ず env(早/遅)で加速弾(止/動)を解決する", () => {
