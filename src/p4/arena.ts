@@ -453,6 +453,12 @@ export type RequiredAction = {
   color?: SplitColor;
   /** つなみ/ほのお のどちらか（kind==="aoe" の補助情報）。 */
   wave?: "honoo" | "tsunami";
+  /**
+   * 同じ env スロット（早=51/遅=74）で水雷(位置)と加速弾(移動)が衝突したとき、
+   * 位置要求(stack/spread/filler)に相乗りする加速弾の移動要求。
+   * 止まる→"stop" / 動く→"move"。カンペ buildTimeline の「頭割り・止まる」等の合体に対応。
+   */
+  move?: "stop" | "move";
 };
 
 /** 真偽文字列 → ほんと(true)。 */
@@ -487,8 +493,10 @@ export function requiredAction(setup: SimSetup, seat: number, key: MechanicKey):
   // 水雷側 GC の真偽 / 加速度系側 GC の真偽。
   const waterTruthShin = waterGc === "1" ? gc1Shin : gc2Shin;
   const accelTruthShin = waterGc === "1" ? gc2Shin : gc1Shin;
-  // 加速度系（視線/無職）は水雷と逆 GC・逆タイミング。
-  const accelEarly = !waterEarly;
+  // 加速度系の早/遅は加速弾の法則（視線→GC1早/GC2遅・無職→GC1遅/GC2早）。
+  // 逆GCで決まり、水の逆とは限らない（カンペ buildTimeline の accelWhen と一致）。
+  const accelGc = waterGc === "1" ? "2" : "1";
+  const accelEarly = accelGc === "1" ? accelIsShisen : !accelIsShisen;
 
   if (key === "gc3") {
     // 分断ボスのキャスト真偽（うそ=gi なら gc3RequiredColor 内でアラガン/超越を反転）。
@@ -497,22 +505,31 @@ export function requiredAction(setup: SimSetup, seat: number, key: MechanicKey):
     return { kind: "gc3", label: seishi(player.gc3Role) ?? "", color };
   }
 
-  // --- 水雷タイミング（早=51 / 遅=74）---
-  const waterMechanicSec = waterEarly ? "early" : "late";
-  if (key === waterMechanicSec) {
-    const truth = (waterTruthShin ? "shin" : "gi") as "shin" | "gi";
-    const action = raiMizuAction(waterType, truth) ?? "";
-    const kind: RequiredKind = action === "頭割り" ? "stack" : "spread";
-    return { kind, label: action };
-  }
-
   // --- 加速度系タイミング（視線 or 無職）---
   // 視線(shisen): juso1(57, 早) / juso2(79, 遅)。
   // 無職(mushoku): 加速度爆弾。早=51 / 遅=74 に解決（水雷と同じ位置帯のタイミング）。
   // 加速度系（視線/無職）は必ず「加速弾(爆弾)」を持つ。爆弾は env チェック（早=51/遅=74）で解決。
   // 視線(shisen)は加えて「視線(魔眼)」も持ち、これは juso（早=57/遅=79）で解決する。
   // 参照 sim.html assignGimmickDebuffs: SET2 = BOMB(+EYE)。
+  const waterMechanicSec: MechanicKey = waterEarly ? "early" : "late";
   const bombKey: MechanicKey = accelEarly ? "early" : "late";
+
+  // --- 水雷タイミング（早=51 / 遅=74）---
+  if (key === waterMechanicSec) {
+    const truth = (waterTruthShin ? "shin" : "gi") as "shin" | "gi";
+    const action = raiMizuAction(waterType, truth) ?? "";
+    const kind: RequiredKind = action === "頭割り" ? "stack" : "spread";
+    // 加速弾が同じ env スロットに着弾するなら（waterEarly === accelEarly）、
+    // 位置(頭割り/散開)に加速弾の移動(止/動)を合体させる（カンペ buildTimeline と一致）。
+    if (bombKey === waterMechanicSec) {
+      const accelTruth = (accelTruthShin ? "shin" : "gi") as "shin" | "gi";
+      const accelAction = accel(accelTruth) ?? "";
+      const move: "stop" | "move" = accelAction === "止まる" ? "stop" : "move";
+      return { kind, label: `${action}・${accelAction}`, move };
+    }
+    return { kind, label: action };
+  }
+
   if (key === bombKey) {
     const truth = (accelTruthShin ? "shin" : "gi") as "shin" | "gi";
     const action = accel(truth) ?? "";
@@ -553,6 +570,19 @@ export function requiredAction(setup: SimSetup, seat: number, key: MechanicKey):
 }
 
 /**
+ * 位置要求(stack/spread/filler)に相乗りした加速弾の移動要求(req.move)を判定する。
+ * move 無指定なら合格。stop→移動中で不合格 / move→停止中で不合格（standalone と同じ理由）。
+ */
+function evaluateMove(req: RequiredAction, moving: boolean): { ok: boolean; reason: string } {
+  if (!req.move) return { ok: true, reason: "" };
+  if (req.move === "stop" && moving)
+    return { ok: false, reason: "加速度爆弾: 止まっていない！" };
+  if (req.move === "move" && !moving)
+    return { ok: false, reason: "加速度爆弾: 動いていない！" };
+  return { ok: true, reason: "" };
+}
+
+/**
  * 要求アクションに対し、プレイヤーの現在状態が合格か判定する。
  *
  * @param req         requiredAction の結果。
@@ -579,16 +609,17 @@ export function evaluate(
     case "none":
       return { ok: true, reason: "" };
     case "stack":
-    case "filler":
+    case "filler": {
       if (!inZoneAt(p, zones.h12) && !inZoneAt(p, zones.h6))
         return { ok: false, reason: "頭割り位置（12時/6時）から外れています" };
       if (inZoneAt(p, zones.h3) || inZoneAt(p, zones.h9))
         return { ok: false, reason: "頭割りタイミングで 3時/9時 に入っています" };
-      return { ok: true, reason: "" };
+      return evaluateMove(req, moving);
+    }
     case "spread":
       if (!inZoneAt(p, zones.h3) && !inZoneAt(p, zones.h9))
         return { ok: false, reason: "散開位置（3時/9時）から外れています" };
-      return { ok: true, reason: "" };
+      return evaluateMove(req, moving);
     case "stop":
       if (moving) return { ok: false, reason: "加速度爆弾: 止まっていない！" };
       return { ok: true, reason: "" };

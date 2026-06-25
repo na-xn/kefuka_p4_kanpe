@@ -37,7 +37,7 @@ import {
   evaluateRoleWater,
   type Point,
 } from "@/p4/arena";
-import { generateSim, type SimSetup } from "@/p4/simulation";
+import { generateSim, toMinState, type SimSetup } from "@/p4/simulation";
 
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
@@ -213,15 +213,27 @@ describe("requiredAction mapping", () => {
 
   it("加速度系(視線/無職)の席は必ず env(早/遅)で加速弾(止/動)を解決する", () => {
     // 参照 SET2 = BOMB(+EYE)。視線でも無職でも加速弾は env チェックで解決する。
+    // 加速弾は env スロットで解決するが、その形は2通り:
+    //  (a) 水雷と衝突しない → standalone な stop/move kind。
+    //  (b) 水雷と同じ env スロットに衝突 → 水雷の位置要求(stack/spread/filler)に
+    //      乗る move フィールド（位置と移動を合体）。
+    // どちらか「ちょうど一方」で、env スロットで爆弾が解決していることを保証する。
     for (let seat = 0; seat < 8; seat++) {
       const p = setup.players.find((pl) => pl.seat === seat)!;
       const isAccel = (r: string) => r === "shisen" || r === "mushoku";
       if (!isAccel(p.gc1Role) && !isAccel(p.gc2Role)) continue;
       const early = requiredAction(setup, seat, "early");
       const late = requiredAction(setup, seat, "late");
-      const bombAt = [early, late].filter((r) => r.kind === "stop" || r.kind === "move");
-      // 加速度系の席はちょうど1回 env で爆弾を解決する。
+      const bombResolved = (r: ReturnType<typeof requiredAction>) =>
+        r.kind === "stop" || r.kind === "move" || r.move !== undefined;
+      const bombAt = [early, late].filter(bombResolved);
+      // 加速度系の席はちょうど1つの env スロットで爆弾を解決する（standalone か合体のいずれか）。
       expect(bombAt.length).toBe(1);
+      // その解決は standalone な stop/move か、合体の move フィールドの「どちらか一方」。
+      const r = bombAt[0];
+      const standalone = r.kind === "stop" || r.kind === "move";
+      const merged = r.move !== undefined;
+      expect(standalone !== merged).toBe(true); // XOR
     }
   });
 
@@ -233,7 +245,8 @@ describe("requiredAction mapping", () => {
       if (!hasShisen) continue;
       const envBomb = ["early", "late"].some((k) => {
         const r = requiredAction(setup, seat, k as "early" | "late");
-        return r.kind === "stop" || r.kind === "move";
+        // 爆弾は standalone(stop/move) か、水雷と合体した move フィールドのいずれかで解決。
+        return r.kind === "stop" || r.kind === "move" || r.move !== undefined;
       });
       const jusoEye = ["juso1", "juso2"].some((k) => {
         const r = requiredAction(setup, seat, k as "juso1" | "juso2");
@@ -241,6 +254,76 @@ describe("requiredAction mapping", () => {
       });
       expect(envBomb).toBe(true);
       expect(jusoEye).toBe(true);
+    }
+  });
+
+  it("水雷と加速弾が同 env スロットに衝突したら位置(stack/spread/filler)+move を合体する", () => {
+    // 衝突時: その env キーの要求は 位置 kind と move の両方を持ち、ラベルは「位置・止/動」。
+    let sawMerge = false;
+    for (let seat = 0; seat < 8; seat++) {
+      for (const k of ["early", "late"] as const) {
+        const r = requiredAction(setup, seat, k);
+        if (r.move === undefined) continue;
+        sawMerge = true;
+        // 合体は必ず位置 kind（stack/spread/filler）に乗る。
+        expect(["stack", "spread", "filler"]).toContain(r.kind);
+        // move は止(stop)/動(move)。
+        expect(["stop", "move"]).toContain(r.move);
+        // ラベルは「位置・止/動」の合体表記（カンペ buildTimeline と一致）。
+        const moveLabel = r.move === "stop" ? "止まる" : "動く";
+        expect(r.label.endsWith(`・${moveLabel}`)).toBe(true);
+      }
+    }
+    // この seed では水雷×加速弾の衝突が少なくとも1席で起きる。
+    expect(sawMerge).toBe(true);
+  });
+
+  it("合体要求は位置 or 移動のどちらかが誤れば evaluate で不合格", () => {
+    // 合体要求（位置 stack/spread/filler + move）を構成し、4象限で確認する。
+    // stack + stop: 正しい位置(h12) かつ 停止 のみ合格。
+    const stackStop = { kind: "stack" as const, label: "頭割り・止まる", move: "stop" as const };
+    const dir: Point = { x: 0, y: -1 };
+    // 位置○ 移動○（停止）→ 合格。
+    expect(evaluate(stackStop, ZONES.h12, dir, false).ok).toBe(true);
+    // 位置○ 移動×（移動中）→ 不合格（move 違反）。
+    const r1 = evaluate(stackStop, ZONES.h12, dir, true);
+    expect(r1.ok).toBe(false);
+    expect(r1.reason).toContain("止まっていない");
+    // 位置× 移動○（停止）→ 不合格（位置違反）。
+    expect(evaluate(stackStop, ZONES.h3, dir, false).ok).toBe(false);
+    // 位置× 移動×（移動中）→ 不合格。
+    expect(evaluate(stackStop, ZONES.h3, dir, true).ok).toBe(false);
+
+    // spread + move: 正しい位置(h3) かつ 移動中 のみ合格。
+    const spreadMove = { kind: "spread" as const, label: "散開・動く", move: "move" as const };
+    expect(evaluate(spreadMove, ZONES.h3, dir, true).ok).toBe(true);
+    const r2 = evaluate(spreadMove, ZONES.h3, dir, false);
+    expect(r2.ok).toBe(false);
+    expect(r2.reason).toContain("動いていない");
+    expect(evaluate(spreadMove, ZONES.h12, dir, true).ok).toBe(false);
+  });
+
+  it("env 爆弾解決スロットは buildTimeline の accelWhen 法則に一致する（視線/無職×GC）", () => {
+    // accelWhen: accelGC=1 → 視線=早/無職=遅, accelGC=2 → 視線=遅/無職=早。
+    // accelGC = 水雷GC の逆。env 爆弾は早=early/遅=late で解決する。
+    for (let seat = 0; seat < 8; seat++) {
+      const ms = toMinState(setup, seat);
+      const accelGc = ms.waterGC === "1" ? "2" : "1";
+      const accelIsShisen = ms.shisen === "yes";
+      const accelEarly =
+        accelGc === "1" ? accelIsShisen : !accelIsShisen;
+      const expectedSlot: "early" | "late" = accelEarly ? "early" : "late";
+      // expectedSlot で爆弾が解決している（standalone か move 合体のいずれか）。
+      const r = requiredAction(setup, seat, expectedSlot);
+      const resolvedHere =
+        r.kind === "stop" || r.kind === "move" || r.move !== undefined;
+      expect(resolvedHere).toBe(true);
+      // 逆スロットでは爆弾は解決しない（その席の env 位置はあるが move/stop/move フィールドは無い）。
+      const other: "early" | "late" = expectedSlot === "early" ? "late" : "early";
+      const ro = requiredAction(setup, seat, other);
+      const resolvedThere =
+        ro.kind === "stop" || ro.kind === "move" || ro.move !== undefined;
+      expect(resolvedThere).toBe(false);
     }
   });
 });

@@ -136,9 +136,11 @@ function buildDebuffs(setup: SimSetup, seat: number): DebuffEntry[] {
   const waterEarly = ms.waterWhen === "haya";
   // 水雷側 GC の解決秒。
   const waterSec = waterEarly ? MECHANIC_SEC.early : MECHANIC_SEC.late;
-  // 加速度系側 GC の解決秒。
-  const accelEarly = !waterEarly;
+  // 加速度系側 GC の解決秒。早/遅は加速弾の法則（視線→GC1早/GC2遅・無職→GC1遅/GC2早）。
+  // 水の逆とは限らない（カンペ buildTimeline の accelWhen と一致させる）。
   const accelIsShisen = ms.shisen === "yes";
+  const accelGc = ms.waterGC === "1" ? "2" : "1";
+  const accelEarly = accelGc === "1" ? accelIsShisen : !accelIsShisen;
   const accelSec = accelIsShisen
     ? accelEarly
       ? MECHANIC_SEC.juso1
@@ -522,6 +524,14 @@ export function PlayArena({ setup, seat = 0, startAt, onResult, onNewTopic }: Pr
             // ロール別の単一カーディナル判定（A=北/B=東/C=南/D=西）。
             const isStack = req.kind !== "spread";
             r = evaluateRoleWater(playerRole, isStack, { x: pl.x, y: pl.y }, zones);
+            // 同 env スロットで加速弾(止/動)が水雷に合体しているなら、位置に加えて移動も判定。
+            // 位置か移動のどちらかが誤りなら不合格（カンペ buildTimeline の「頭割り・止まる」等）。
+            if (r.ok && req.move) {
+              if (req.move === "stop" && moving)
+                r = { ok: false, reason: "加速度爆弾: 止まっていない！" };
+              else if (req.move === "move" && !moving)
+                r = { ok: false, reason: "加速度爆弾: 動いていない！" };
+            }
           } else {
             r = evaluate(
               req,
