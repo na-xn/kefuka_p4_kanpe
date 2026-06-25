@@ -281,16 +281,22 @@ function PlayRunner({ playRole }: { playRole: PlayRole }) {
           <RotateCcw /> 新しいお題
         </Button>
       </div>
-      <PlayArena setup={setup} seat={seat} startAt={startAt} onNewTopic={start} />
-      {/* アリーナの下にカンペ入力（自分で書き込む。アリーナのキー/ポインタ操作とは独立）。 */}
-      <div className="border-t pt-2">
-        <p className="px-0.5 pb-1 text-[10px] font-semibold text-muted-foreground">
-          カンペ入力（デバフが付いたら入力）
-        </p>
-        <MinimumMode
-          value={minState}
-          set={(id, v) => setMinState((s) => ({ ...s, [id]: v }))}
-        />
+      {/* 広い画面ではアリーナ（左）とカンペ入力（右）を横並び、狭い/モバイルでは縦積み。 */}
+      <div className="flex flex-col gap-2 md:flex-row">
+        {/* 左カラム: アリーナ（潰れない basis/max を確保。canvas はコンテナにスケール）。 */}
+        <div className="shrink-0 md:basis-[420px] md:max-w-[480px]">
+          <PlayArena setup={setup} seat={seat} startAt={startAt} onNewTopic={start} />
+        </div>
+        {/* 右カラム: 自分で書き込むカンペ（サンダガ/ブリザガ含む。アリーナのキー/ポインタ操作とは独立）。 */}
+        <div className="min-w-0 flex-1 border-t pt-2 md:border-l md:border-t-0 md:pl-2 md:pt-0">
+          <p className="px-0.5 pb-1 text-[10px] font-semibold text-muted-foreground">
+            カンペ入力（デバフが付いたら入力）
+          </p>
+          <MinimumMode
+            value={minState}
+            set={(id, v) => setMinState((s) => ({ ...s, [id]: v }))}
+          />
+        </div>
       </div>
     </div>
   );

@@ -391,14 +391,8 @@ export default function App() {
       /* 無視 */
     }
   }, [simMode]);
-  // 練習モード中はオーバーレイをパッシブ（クリック透過しない＝フォーカス可能）にし、
-  // それ以外はパッシブ（ゲームへ入力を通す）に戻す。Tauri 外では無視。
-  useEffect(() => {
-    if (!IS_TAURI) return;
-    import("@tauri-apps/api/core").then(({ invoke }) =>
-      invoke("set_overlay_passive", { passive: !simMode }).catch(() => {})
-    );
-  }, [simMode]);
+  // フォーカス可否（WS_EX_NOACTIVATE 切替）は SimulationMode 側で
+  // 「操作プレイ中・セッションID入力画面のみ」に限定して制御する（useOverlayFocus）。
   // 読み上げログの購読（speak() の各イベントを受信して蓄積、最新50件保持）。
   useEffect(() => {
     setSpeechLogger((e) => setSpeechLog((prev) => [...prev.slice(-49), e]));
@@ -1151,26 +1145,35 @@ export default function App() {
             </div>
           </div>
 
-          {/* モード切替（ミニマムモード＝テスト機能） */}
+          {/* モード切替（通常 / ミニマム / 練習）タブ */}
           <div className="mt-2 border-t pt-2">
-            <label className="flex cursor-pointer items-center justify-between text-[11px] font-medium text-muted-foreground">
-              <span>ミニマムモード</span>
-              <input
-                type="checkbox"
-                checked={minMode}
-                onChange={(e) => setMinMode(e.target.checked)}
-                className="size-3.5 accent-primary"
-              />
-            </label>
-            <label className="mt-1.5 flex cursor-pointer items-center justify-between text-[11px] font-medium text-muted-foreground">
-              <span>練習モード（シミュレーション）</span>
-              <input
-                type="checkbox"
-                checked={simMode}
-                onChange={(e) => setSimMode(e.target.checked)}
-                className="size-3.5 accent-primary"
-              />
-            </label>
+            <div className="mb-1 text-[10px] font-semibold text-muted-foreground">モード</div>
+            <div className="flex overflow-hidden rounded-md border">
+              {([
+                { key: "normal", label: "通常" },
+                { key: "min", label: "ミニマム" },
+                { key: "sim", label: "練習" },
+              ] as const).map((m) => {
+                const active = m.key === (simMode ? "sim" : minMode ? "min" : "normal");
+                return (
+                  <button
+                    key={m.key}
+                    type="button"
+                    onClick={() => {
+                      setMinMode(m.key === "min");
+                      setSimMode(m.key === "sim");
+                    }}
+                    className={`flex-1 px-2 py-1 text-[11px] font-bold transition-colors ${
+                      active
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-transparent text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* 処理画面の表示オプション */}

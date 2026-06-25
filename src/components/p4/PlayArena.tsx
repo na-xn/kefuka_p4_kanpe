@@ -1094,7 +1094,7 @@ function drawTarget(
       // 分断線（青/ピンクの2面）は「読むべき」機構なので表示するが、
       // どちらが安全かの正解側ハイライトは出さない（プレイヤーが判断する）。
       const boss = gc3BossPos(setup.gc3BossAngle);
-      drawSplit(ctx, boss);
+      drawSplit(ctx, boss, setup.gc3SplitTruth);
       break;
     }
     case "look":
@@ -1164,7 +1164,7 @@ function drawEyeTelegraph(ctx: CanvasRenderingContext2D, src: Point = CENTER) {
  * GC3 分断面（参照 drawWave3SplitAoE: ボスへ translate→中心向き rotate、pink=+側 / blue=-側）。
  * 練習なので「安全側の強調」は出さない。2面（青/ピンク）と分断線だけを読ませる。
  */
-function drawSplit(ctx: CanvasRenderingContext2D, boss: Point) {
+function drawSplit(ctx: CanvasRenderingContext2D, boss: Point, truth?: Truth) {
   const ang = Math.atan2(CENTER.y - boss.y, CENTER.x - boss.x);
   const R = ARENA_RADIUS * 3;
 
@@ -1186,6 +1186,23 @@ function drawSplit(ctx: CanvasRenderingContext2D, boss: Point) {
   ctx.arc(boss.x, boss.y, 14, 0, Math.PI * 2);
   ctx.fillStyle = "rgba(220,60,60,0.9)";
   ctx.fill();
+
+  // 真/偽マーカー（外周エクスデス分断ボスの上）。
+  // setup.gc3SplitTruth が安全側を反転させるので、プレイヤーが読めるように表示する。
+  // 中央ボス真偽インジケータと同じ truth/fake 画像を再利用（preload 済み・loaded ガード）。
+  if (truth) {
+    const shin = truth === "shin";
+    const key: IconKey = shin ? "truth" : "fake";
+    const img = imgCache[key];
+    const size = 26;
+    const my = boss.y - 14 - 8 - size;
+    if (loadedCache.truth && loadedCache.fake && img) {
+      ctx.drawImage(img, boss.x - size / 2, my, size, size);
+    } else {
+      ctx.fillStyle = shin ? "#00b4d8" : "#ff4444";
+      ctx.fillRect(boss.x - size / 2, my, size, size);
+    }
+  }
 }
 
 /** デバフアイコンスタック（プレイヤー右上に小さく並べる）+ 残り秒カウントダウン。 */
