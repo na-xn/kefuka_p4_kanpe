@@ -44,6 +44,7 @@ const CENTER: SimSetup["centerAoE"] = {
   gc3: { sandagaTruth: "shin", blizzagaTruth: "shin", thunderPattern: 3, blizzardPattern: 0 },
   sandaga: { truth: "gi", thunderPattern: 0 },
   blizzaga: { truth: "shin", blizzardPattern: 1 },
+  finalMemory: { sandagaOut: "shin", blizzagaOut: "shin", thunderPattern: 0, blizzardPattern: 0 },
 };
 
 describe("playTimeline schedule constants (参照 sim.html 抽出)", () => {

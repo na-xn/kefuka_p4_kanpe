@@ -119,6 +119,26 @@ export type SimSetup = {
       truth: Truth;
       blizzardPattern: number;
     };
+    /**
+     * 最終記憶 / マジックアウト（t=84 詠唱 → t=87 解決）。
+     *
+     * 参照 sim.html `finalMemoryState` / `checkFinalMemorySafety`:
+     * - sandagaOut/blizzagaOut — マジックアウトの「リビール（未来）」真偽
+     *   （`finalMemoryState.topTruth`/`bottomTruth`）。
+     * - thunderPattern ∈ 0..3 / blizzardPattern ∈ 0..1 — 最終記憶 AoE の
+     *   フレッシュな十字/象限パターン。
+     *
+     * 最終的な避け先の真偽は、記憶した mid-fight サンダガ/ブリザガ真偽
+     * （centerAoE.sandaga.truth / centerAoE.blizzaga.truth）と、この
+     * リビール真偽の XNOR（一致=真→記憶どおり / 不一致=偽→反転）で合成する。
+     * 合成は arena.ts `finalMemoryComposite` を参照。
+     */
+    finalMemory: {
+      sandagaOut: Truth;
+      blizzagaOut: Truth;
+      thunderPattern: number;
+      blizzardPattern: number;
+    };
   };
   /** 8人分の割当（seat 0..7）。 */
   players: PlayerAssignment[];
@@ -275,11 +295,30 @@ export function generateSim(rng: () => number = Math.random): SimSetup {
       truth: randTruth(rng),
       blizzardPattern: Math.floor(rng() * 2),
     },
+    // 最終記憶 / マジックアウト（t=84→87）。参照 finalMemoryState。
+    // 値は下で gc3SplitTruth の「後」にまとめて引く（既存 rng() 順を一切ずらさない）。
+    finalMemory: {
+      sandagaOut: "shin" as Truth,
+      blizzagaOut: "shin" as Truth,
+      thunderPattern: 0,
+      blizzardPattern: 0,
+    },
   };
 
   // GC3 分断ボスのキャスト真偽。決定性を崩さないため、既存の全 rng() 呼び出しの
   // 「後」に追加で引く（参照 wave3BossB.currentEffect 相当）。
   const gc3SplitTruth = randTruth(rng);
+
+  // 最終記憶 / マジックアウト（t=84→87）の rng() は、既存の全 rng() 呼び出し
+  // （gc3SplitTruth 含む）の「後」にまとめて引く。これにより新フィールド追加が
+  // 既存フィールド（centerAoE.gc1..blizzaga / gc3BossAngle / gc3SplitTruth）の
+  // 決定値を一切ずらさない。順序: sandagaOut, blizzagaOut, thunderPattern, blizzardPattern。
+  centerAoE.finalMemory = {
+    sandagaOut: randTruth(rng),
+    blizzagaOut: randTruth(rng),
+    thunderPattern: Math.floor(rng() * 4),
+    blizzardPattern: Math.floor(rng() * 2),
+  };
 
   return {
     gc1Truth,

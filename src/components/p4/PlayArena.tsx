@@ -17,6 +17,7 @@ import {
   requiredAction,
   evaluate,
   centerAoeSafeGeometry,
+  finalMemoryComposite,
   MECHANIC_SEC,
   END_SEC,
   mechanicResolveSec,
@@ -35,6 +36,7 @@ import {
   centerResolutions,
   centerTruths,
   SUB_BOSS_VANISH_SEC,
+  FINAL_MEMORY_SEC,
   type CenterCast,
 } from "@/p4/playTimeline";
 
@@ -661,6 +663,23 @@ export function PlayArena({
         }
       }
 
+      // --- 最終記憶 / マジックアウト AoE 判定（t=87 解決） ---
+      // 参照 checkFinalMemorySafety: 記憶した mid-fight サンダガ/ブリザガ真偽 ×
+      //   マジックアウトのリビール真偽を XNOR 合成し（finalMemoryComposite）、
+      //   合成真偽が真→表示十字/象限を避ける（grand-cross と同じ両面判定）。
+      // 合成パターンは finalMemory.thunderPattern/blizzardPattern（GC1 のものではない）。
+      if (elapsed >= FINAL_MEMORY_SEC && !centerJudged.current.finalMemory) {
+        centerJudged.current.finalMemory = true;
+        const safe = centerAoeSafeGeometry(
+          { x: pl.x, y: pl.y },
+          finalMemoryComposite(setup).params,
+          "cross",
+        );
+        if (!safe) {
+          pushDeath(Math.floor(elapsed), "最終記憶 / マジックアウト", "被弾!");
+        }
+      }
+
       // --- 自席位置の通知（セッション用・~12Hz スロットル / ソロでは no-op） ---
       const cb = onLocalPosRef.current;
       if (cb) {
@@ -859,9 +878,13 @@ function draw(
     const resolving = elapsed >= center.resolveSec;
     const alpha = resolving ? 0.45 : 0.12;
     if (center.geometry === "cross") {
-      // 序盤グランドクロス（gc1/gc2/gc3）。最終記憶はパターンが無いので gc1 で代用。
-      const blzPat = g ? g.blizzardPattern : setup.centerAoE.gc1.blizzardPattern;
-      const thnPat = g ? g.thunderPattern : setup.centerAoE.gc1.thunderPattern;
+      // 序盤グランドクロス（gc1/gc2/gc3）は各自のパターン。
+      // 最終記憶 / マジックアウト（t≥84 の cross 窓）は finalMemory の専用パターンで描く
+      // （GC1 で代用しない＝判定 finalMemoryComposite と同じ十字/象限を予告する）。
+      const isFinalMemory = elapsed >= FINAL_MEMORY_SEC - 3;
+      const fm = setup.centerAoE.finalMemory;
+      const blzPat = isFinalMemory ? fm.blizzardPattern : g ? g.blizzardPattern : setup.centerAoE.gc1.blizzardPattern;
+      const thnPat = isFinalMemory ? fm.thunderPattern : g ? g.thunderPattern : setup.centerAoE.gc1.thunderPattern;
       drawBlizzardLayer(ctx, blzPat, alpha);
       drawThunderLayer(ctx, thnPat, alpha);
     } else if (center.geometry === "thunder") {

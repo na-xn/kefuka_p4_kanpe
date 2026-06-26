@@ -20,6 +20,7 @@ import {
   inBlizzardQuadrant,
   centerAoeSafe,
   centerAoeSafeGeometry,
+  finalMemoryComposite,
   THUNDER_STRIP_W,
   MECHANIC_SEC,
   WAVE_DETONATE_DELAY,
@@ -508,6 +509,99 @@ describe("center AoE geometry (サンダガ/ブリザガ)", () => {
       blizzagaShin: false,
     };
     expect(centerAoeSafeGeometry(p, params, "cross")).toBe(centerAoeSafe(p, params));
+  });
+});
+
+describe("finalMemoryComposite（最終記憶 / マジックアウト 過去×未来 XNOR 合成）", () => {
+  /** finalMemory を差し替えた最小 SimSetup（記憶 sandaga/blizzaga 真偽 + リビール）。 */
+  function fmSetup(
+    memThunda: "shin" | "gi",
+    memBlizza: "shin" | "gi",
+    sandagaOut: "shin" | "gi",
+    blizzagaOut: "shin" | "gi",
+    thunderPattern = 0,
+    blizzardPattern = 0,
+  ): SimSetup {
+    return {
+      gc1Truth: "shin",
+      gc2Truth: "shin",
+      wave1Type: "honoo",
+      wave1Truth: "shin",
+      wave2Type: "tsunami",
+      wave2Truth: "shin",
+      gc1WaterEarly: true,
+      thundaTruth: "shin",
+      blizzaTruth: "shin",
+      gc3BossAngle: 0,
+      gc3SplitTruth: "shin",
+      centerAoE: {
+        gc1: { sandagaTruth: "shin", blizzagaTruth: "shin", thunderPattern: 0, blizzardPattern: 0 },
+        gc2: { sandagaTruth: "shin", blizzagaTruth: "shin", thunderPattern: 0, blizzardPattern: 0 },
+        gc3: { sandagaTruth: "shin", blizzagaTruth: "shin", thunderPattern: 0, blizzardPattern: 0 },
+        sandaga: { truth: memThunda, thunderPattern: 0 },
+        blizzaga: { truth: memBlizza, blizzardPattern: 0 },
+        finalMemory: { sandagaOut, blizzagaOut, thunderPattern, blizzardPattern },
+      },
+      players: [],
+    };
+  }
+
+  it("XNOR: リビール真(shin)→記憶どおり / 偽(gi)→反転（参照 (past*future)===1）", () => {
+    // 記憶=真, リビール=真 → 合成=真。
+    expect(finalMemoryComposite(fmSetup("shin", "shin", "shin", "shin")).thunda).toBe("shin");
+    // 記憶=真, リビール=偽 → 反転=偽。
+    expect(finalMemoryComposite(fmSetup("shin", "shin", "gi", "shin")).thunda).toBe("gi");
+    // 記憶=偽, リビール=偽 → 一致＝真。
+    expect(finalMemoryComposite(fmSetup("gi", "shin", "gi", "shin")).thunda).toBe("shin");
+    // 記憶=偽, リビール=真 → 不一致＝偽。
+    expect(finalMemoryComposite(fmSetup("gi", "shin", "shin", "shin")).thunda).toBe("gi");
+    // ブリザガ面も独立に同じ XNOR。
+    expect(finalMemoryComposite(fmSetup("shin", "gi", "shin", "gi")).blizza).toBe("shin");
+    expect(finalMemoryComposite(fmSetup("shin", "shin", "shin", "gi")).blizza).toBe("gi");
+  });
+
+  it("合成は参照 (pastVal*futureVal)===1 と完全一致（全16通り）", () => {
+    const truths = ["shin", "gi"] as const;
+    const val = (t: "shin" | "gi") => (t === "shin" ? 1 : -1);
+    for (const memT of truths)
+      for (const memB of truths)
+        for (const outT of truths)
+          for (const outB of truths) {
+            const c = finalMemoryComposite(fmSetup(memT, memB, outT, outB));
+            const refT = val(memT) * val(outT) === 1 ? "shin" : "gi";
+            const refB = val(memB) * val(outB) === 1 ? "shin" : "gi";
+            expect(c.thunda).toBe(refT);
+            expect(c.blizza).toBe(refB);
+          }
+  });
+
+  it("params は finalMemory のパターン + 合成真偽（GC1 のものではない）", () => {
+    const c = finalMemoryComposite(fmSetup("shin", "shin", "gi", "shin", 3, 1));
+    expect(c.params.thunderPattern).toBe(3);
+    expect(c.params.blizzardPattern).toBe(1);
+    // sandagaShin=合成真偽(gi→false), blizzagaShin=合成真偽(shin→true)。
+    expect(c.params.sandagaShin).toBe(false);
+    expect(c.params.blizzagaShin).toBe(true);
+  });
+
+  it("解決判定: 合成真偽どおりの正解位置は安全、誤位置は被弾", () => {
+    // 記憶=真, リビール=真 → 合成サンダガ=真（表示十字を避ける）。
+    // thunderPattern=0 の十字内 (700,400) → 被弾。外 (500,300) → 安全。
+    const setup = fmSetup("shin", "gi", "shin", "shin", 0, 0);
+    const c = finalMemoryComposite(setup);
+    expect(c.thunda).toBe("shin"); // 表示十字が実発火 → 避ける
+    expect(c.blizza).toBe("gi"); // 記憶=偽,リビール=真 → 反転=偽（表示象限の補集合が発火）
+
+    const inThunder: Point = { x: 700, y: 400 };
+    expect(inThunderStrip(inThunder, 0)).toBe(true);
+    expect(centerAoeSafeGeometry(inThunder, c.params, "cross")).toBe(false);
+
+    // 雷十字外 かつ ブリザガ被弾しない位置。blizza=gi(補集合発火) → 表示象限0「内」が安全。
+    // 象限0(pattern0): (px>=0&&py<=0)||(px<=0&&py>=0)。px>0,py<0 の (500,300) は象限0内。
+    const safe: Point = { x: 500, y: 300 };
+    expect(inThunderStrip(safe, 0)).toBe(false);
+    expect(inBlizzardQuadrant(safe, 0)).toBe(true); // 表示象限内＝補集合発火では安全
+    expect(centerAoeSafeGeometry(safe, c.params, "cross")).toBe(true);
   });
 });
 

@@ -142,6 +142,34 @@ describe("generateSim composition", () => {
     }
   });
 
+  it("centerAoE.finalMemory is a valid deterministic shape (マジックアウト リビール + パターン)", () => {
+    for (const seed of SEEDS) {
+      const setup = generateSim(mulberry32(seed));
+      const again = generateSim(mulberry32(seed));
+      const fm = setup.centerAoE.finalMemory;
+      expect(["shin", "gi"]).toContain(fm.sandagaOut);
+      expect(["shin", "gi"]).toContain(fm.blizzagaOut);
+      expect(fm.thunderPattern).toBeGreaterThanOrEqual(0);
+      expect(fm.thunderPattern).toBeLessThanOrEqual(3);
+      expect([0, 1]).toContain(fm.blizzardPattern);
+      // 同一シードで完全再現。
+      expect(again.centerAoE.finalMemory).toEqual(fm);
+    }
+  });
+
+  it("finalMemory is additive: existing fields (centerAoE.gc1..blizzaga / gc3BossAngle / gc3SplitTruth) don't shift", () => {
+    // 新 rng() は gc3SplitTruth 含む全フィールド生成「後」に引くため、既存値は不変。
+    const setup = generateSim(mulberry32(2024));
+    const ref = generateSim(mulberry32(2024));
+    expect(setup.centerAoE.gc1).toEqual(ref.centerAoE.gc1);
+    expect(setup.centerAoE.gc2).toEqual(ref.centerAoE.gc2);
+    expect(setup.centerAoE.gc3).toEqual(ref.centerAoE.gc3);
+    expect(setup.centerAoE.sandaga).toEqual(ref.centerAoE.sandaga);
+    expect(setup.centerAoE.blizzaga).toEqual(ref.centerAoE.blizzaga);
+    expect(setup.gc3BossAngle).toBe(ref.gc3BossAngle);
+    expect(setup.gc3SplitTruth).toBe(ref.gc3SplitTruth);
+  });
+
   it("gc3/sandaga/blizzaga are additive: existing fields don't shift", () => {
     // 新 rng() 呼び出しは gc2 の後に追加したため、それ以前のフィールドは不変。
     const setup = generateSim(mulberry32(2024));

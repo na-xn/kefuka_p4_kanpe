@@ -131,6 +131,7 @@ describe("buildAnswerTimeline", () => {
         gc3: { sandagaTruth: "shin", blizzagaTruth: "shin", thunderPattern: 0, blizzardPattern: 0 },
         sandaga: { truth: "shin", thunderPattern: 0 },
         blizzaga: { truth: "shin", blizzardPattern: 0 },
+        finalMemory: { sandagaOut: "shin", blizzagaOut: "shin", thunderPattern: 0, blizzardPattern: 0 },
       },
       players: [
         { seat: 0, role: "TH", job: "tank", gc1Role: "mizu", gc2Role: "shisen", gc3Role, gc3Scar },

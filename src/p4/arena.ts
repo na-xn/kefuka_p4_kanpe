@@ -8,9 +8,9 @@
  * React コンポーネント（PlayArena.tsx）はこの純関数の薄いラッパに留める。
  */
 
-import type { SimSetup } from "@/p4/simulation";
+import type { SimSetup, Truth } from "@/p4/simulation";
 import { toMinState } from "@/p4/simulation";
-import { raiMizuAction, accel, juso, tsunamiHonooAction, seishi } from "@/p4/logic";
+import { raiMizuAction, accel, juso, tsunamiHonooAction, seishi, magicFinal } from "@/p4/logic";
 
 /* ============================================================
  * アリーナ定数（参照 sim.html 準拠）
@@ -391,6 +391,53 @@ export function centerAoeSafeGeometry(
     return !(params.blizzagaShin ? inBlizzard : !inBlizzard);
   }
   return centerAoeSafe(p, params);
+}
+
+/* ============================================================
+ * 最終記憶 / マジックアウト（過去×未来の真偽合成）
+ * ========================================================== */
+
+/** 最終記憶の合成結果（合成済み真偽 + 中央 AoE 判定パラメータ）。 */
+export type FinalMemoryComposite = {
+  /** 合成済みサンダガ真偽（記憶 XNOR リビール）。shin=表示十字が実発火（避ける）。 */
+  thunda: Truth;
+  /** 合成済みブリザガ真偽（記憶 XNOR リビール）。shin=表示象限が実発火（避ける）。 */
+  blizza: Truth;
+  /** centerAoeSafe / centerAoeSafeGeometry("cross") へ渡す判定パラメータ。 */
+  params: CenterAoeParams;
+};
+
+/**
+ * 最終記憶 / マジックアウトの真偽合成（純関数・参照 checkFinalMemorySafety）。
+ *
+ * 記憶した mid-fight サンダガ/ブリザガ真偽（setup.centerAoE.sandaga.truth /
+ * .blizzaga.truth）と、マジックアウトのリビール真偽（finalMemory.sandagaOut /
+ * .blizzagaOut）を XNOR で合成する（magicFinal）:
+ *   - リビール 真(shin) → 記憶どおり（記憶=真なら合成=真）。
+ *   - リビール 偽(gi)   → 反転（記憶=真なら合成=偽）。
+ * これは参照の `(pastVal * futureVal) === 1`（両者が同符号=同一なら真）と一致する
+ * （magicFinal は memory === out のとき "shin"、不一致のとき "gi" を返す）。
+ *
+ * 合成真偽 shin のとき表示十字/象限が実発火 → そこを避ける（centerAoeSafe と同規約）。
+ */
+export function finalMemoryComposite(setup: SimSetup): FinalMemoryComposite {
+  const fm = setup.centerAoE.finalMemory;
+  // 記憶した mid-fight サンダガ/ブリザガ真偽（「最初のマジックチャージ」）。
+  const memThunda = setup.centerAoE.sandaga.truth;
+  const memBlizza = setup.centerAoE.blizzaga.truth;
+  // XNOR 合成（magicFinal は null を返さない＝両引数とも有効な Truth）。
+  const thunda = magicFinal(memThunda, fm.sandagaOut) as Truth;
+  const blizza = magicFinal(memBlizza, fm.blizzagaOut) as Truth;
+  return {
+    thunda,
+    blizza,
+    params: {
+      thunderPattern: fm.thunderPattern,
+      blizzardPattern: fm.blizzardPattern,
+      sandagaShin: thunda === "shin",
+      blizzagaShin: blizza === "shin",
+    },
+  };
 }
 
 /* ============================================================
