@@ -528,7 +528,9 @@ export function PlayArena({
     // 自席位置の最終ブロードキャスト時刻（~12Hz スロットル）。
     let lastLocalPosAt = 0;
 
+    let loopErrored = false;
     const loop = () => {
+     try {
       const pl = player.current;
       let dx = 0;
       let dy = 0;
@@ -668,7 +670,11 @@ export function PlayArena({
       //   マジックアウトのリビール真偽を XNOR 合成し（finalMemoryComposite）、
       //   合成真偽が真→表示十字/象限を避ける（grand-cross と同じ両面判定）。
       // 合成パターンは finalMemory.thunderPattern/blizzardPattern（GC1 のものではない）。
-      if (elapsed >= FINAL_MEMORY_SEC && !centerJudged.current.finalMemory) {
+      if (
+        elapsed >= FINAL_MEMORY_SEC &&
+        !centerJudged.current.finalMemory &&
+        setup.centerAoE.finalMemory
+      ) {
         centerJudged.current.finalMemory = true;
         const safe = centerAoeSafeGeometry(
           { x: pl.x, y: pl.y },
@@ -707,7 +713,13 @@ export function PlayArena({
 
       // HUD クロックを粗く反映（END_SEC で凍結済みの elapsed を使う）。
       setClock((c0) => (Math.abs(c0 - elapsed) > 0.25 ? elapsed : c0));
-
+     } catch (err) {
+       // 1フレームのエラーでアリーナ全体を止めない（画面が空白/フリーズにならないよう続行）。
+       if (!loopErrored) {
+         loopErrored = true;
+         console.error("[PlayArena] frame error", err);
+       }
+     }
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
@@ -881,8 +893,10 @@ function draw(
       // 序盤グランドクロス（gc1/gc2/gc3）は各自のパターン。
       // 最終記憶 / マジックアウト（t≥84 の cross 窓）は finalMemory の専用パターンで描く
       // （GC1 で代用しない＝判定 finalMemoryComposite と同じ十字/象限を予告する）。
-      const isFinalMemory = elapsed >= FINAL_MEMORY_SEC - 3;
       const fm = setup.centerAoE.finalMemory;
+      // 古い/不完全な setup（セッションで旧バージョンのホストが配信した等）で
+      // finalMemory が無い場合は最終記憶パターンを使わない（クラッシュ防止）。
+      const isFinalMemory = elapsed >= FINAL_MEMORY_SEC - 3 && !!fm;
       const blzPat = isFinalMemory ? fm.blizzardPattern : g ? g.blizzardPattern : setup.centerAoE.gc1.blizzardPattern;
       const thnPat = isFinalMemory ? fm.thunderPattern : g ? g.thunderPattern : setup.centerAoE.gc1.thunderPattern;
       drawBlizzardLayer(ctx, blzPat, alpha);
